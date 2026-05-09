@@ -17,29 +17,35 @@ tag in the response, and uses it to find the upstream git repo
   any sub-package path lands on the meta tags. Cloudflare Pages and
   Netlify both honor this format.
 
-## Deploying to Cloudflare Pages
+## Deploying to Cloudflare (Workers + Static Assets)
 
-This is the smoothest free path; ~5 minutes total once you have a
-Cloudflare account.
+Cloudflare merged the classic "Pages" flow into the unified Workers
+deploy UI. The `wrangler.toml` at the repo root tells the Workers
+runtime to serve this `site/` directory as a static asset bundle —
+no Worker code, no build step.
 
-1. Go to **Cloudflare Pages → Create a project → Connect to Git** and pick
-   the `postgrip-io/agent-sdk-go` repo.
-2. Build settings:
-   - **Framework preset**: None
-   - **Build command**: *(empty)*
-   - **Build output directory**: `site`
-   - **Root directory**: *(empty / repo root)*
-3. Deploy. You'll get a `*.pages.dev` URL. Verify it works:
+1. Cloudflare dashboard → **Workers & Pages → Create → Continue with GitHub**.
+2. Pick the `postgrip-io/agent-sdk-go` repo.
+3. Configure:
+   - **Project name**: `agent-sdk-go` *(matches the CNAME target you'll add)*
+   - **Production branch**: `main`
+   - **Build command**: *(leave empty)*
+   - **Deploy command**: `npx wrangler deploy` *(default; reads `wrangler.toml`)*
+   - **Path**: `/`
+   - **API token**: let Cloudflare create one automatically.
+4. Click **Save and Deploy**. First deploy is ~30s.
+5. The project gets a `*.workers.dev` (or `*.pages.dev` legacy) URL.
+   Verify it serves the meta tag:
    ```sh
-   curl -s 'https://<project>.pages.dev/sdk?go-get=1' | grep go-import
+   curl -s 'https://<project-url>/sdk?go-get=1' | grep go-import
    ```
-   You should see the `<meta name="go-import" ...>` line.
-4. **Add custom domain**: Pages project → Custom domains → Set up a
-   custom domain → enter `go.postgrip.io`. Cloudflare will tell you
-   exactly what DNS record to add (a `CNAME` from `go.postgrip.io` to
-   `<project>.pages.dev`).
-5. Add that one CNAME at your DNS registrar. Cloudflare auto-issues a
-   TLS cert; usually live within minutes.
+6. **Custom domain**: Project → **Settings → Domains & Routes → Add**
+   → enter `go.postgrip.io`.
+7. **DNS**: a single CNAME at your DNS registrar pointing
+   `go.postgrip.io` → `<project>.workers.dev` (or whatever Cloudflare
+   shows as the target). If your DNS zone is on Cloudflare too, the
+   custom-domain wizard auto-creates the CNAME for you.
+8. TLS cert auto-issues; usually live within minutes.
 
 ## Verifying everything works
 

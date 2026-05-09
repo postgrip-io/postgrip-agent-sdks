@@ -1,0 +1,19 @@
+# Cloudflare Workers Assets config for the go.postgrip.io vanity site.
+#
+# `npx wrangler deploy` reads this to know that ./site is a static asset
+# bundle served as-is — no Worker code, no build step. The Workers runtime
+# also honors the site/_redirects file for the /sdk/* rewrites.
+#
+# The site itself is a tiny landing page that carries the <meta name="go-import">
+# tag Go's module proxy needs to resolve `go get go.postgrip.io/sdk`.
+# See site/README.md for the deployment walkthrough.
+
+name = "agent-sdk-go"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./site"
+# If a request doesn't match a file or _redirects rule, serve index.html.
+# That's a no-op for the vanity flow (which always matches /sdk*) but is
+# a safe fallback for any stray path on the domain.
+not_found_handling = "single-page-application"
