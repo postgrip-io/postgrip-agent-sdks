@@ -2,10 +2,37 @@ package sdk
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/postgrip-io/agent-sdk-go/internal/replay"
 )
+
+// checkReplayCancellation translates the replay package's cancellation
+// sentinel into the SDK's public CancelledFailure. Returns nil when the
+// replay reports no cancellation.
+func (w *workflowContext) checkReplayCancellation() error {
+	if err := w.replay.CheckCancellation(); err != nil {
+		return &CancelledFailure{Message: "workflow cancellation requested"}
+	}
+	return nil
+}
+
+// translateReplayError converts replay sentinels (DeterminismError) into
+// the SDK's public failure types so workflow bodies and operators see
+// consistent errors regardless of where the failure originated.
+func translateReplayError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var det *replay.DeterminismError
+	if errors.As(err, &det) {
+		return NewNonRetryableApplicationFailure(det.Message, "WorkflowDeterminismViolation")
+	}
+	return err
+}
 
 // workflowContext is the live Context implementation. The Worker creates one
 // per workflow task and passes it to the registered WorkflowFunc.
@@ -31,7 +58,7 @@ type workflowContext struct {
 	// than a supported "one-shot" mode. Workflow bodies must run in a
 	// single goroutine; signalChannels / queryHandlers / updateHandlers are
 	// not synchronized.
-	replay *workflowReplay
+	replay *replay.Replay
 
 	signalChannels map[string]*SignalChannel
 	queryHandlers  map[string]func(args []any) (any, error)
@@ -53,15 +80,15 @@ func (w *workflowContext) Sleep(d time.Duration) error {
 	// (return nil) or it hasn't yet (suspend). Cursor advances either way so
 	// the next call to Sleep consults the next recorded timer.
 	if w.replay != nil {
-		if err := w.replay.checkCancellation(); err != nil {
+		if err := w.checkReplayCancellation(); err != nil {
 			return err
 		}
-		started, err := w.replay.nextTimer(durationMs)
+		started, err := w.replay.NextTimer(durationMs)
 		if err != nil {
-			return err
+			return translateReplayError(err)
 		}
 		if started != nil {
-			if w.replay.isTimerFired(started) {
+			if w.replay.IsTimerFired(started) {
 				return nil
 			}
 			return newSuspended("waiting for timer (duration=%dms)", durationMs)
@@ -89,12 +116,12 @@ func (w *workflowContext) Sleep(d time.Duration) error {
 
 func (w *workflowContext) ExecuteActivity(activityType string, args []any, target any, opts *ActivityOptions) error {
 	if w.replay != nil {
-		if err := w.replay.checkCancellation(); err != nil {
+		if err := w.checkReplayCancellation(); err != nil {
 			return err
 		}
-		scheduled, err := w.replay.nextActivity(activityType)
+		scheduled, err := w.replay.NextActivity(activityType)
 		if err != nil {
-			return err
+			return translateReplayError(err)
 		}
 		if scheduled != nil {
 			return w.resolveScheduledActivity(activityType, args, target, opts, scheduled)
@@ -155,11 +182,11 @@ func (w *workflowContext) resolveScheduledActivity(activityType string, args []a
 		}
 		return decodeResultValue(task.Result, target)
 	case TaskStateFailed:
-		if w.replay.isActivityCanceled(scheduled) {
+		if w.replay.IsActivityCanceled(scheduled) {
 			return &CancelledFailure{Message: "activity " + activityType + " cancelled"}
 		}
-		if w.replay.hasActivityRetryScheduled(scheduled) {
-			// Runtime requested a retry — recurse so the next nextActivity
+		if w.replay.HasActivityRetryScheduled(scheduled) {
+			// Runtime requested a retry — recurse so the next NextActivity
 			// cursor entry resolves the retry attempt.
 			return w.ExecuteActivity(activityType, args, target, opts)
 		}
@@ -174,12 +201,12 @@ func (w *workflowContext) resolveScheduledActivity(activityType string, args []a
 
 func (w *workflowContext) ExecuteChildWorkflow(workflowType string, args []any, target any, opts *ChildWorkflowOptions) error {
 	if w.replay != nil {
-		if err := w.replay.checkCancellation(); err != nil {
+		if err := w.checkReplayCancellation(); err != nil {
 			return err
 		}
-		started, err := w.replay.nextChild(workflowType)
+		started, err := w.replay.NextChild(workflowType)
 		if err != nil {
-			return err
+			return translateReplayError(err)
 		}
 		if started != nil {
 			return w.resolveChildWorkflow(workflowType, target, started)
@@ -281,7 +308,7 @@ func (w *workflowContext) persistedSignals(name string) [][]any {
 	if w.replay == nil {
 		return nil
 	}
-	return w.replay.signalsByName(name)
+	return w.replay.SignalsByName(name)
 }
 
 func (w *workflowContext) SetQueryHandler(name string, handler func(args []any) (any, error)) error {
@@ -323,6 +350,22 @@ func (w *workflowContext) Milestone(name string, opts MilestoneOptions) error {
 		Message: name,
 		Details: details,
 	})
+}
+
+// errWorkflowSuspended is the sentinel returned by workflow context helpers
+// when the workflow body cannot proceed (waiting on an in-flight activity /
+// timer / child workflow, or on a signal that hasn't arrived yet). The
+// Worker recognizes this via errors.As and translates it into a BlockTask
+// call so the runtime service re-leases the workflow when its dependencies
+// resolve.
+type errWorkflowSuspended struct {
+	reason string
+}
+
+func (e *errWorkflowSuspended) Error() string { return "workflow suspended: " + e.reason }
+
+func newSuspended(format string, args ...any) error {
+	return &errWorkflowSuspended{reason: fmt.Sprintf(format, args...)}
 }
 
 func (w *workflowContext) ContinueAsNew(opts ContinueAsNewOptions) error {

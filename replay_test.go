@@ -9,95 +9,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/postgrip-io/agent-sdk-go/internal/replay"
 )
-
-func TestNewWorkflowReplaySplitsByType(t *testing.T) {
-	t.Parallel()
-	r := newWorkflowReplay([]WorkflowHistoryEvent{
-		{ID: "1", Type: historyEventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
-		{ID: "2", Type: historyEventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1000)}},
-		{ID: "3", Type: historyEventTimerFired, TaskID: "tmr-1"},
-		{ID: "4", Type: historyEventChildWorkflowStarted, TaskID: "wf-child-1", Attributes: map[string]any{"workflow_type": "Sub"}},
-		{ID: "5", Type: historyEventWorkflowCancellationRequest},
-		{ID: "6", Type: historyEventWorkflowSignaled, Attributes: map[string]any{"name": "ping", "args": []any{1}}},
-		{ID: "7", Type: historyEventWorkflowSignaled, Attributes: map[string]any{"name": "ping", "args": []any{2}}},
-		{ID: "8", Type: historyEventWorkflowSignaled, Attributes: map[string]any{"name": "other", "args": []any{}}},
-	})
-	if len(r.activities) != 1 || len(r.timers) != 1 || len(r.children) != 1 {
-		t.Fatalf("filtered slices wrong: %d activities, %d timers, %d children", len(r.activities), len(r.timers), len(r.children))
-	}
-	if !r.cancellationRequested {
-		t.Fatal("cancellation flag not set")
-	}
-	pings := r.signalsByName("ping")
-	if len(pings) != 2 {
-		t.Fatalf("ping signals = %d, want 2", len(pings))
-	}
-	if pings[0][0].(int) != 1 || pings[1][0].(int) != 2 {
-		t.Fatalf("signal args order wrong: %#v", pings)
-	}
-}
-
-func TestNextActivityAdvancesCursorAndDetectsDeterminism(t *testing.T) {
-	t.Parallel()
-	r := newWorkflowReplay([]WorkflowHistoryEvent{
-		{Type: historyEventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
-		{Type: historyEventActivityTaskScheduled, TaskID: "act-2", Attributes: map[string]any{"activity_type": "Farewell"}},
-	})
-	first, err := r.nextActivity("Greet")
-	if err != nil || first == nil || first.TaskID != "act-1" {
-		t.Fatalf("first nextActivity = %+v, err=%v", first, err)
-	}
-	// Determinism violation: workflow asks for a different activity than
-	// what's recorded next.
-	if _, err := r.nextActivity("Whoops"); err == nil {
-		t.Fatal("expected determinism violation on mismatched activity")
-	}
-	// Cursor still advanced past the violation, so the next call returns nil
-	// (history exhausted).
-	if next, err := r.nextActivity("Anything"); err != nil || next != nil {
-		t.Fatalf("nextActivity past end = %+v, err=%v", next, err)
-	}
-}
-
-func TestNextTimerChecksDuration(t *testing.T) {
-	t.Parallel()
-	r := newWorkflowReplay([]WorkflowHistoryEvent{
-		{Type: historyEventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(2500)}},
-	})
-	// Workflow asks for a different duration -> determinism violation.
-	if _, err := r.nextTimer(2000); err == nil {
-		t.Fatal("expected determinism violation when timer duration changes")
-	}
-	// Reset cursor to test happy path.
-	r.timerCursor = 0
-	if ev, err := r.nextTimer(2500); err != nil || ev == nil || ev.TaskID != "tmr-1" {
-		t.Fatalf("nextTimer happy = %+v, err=%v", ev, err)
-	}
-}
-
-func TestIsTimerFired(t *testing.T) {
-	t.Parallel()
-	r := newWorkflowReplay([]WorkflowHistoryEvent{
-		{Type: historyEventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1000)}},
-		{Type: historyEventTimerFired, TaskID: "tmr-1"},
-		{Type: historyEventTimerStarted, TaskID: "tmr-2", Attributes: map[string]any{"duration_ms": float64(1000)}},
-	})
-	first, _ := r.nextTimer(1000)
-	if !r.isTimerFired(first) {
-		t.Fatal("expected first timer to be fired")
-	}
-	second, _ := r.nextTimer(1000)
-	if r.isTimerFired(second) {
-		t.Fatal("expected second timer to still be pending")
-	}
-}
 
 func TestSignalChannelDrainsThenSuspends(t *testing.T) {
 	t.Parallel()
 	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
-		{Type: historyEventWorkflowSignaled, Attributes: map[string]any{"name": "ready", "args": []any{"a"}}},
-		{Type: historyEventWorkflowSignaled, Attributes: map[string]any{"name": "ready", "args": []any{"b"}}},
+		{Type: replay.EventWorkflowSignaled, Attributes: map[string]any{"name": "ready", "args": []any{"a"}}},
+		{Type: replay.EventWorkflowSignaled, Attributes: map[string]any{"name": "ready", "args": []any{"b"}}},
 	})
 	ch := wfctx.GetSignalChannel("ready")
 	args, err := ch.Receive(wfctx)
@@ -116,8 +36,8 @@ func TestSignalChannelDrainsThenSuspends(t *testing.T) {
 func TestSleepReturnsNilWhenTimerFiredInHistory(t *testing.T) {
 	t.Parallel()
 	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
-		{Type: historyEventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1500)}},
-		{Type: historyEventTimerFired, TaskID: "tmr-1"},
+		{Type: replay.EventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1500)}},
+		{Type: replay.EventTimerFired, TaskID: "tmr-1"},
 	})
 	if err := wfctx.Sleep(1500 * time.Millisecond); err != nil {
 		t.Fatalf("Sleep with fired timer = %v, want nil", err)
@@ -127,7 +47,7 @@ func TestSleepReturnsNilWhenTimerFiredInHistory(t *testing.T) {
 func TestSleepSuspendsWhenTimerStillPending(t *testing.T) {
 	t.Parallel()
 	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
-		{Type: historyEventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1500)}},
+		{Type: replay.EventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1500)}},
 	})
 	err := wfctx.Sleep(1500 * time.Millisecond)
 	if !IsWorkflowSuspended(err) {
@@ -156,7 +76,7 @@ func TestSleepSchedulesAndSuspendsWhenHistoryExhausted(t *testing.T) {
 		taskID:     "wf-task",
 		workflowID: "wf-1",
 		now:        time.Now().UTC(),
-		replay:     newWorkflowReplay(nil),
+		replay:     replay.New(nil),
 	}
 	err := wfctx.Sleep(2 * time.Second)
 	if !IsWorkflowSuspended(err) {
@@ -170,7 +90,6 @@ func TestSleepSchedulesAndSuspendsWhenHistoryExhausted(t *testing.T) {
 func TestExecuteActivityReturnsHistoryResult(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Worker fetched the persisted activity task; respond with success.
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"act-1","namespace":"default","queue":"default","type":"activity:Greet","state":"succeeded","attempt":1,"lease_timeout_seconds":0,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:01Z","result":{"value":"hello, world"}}`))
 	}))
@@ -180,8 +99,8 @@ func TestExecuteActivityReturnsHistoryResult(t *testing.T) {
 	wfctx := &workflowContext{
 		Context: context.Background(),
 		conn:    conn,
-		replay: newWorkflowReplay([]WorkflowHistoryEvent{
-			{Type: historyEventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
+		replay: replay.New([]WorkflowHistoryEvent{
+			{Type: replay.EventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
 		}),
 	}
 	var result string
@@ -205,8 +124,8 @@ func TestExecuteActivitySuspendsWhenActivityStillRunning(t *testing.T) {
 	wfctx := &workflowContext{
 		Context: context.Background(),
 		conn:    conn,
-		replay: newWorkflowReplay([]WorkflowHistoryEvent{
-			{Type: historyEventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
+		replay: replay.New([]WorkflowHistoryEvent{
+			{Type: replay.EventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
 		}),
 	}
 	var ignored string
@@ -220,20 +139,23 @@ func TestExecuteActivityRaisesDeterminismOnNameDrift(t *testing.T) {
 	t.Parallel()
 	wfctx := &workflowContext{
 		Context: context.Background(),
-		replay: newWorkflowReplay([]WorkflowHistoryEvent{
-			{Type: historyEventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
+		replay: replay.New([]WorkflowHistoryEvent{
+			{Type: replay.EventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
 		}),
 	}
 	err := wfctx.ExecuteActivity("Farewell", nil, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "activity command changed") {
 		t.Fatalf("expected determinism violation, got %v", err)
 	}
+	if !IsApplicationFailure(err) {
+		t.Fatalf("determinism violation should surface as ApplicationFailure, got %T", err)
+	}
 }
 
 func TestCancellationRequestedShortCircuitsCommands(t *testing.T) {
 	t.Parallel()
 	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
-		{Type: historyEventWorkflowCancellationRequest},
+		{Type: replay.EventWorkflowCancellationRequest},
 	})
 	if err := wfctx.Sleep(time.Second); !IsCancelled(err) {
 		t.Fatalf("expected CancelledFailure, got %v", err)
@@ -243,27 +165,6 @@ func TestCancellationRequestedShortCircuitsCommands(t *testing.T) {
 	}
 	if err := wfctx.ExecuteChildWorkflow("Sub", nil, nil, nil); !IsCancelled(err) {
 		t.Fatalf("ExecuteChildWorkflow expected CancelledFailure, got %v", err)
-	}
-}
-
-func TestNumberAsInt64HandlesJSONShapes(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		in   any
-		want int64
-		ok   bool
-	}{
-		{int(7), 7, true},
-		{int64(8), 8, true},
-		{float64(9), 9, true},
-		{float32(10.7), 10, true},
-		{"11", 0, false},
-	}
-	for _, c := range cases {
-		got, ok := numberAsInt64(c.in)
-		if ok != c.ok || got != c.want {
-			t.Fatalf("numberAsInt64(%v) = %d,%v want %d,%v", c.in, got, ok, c.want, c.ok)
-		}
 	}
 }
 
@@ -306,8 +207,6 @@ func TestRunWorkflowBlocksWhenHistoryFetchFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWorker: %v", err)
 	}
-	// Pre-seed the connection's agent session so BlockTask doesn't try to
-	// enroll against this stub server (which only serves /history and /block).
 	conn.applyAgentSession(agentSessionResponse{AgentID: "agent-1", AccessToken: "tok", AccessExpiresAt: time.Now().Add(time.Hour)})
 
 	res, err := worker.runWorkflow(context.Background(), &Task{
@@ -342,6 +241,6 @@ func newReplayCtx(t *testing.T, history []WorkflowHistoryEvent) *workflowContext
 		taskID:     "wf-task",
 		workflowID: "wf-1",
 		now:        time.Now().UTC(),
-		replay:     newWorkflowReplay(history),
+		replay:     replay.New(history),
 	}
 }

@@ -100,6 +100,18 @@ func IsContinueAsNew(err error) bool {
 	return errors.As(err, &c)
 }
 
+// IsWorkflowSuspended reports whether err (or anything it wraps) is the
+// workflow-suspension sentinel returned by Sleep / ExecuteActivity /
+// ExecuteChildWorkflow / SignalChannel.Receive when the workflow body cannot
+// proceed. Customer workflow bodies typically just return errors from these
+// helpers without handling them — those propagations carry the sentinel up
+// to the Worker. IsWorkflowSuspended is exposed for advanced callers that
+// need to discriminate.
+func IsWorkflowSuspended(err error) bool {
+	var s *errWorkflowSuspended
+	return errors.As(err, &s)
+}
+
 // SignalChannel is delivered to workflow code so it can wait for the next
 // signal of a given name. Receive() is called inside the workflow body.
 //

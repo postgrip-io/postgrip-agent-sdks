@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/postgrip-io/agent-sdk-go/internal/replay"
 )
 
 // WorkerOptions configures a customer-side worker that polls the runtime
@@ -341,7 +343,7 @@ func (w *Worker) runWorkflow(ctx context.Context, task *Task) (*TaskResult, erro
 		}
 		return nil, errWorkflowAlreadyBlocked
 	}
-	replay := newWorkflowReplay(history)
+	rp := replay.New(history)
 	wfctx := &workflowContext{
 		Context:      ctx,
 		logger:       w.logger.With("workflow_id", workflowID, "workflow_type", workflowType),
@@ -353,7 +355,7 @@ func (w *Worker) runWorkflow(ctx context.Context, task *Task) (*TaskResult, erro
 		workflowID:   workflowID,
 		workflowType: workflowType,
 		now:          time.Now().UTC(),
-		replay:       replay,
+		replay:       rp,
 	}
 	value, err := fn(wfctx, args)
 	if err != nil {
