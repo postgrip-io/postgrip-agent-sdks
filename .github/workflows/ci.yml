@@ -15,13 +15,13 @@ jobs:
           go-version-file: go.mod
       - name: gofmt
         run: |
-          out=$(gofmt -l src)
+          out=$(gofmt -l .)
           if [ -n "$out" ]; then
             echo "gofmt-dirty:" >&2
             echo "$out" >&2
             exit 1
           fi
       - name: go vet
-        run: go vet ./src/...
+        run: go vet ./...
       - name: go test
-        run: go test ./src/...
+        run: go test ./...

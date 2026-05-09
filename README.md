@@ -9,7 +9,7 @@ shapes come from
 all four repos agree on the runtime contract.
 
 ```sh
-go get github.com/postgrip-io/agent-sdk-go/src
+go get github.com/postgrip-io/agent-sdk-go
 ```
 
 ## Quick start — enqueue a task
@@ -22,7 +22,7 @@ import (
     "log"
     "os"
 
-    "github.com/postgrip-io/agent-sdk-go/src"
+    "github.com/postgrip-io/agent-sdk-go"
 )
 
 func main() {
@@ -72,7 +72,7 @@ import (
     "context"
     "log"
 
-    "github.com/postgrip-io/agent-sdk-go/src"
+    "github.com/postgrip-io/agent-sdk-go"
 )
 
 // Activities are plain Go functions. The first arg is a regular
@@ -171,19 +171,19 @@ func startGreet(ctx context.Context, conn *sdk.Connection) error {
 ## Layout
 
 ```text
-src/                  # Go package "sdk" — Connection / Client / Worker / replay runtime + tests
+*.go                  # Go package "sdk" — Connection / Client / Worker / replay runtime + tests, at module root (idiomatic Go)
 test/                 # reserved for future black-box / integration tests
 doc/                  # reserved for longer-form prose docs
 .github/workflows/    # CI: gofmt + go vet + go test
 ```
 
-The package files live under `src/` to match the layout of
-`agent-sdk-protocol`, `agent-sdk-typescript`, and `agent-sdk-python`.
-The declared package stays `sdk`, so consumer code references
-`sdk.Client` etc. — only the `/src` segment in the import path is new.
+Go source lives at the module root so a default `go get` + `import`
+work without a path-suffix. The TS and Python sibling SDKs keep their
+sources under `src/` per each language's idiom; only `test/`, `doc/`,
+and `.github/` are uniformly nested across all four repos.
 
 ## Development
 
 ```sh
-go test ./src/...
+go test ./...
 ```
