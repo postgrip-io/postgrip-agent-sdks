@@ -6,10 +6,11 @@ upstream code on GitHub at `github.com/postgrip-io/agent-sdk-go`. For external
 serve a small static page with `<meta name="go-import">` and
 `<meta name="go-source">` tags.
 
-That page lives in [`site/`](../site/) — it's a deployment-ready
-`index.html` plus a `_redirects` file for path rewrites. See
-[`site/README.md`](../site/README.md) for the deployment walkthrough
-(Cloudflare Pages + one CNAME record).
+That page lives in [`site/`](../site/) — a deployment-ready `index.html`
+served via Cloudflare Workers Assets (config in
+[`wrangler.toml`](../wrangler.toml)). See
+[`doc/site-deployment.md`](./site-deployment.md) for the deployment
+walkthrough (one CNAME, one Cloudflare Workers project).
 
 ## Why this matters
 

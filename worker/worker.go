@@ -44,13 +44,6 @@ type Options struct {
 	MaxConcurrentTasks int
 	PollInterval       time.Duration
 	Logger             *slog.Logger
-
-	// EnableSystemTasks routes shell.exec, container.exec, noop, and timer
-	// tasks to the same internal handlers the postgrip-agent binary uses.
-	// Customer-side workers usually leave this false (the system-side Go
-	// agent picks up those task types). Set true to consolidate into one
-	// process during local development.
-	EnableSystemTasks bool
 }
 
 // Worker is a polling agent. Run blocks until context cancellation or

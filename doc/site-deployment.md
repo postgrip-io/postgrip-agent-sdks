@@ -1,7 +1,8 @@
-# site/
+# Vanity site deployment
 
-Static landing page that doubles as the Go vanity import resolver for
-`go.postgrip.io/sdk`.
+The contents of `site/` are deployed to `go.postgrip.io` as a Cloudflare
+Worker (Workers Assets). The page doubles as the Go vanity import resolver
+for `go.postgrip.io/sdk` and a small human-visible landing.
 
 When `go get go.postgrip.io/sdk[/...]` runs, Go's module proxy fetches
 `https://go.postgrip.io/sdk?go-get=1`, parses the `<meta name="go-import">`
