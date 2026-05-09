@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out=$(gofmt -l src)
+          if [ -n "$out" ]; then
+            echo "gofmt-dirty:" >&2
+            echo "$out" >&2
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./src/...
+      - name: go test
+        run: go test ./src/...

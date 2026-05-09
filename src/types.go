@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-protocol"
+	"github.com/postgrip-io/agent-sdk-protocol/src"
 )
 
 // Re-export the wire types so customer code can import everything from one

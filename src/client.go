@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-protocol"
+	"github.com/postgrip-io/agent-sdk-protocol/src"
 )
 
 // Client is the high-level entry point. It groups the Task / Workflow /

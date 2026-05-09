@@ -9,7 +9,7 @@ shapes come from
 all four repos agree on the runtime contract.
 
 ```sh
-go get github.com/postgrip-io/agent-sdk-go
+go get github.com/postgrip-io/agent-sdk-go/src
 ```
 
 ## Quick start — enqueue a task
@@ -22,7 +22,7 @@ import (
     "log"
     "os"
 
-    "github.com/postgrip-io/agent-sdk-go"
+    "github.com/postgrip-io/agent-sdk-go/src"
 )
 
 func main() {
@@ -72,7 +72,7 @@ import (
     "context"
     "log"
 
-    "github.com/postgrip-io/agent-sdk-go"
+    "github.com/postgrip-io/agent-sdk-go/src"
 )
 
 // Activities are plain Go functions. The first arg is a regular
@@ -168,9 +168,22 @@ func startGreet(ctx context.Context, conn *sdk.Connection) error {
   unsupported — query/update handler invocation against a paused workflow
   isn't yet wired through Worker.
 
+## Layout
+
+```text
+src/                  # Go package "sdk" — Connection / Client / Worker / replay runtime + tests
+test/                 # reserved for future black-box / integration tests
+doc/                  # reserved for longer-form prose docs
+.github/workflows/    # CI: gofmt + go vet + go test
+```
+
+The package files live under `src/` to match the layout of
+`agent-sdk-protocol`, `agent-sdk-typescript`, and `agent-sdk-python`.
+The declared package stays `sdk`, so consumer code references
+`sdk.Client` etc. — only the `/src` segment in the import path is new.
+
 ## Development
 
 ```sh
-cd postgrip-agent
-go test ./sdk/...
+go test ./src/...
 ```
