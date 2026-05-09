@@ -1,5 +1,11 @@
 # PostGrip Agent — Go SDK
 
+[![Docs](https://img.shields.io/badge/docs-postgrip--io.github.io-2563EB?logo=github&logoColor=white)](https://postgrip-io.github.io/agent-sdk-go/)
+[![Go Reference](https://pkg.go.dev/badge/go.postgrip.io/sdk.svg)](https://pkg.go.dev/go.postgrip.io/sdk)
+[![CI](https://github.com/postgrip-io/agent-sdk-go/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/agent-sdk-go/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/postgrip-io/agent-sdk-go?label=release&color=2563EB)](https://github.com/postgrip-io/agent-sdk-go/releases)
+[![License](https://img.shields.io/github/license/postgrip-io/agent-sdk-go?color=2563EB)](LICENSE)
+
 Go SDK for the PostGrip Agent runtime service. Mirrors
 [`agent-sdk-typescript`](https://github.com/postgrip-io/agent-sdk-typescript)
 and [`agent-sdk-python`](https://github.com/postgrip-io/agent-sdk-python) so
@@ -8,8 +14,8 @@ shapes come from
 [`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) so
 all four repos agree on the runtime contract.
 
-📖 **Docs:** [postgrip-io.github.io/agent-sdk-go](https://postgrip-io.github.io/agent-sdk-go) — quick start, package guide, workflow runtime model.
-📚 **API:** [pkg.go.dev/go.postgrip.io/sdk](https://pkg.go.dev/go.postgrip.io/sdk) — auto-generated godoc.
+**Docs:** [postgrip-io.github.io/agent-sdk-go](https://postgrip-io.github.io/agent-sdk-go) — quick start, package guide, workflow runtime model.
+**API:** [pkg.go.dev/go.postgrip.io/sdk](https://pkg.go.dev/go.postgrip.io/sdk) — auto-generated godoc.
 
 ```sh
 go get go.postgrip.io/sdk
