@@ -1,4 +1,4 @@
-package sdk
+package client
 
 import (
 	"bytes"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/postgrip-io/agent-sdk-go/failure"
 )
 
 // ConnectionOptions configures the HTTP connection to the agent runtime
@@ -110,8 +112,8 @@ func NewConnection(opts ConnectionOptions) (*Connection, error) {
 // Address returns the canonical base URL of the runtime service.
 func (c *Connection) Address() string { return c.address }
 
-// Health hits /healthz; returns the parsed JSON body. Useful as a smoke test
-// at startup before consuming Client APIs.
+// Health hits /healthz; returns the parsed JSON body. Useful as a smoke
+// test at startup before consuming Client APIs.
 func (c *Connection) Health(ctx context.Context) (map[string]any, error) {
 	var out map[string]any
 	if err := c.do(ctx, http.MethodGet, "/healthz", nil, &out, false); err != nil {
@@ -120,21 +122,21 @@ func (c *Connection) Health(ctx context.Context) (map[string]any, error) {
 	return out, nil
 }
 
-// do is the single HTTP entrypoint for the SDK; all the typed helpers above
-// funnel through it. agentAuth selects between "use AuthToken" (false) and
-// "use the agent's refreshable access token" (true).
+// do is the single HTTP entrypoint; all the typed helpers funnel through
+// it. agentAuth selects between "use AuthToken" (false) and "use the
+// agent's refreshable access token" (true).
 func (c *Connection) do(ctx context.Context, method, path string, body any, out any, agentAuth bool) error {
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {
-			return &PostGripAgentError{Message: "encode request body", Cause: err}
+			return &failure.SDKError{Message: "encode request body", Cause: err}
 		}
 		reader = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.address+path, reader)
 	if err != nil {
-		return &PostGripAgentError{Message: "build request", Cause: err}
+		return &failure.SDKError{Message: "build request", Cause: err}
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -154,25 +156,25 @@ func (c *Connection) do(ctx context.Context, method, path string, body any, out 
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return &PostGripAgentError{Message: "http request", Cause: err}
+		return &failure.SDKError{Message: "http request", Cause: err}
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &PostGripAgentError{Message: "read response body", Cause: err}
+		return &failure.SDKError{Message: "read response body", Cause: err}
 	}
 	if resp.StatusCode >= 400 {
 		msg := strings.TrimSpace(string(raw))
 		if msg == "" {
 			msg = resp.Status
 		}
-		return &PostGripAgentError{Message: fmt.Sprintf("%s %s -> %d %s", method, path, resp.StatusCode, msg)}
+		return &failure.SDKError{Message: fmt.Sprintf("%s %s -> %d %s", method, path, resp.StatusCode, msg)}
 	}
 	if out == nil || len(raw) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return &PostGripAgentError{Message: fmt.Sprintf("decode response from %s %s", method, path), Cause: err}
+		return &failure.SDKError{Message: fmt.Sprintf("decode response from %s %s", method, path), Cause: err}
 	}
 	return nil
 }

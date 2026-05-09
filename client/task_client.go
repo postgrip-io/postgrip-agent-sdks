@@ -1,4 +1,4 @@
-package sdk
+package client
 
 import (
 	"context"
@@ -26,9 +26,8 @@ func (t *TaskClient) Enqueue(ctx context.Context, in EnqueueInput) (*Task, error
 	return t.conn.EnqueueTask(ctx, req)
 }
 
-// ShellExec enqueues a shell.exec task. Mirrors TS client.task.shellExec /
-// Python client.task.shell_exec — the agent runs the command on its host
-// using whatever's installed in the agent image.
+// ShellExec enqueues a shell.exec task. The agent runs the command on its
+// host using whatever's installed in the agent image.
 func (t *TaskClient) ShellExec(ctx context.Context, in ShellExecInput) (*Task, error) {
 	payload := ShellExecPayload{
 		Command:        in.Command,
@@ -44,10 +43,9 @@ func (t *TaskClient) ShellExec(ctx context.Context, in ShellExecInput) (*Task, e
 	})
 }
 
-// ContainerExec enqueues a container.exec task. Mirrors the TS / Python
-// containerExec / container_exec helpers added next to ShellExec. The Go
-// agent will launch a per-task container from `Image` via its docker CLI;
-// requires the agent process to have DOCKER_HOST set on it.
+// ContainerExec enqueues a container.exec task. The Go agent will launch a
+// per-task container from `Image` via its docker CLI; requires the agent
+// process to have DOCKER_HOST set on it.
 func (t *TaskClient) ContainerExec(ctx context.Context, in ContainerExecInput) (*Task, error) {
 	payload := ContainerExecPayload{
 		Image:          in.Image,
@@ -95,43 +93,6 @@ func (t *TaskClient) Events(ctx context.Context, taskID string) ([]TaskEvent, er
 // workflow id.
 func (t *TaskClient) Result(ctx context.Context, taskID string, target any) error {
 	return waitForTaskCompletion(ctx, t.conn, taskID, target)
-}
-
-// waitForTaskCompletion polls the task until it reaches a terminal state.
-// Used by TaskClient.Result and WorkflowHandle.Result so callers don't have
-// to hand-roll a polling loop.
-func waitForTaskCompletion(ctx context.Context, conn *Connection, taskID string, target any) error {
-	for {
-		task, err := conn.GetTask(ctx, taskID)
-		if err != nil {
-			return err
-		}
-		switch task.State {
-		case TaskStateSucceeded:
-			if target == nil || task.Result == nil {
-				return nil
-			}
-			if task.Result.Failure != nil {
-				return failureToError(task.Result.Failure)
-			}
-			return decodeResultValue(task.Result, target)
-		case TaskStateFailed:
-			reason := task.Error
-			if task.Result != nil && task.Result.Failure != nil {
-				return &TaskFailedError{
-					TaskID:  taskID,
-					Reason:  reason,
-					Failure: failureInfoToApplicationFailure(task.Result.Failure),
-				}
-			}
-			return &TaskFailedError{TaskID: taskID, Reason: reason}
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(500 * time.Millisecond):
-		}
-	}
 }
 
 // WatchEvents polls the events endpoint and pushes new events onto the

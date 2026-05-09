@@ -1,4 +1,13 @@
-package sdk
+// Package workflow exposes the workflow-side surface of the SDK: the
+// Context interface customer workflow bodies receive, the option structs
+// for activity / child-workflow / continue-as-new dispatch, signal channels,
+// and the Func/Registry shapes Worker uses to find workflow implementations.
+//
+// Customer code reaches into this package both at registration time (worker
+// passes a workflow.Registry) and inside workflow bodies (the Context
+// argument is a workflow.Context). Implementation lives in the worker
+// package — workflow only carries the public types.
+package workflow
 
 import (
 	"context"
@@ -6,24 +15,23 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/postgrip-io/agent-sdk-protocol"
 )
 
-// WorkflowFunc is the customer-supplied workflow body. The SDK invokes it
-// with a workflow-scoped Context (sleep / activity / child / signal /
-// query / update APIs all dispatch through it) and the deserialized args.
-type WorkflowFunc func(ctx Context, args []any) (any, error)
+// RetryPolicy is re-exported from protocol so customer code doesn't have to
+// import the protocol package alongside workflow.
+type RetryPolicy = protocol.RetryPolicy
 
-// ActivityFunc is the customer-supplied activity body. Standard
-// context.Context is honored for cancellation/deadline; the activity's task
-// id and runtime metadata can be retrieved via ActivityInfo(ctx).
-type ActivityFunc func(ctx context.Context, args []any) (any, error)
+// IDReusePolicy constrains whether a workflow id can be reused for a new
+// run, mirroring the TS/Python WorkflowIdReusePolicy.
+type IDReusePolicy string
 
-// WorkflowRegistry maps workflow types to their implementations. Worker
-// rejects tasks for unregistered workflow types with a non-retryable failure.
-type WorkflowRegistry map[string]WorkflowFunc
-
-// ActivityRegistry maps activity names to their implementations.
-type ActivityRegistry map[string]ActivityFunc
+const (
+	IDReusePolicyAllowDuplicate           IDReusePolicy = "allow_duplicate"
+	IDReusePolicyAllowDuplicateFailedOnly IDReusePolicy = "allow_duplicate_failed_only"
+	IDReusePolicyRejectDuplicate          IDReusePolicy = "reject_duplicate"
+)
 
 // CancellationType controls how child workflows / activities react to a
 // parent cancellation. Mirrors the TS / Python CancellationType.
@@ -42,6 +50,14 @@ const (
 	CancellationScopeCancellable    CancellationScopeType = "cancellable"
 	CancellationScopeNonCancellable CancellationScopeType = "non_cancellable"
 )
+
+// MilestoneOptions controls workflow milestone emission so callers can
+// render ordered progress.
+type MilestoneOptions struct {
+	Index   int
+	Total   int
+	Details map[string]any
+}
 
 // ActivityOptions configures a single activity invocation. Zero values mean
 // "use the runtime defaults"; the runtime service applies sensible
@@ -64,7 +80,7 @@ type ChildWorkflowOptions struct {
 	CancellationType      CancellationType
 	CancellationScope     CancellationScopeType
 	Retry                 *RetryPolicy
-	WorkflowIDReusePolicy WorkflowIDReusePolicy
+	WorkflowIDReusePolicy IDReusePolicy
 }
 
 // ContinueAsNewOptions captures the new workflow shape when a workflow opts
@@ -81,34 +97,51 @@ type ContinueAsNewOptions struct {
 	Retry                *RetryPolicy
 }
 
-// continueAsNewSentinel is returned (as an error) from ContinueAsNew so the
-// Worker dispatch can recognize the intent and translate it into a
-// runtime-service ContinueAsNewResult on completion. ContinueAsNew is not
-// a true error — it's a control-flow signal modeled as one to avoid forcing
-// every WorkflowFunc to return a sum type.
-type continueAsNewSentinel struct {
+// ContinueAsNewSentinel is the error returned from Context.ContinueAsNew so
+// the Worker dispatch can recognize the intent and translate it into a
+// runtime-service ContinueAsNewResult on completion. It's exported so the
+// worker package can errors.As it; customer code should not construct one
+// directly — return ctx.ContinueAsNew(opts) instead.
+type ContinueAsNewSentinel struct {
 	Options ContinueAsNewOptions
 }
 
-func (c *continueAsNewSentinel) Error() string {
+func (c *ContinueAsNewSentinel) Error() string {
 	return fmt.Sprintf("continue-as-new to %q", c.Options.WorkflowType)
 }
 
 // IsContinueAsNew reports whether err is a ContinueAsNew signal.
 func IsContinueAsNew(err error) bool {
-	var c *continueAsNewSentinel
+	var c *ContinueAsNewSentinel
 	return errors.As(err, &c)
 }
 
-// IsWorkflowSuspended reports whether err (or anything it wraps) is the
-// workflow-suspension sentinel returned by Sleep / ExecuteActivity /
-// ExecuteChildWorkflow / SignalChannel.Receive when the workflow body cannot
-// proceed. Customer workflow bodies typically just return errors from these
-// helpers without handling them — those propagations carry the sentinel up
-// to the Worker. IsWorkflowSuspended is exposed for advanced callers that
-// need to discriminate.
-func IsWorkflowSuspended(err error) bool {
-	var s *errWorkflowSuspended
+// Suspended is the sentinel returned by workflow context helpers when the
+// workflow body cannot proceed (waiting on an in-flight activity / timer /
+// child workflow, or on a signal that hasn't arrived yet). The Worker
+// recognizes this via errors.As and translates it into a BlockTask call so
+// the runtime service re-leases the workflow when its dependencies resolve.
+// Exported so the worker package can construct and recognize it.
+type Suspended struct {
+	Reason string
+}
+
+func (e *Suspended) Error() string { return "workflow suspended: " + e.Reason }
+
+// NewSuspended constructs a Suspended sentinel with a printf-style reason.
+// Used by the worker package's Context implementation; customer code should
+// not construct one directly.
+func NewSuspended(format string, args ...any) error {
+	return &Suspended{Reason: fmt.Sprintf(format, args...)}
+}
+
+// IsSuspended reports whether err (or anything it wraps) is the workflow-
+// suspension sentinel. Customer workflow bodies typically just return errors
+// from ctx.ExecuteActivity / ctx.Sleep without handling them — those
+// propagations carry the sentinel up to the Worker. IsSuspended is exposed
+// for advanced callers that need to discriminate.
+func IsSuspended(err error) bool {
+	var s *Suspended
 	return errors.As(err, &s)
 }
 
@@ -124,6 +157,21 @@ type SignalChannel struct {
 	name  string
 	queue chan []any
 }
+
+// NewSignalChannel constructs a channel pre-seeded with persisted signal
+// payloads. Used by the worker package's workflow Context implementation.
+// Customer code obtains channels via Context.GetSignalChannel.
+func NewSignalChannel(name string, persisted [][]any) *SignalChannel {
+	bufSize := len(persisted) + 8
+	ch := &SignalChannel{name: name, queue: make(chan []any, bufSize)}
+	for _, args := range persisted {
+		ch.queue <- args
+	}
+	return ch
+}
+
+// Name returns the signal name this channel routes.
+func (s *SignalChannel) Name() string { return s.name }
 
 // Receive returns the next buffered signal payload for this channel's name.
 // On an empty buffer it returns the suspend sentinel — the Worker
@@ -142,13 +190,13 @@ func (s *SignalChannel) Receive(ctx Context) ([]any, error) {
 	case args := <-s.queue:
 		return args, nil
 	default:
-		return nil, newSuspended("waiting for signal %q", s.name)
+		return nil, NewSuspended("waiting for signal %q", s.name)
 	}
 }
 
-// Context is the workflow-scoped context handed to every WorkflowFunc. It
-// carries cancellation, deadline, and the workflow runtime so workflow code
-// can sleep, execute activities, schedule child workflows, register query /
+// Context is the workflow-scoped context handed to every Func. It carries
+// cancellation, deadline, and the workflow runtime so workflow code can
+// sleep, execute activities, schedule child workflows, register query /
 // update / signal handlers, and call ContinueAsNew.
 //
 // Context implements context.Context so customer code can pass it to any
@@ -156,8 +204,7 @@ func (s *SignalChannel) Receive(ctx Context) ([]any, error) {
 type Context interface {
 	context.Context
 
-	// Now returns the workflow's logical time. Mirrors workflow.now() in TS
-	// and Python — durable across replays.
+	// Now returns the workflow's logical time — durable across replays.
 	Now() time.Time
 
 	// Logger returns a workflow-scoped slog.Logger pre-tagged with the
@@ -193,7 +240,7 @@ type Context interface {
 	// caller until the handler returns, and they may trigger commands.
 	SetUpdateHandler(name string, handler func(args []any) (any, error)) error
 
-	// Milestone emits a TaskEventKindMilestone event for the workflow task.
+	// Milestone emits a milestone event for the workflow task.
 	Milestone(name string, opts MilestoneOptions) error
 
 	// ContinueAsNew completes the current run and schedules a new run with
@@ -202,3 +249,12 @@ type Context interface {
 	// should `return ctx.ContinueAsNew(...)` from their body.
 	ContinueAsNew(opts ContinueAsNewOptions) error
 }
+
+// Func is the customer-supplied workflow body. The SDK invokes it with a
+// workflow-scoped Context (sleep / activity / child / signal / query /
+// update APIs all dispatch through it) and the deserialized args.
+type Func func(ctx Context, args []any) (any, error)
+
+// Registry maps workflow types to their implementations. Worker rejects
+// tasks for unregistered workflow types with a non-retryable failure.
+type Registry map[string]Func

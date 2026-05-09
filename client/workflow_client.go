@@ -1,4 +1,4 @@
-package sdk
+package client
 
 import "context"
 
@@ -57,8 +57,9 @@ func (h *WorkflowHandle) History(ctx context.Context) ([]WorkflowHistoryEvent, e
 	return h.conn.GetWorkflowHistory(ctx, h.WorkflowID)
 }
 
-// WorkflowClient is the workflow management surface — Start, Signal-with-Start,
-// GetHandle. Mirrors TS client.workflow.* and Python client.workflow.*.
+// WorkflowClient is the workflow management surface — Start,
+// SignalWithStart, GetHandle. Mirrors TS client.workflow.* and Python
+// client.workflow.*.
 type WorkflowClient struct {
 	conn *Connection
 }
@@ -128,6 +129,14 @@ func (c *WorkflowClient) SignalWithStart(ctx context.Context, workflowType, sign
 // already-running workflow.
 func (c *WorkflowClient) GetHandle(workflowID string) *WorkflowHandle {
 	return &WorkflowHandle{conn: c.conn, WorkflowID: workflowID}
+}
+
+// HandleForTask constructs a WorkflowHandle keyed on a workflow id and an
+// existing workflow task id. Used by the worker package when surfacing the
+// handle for a workflow it just dispatched, without having to round-trip
+// GetWorkflowExecution.
+func HandleForTask(conn *Connection, workflowID, taskID string) *WorkflowHandle {
+	return &WorkflowHandle{conn: conn, WorkflowID: workflowID, TaskID: taskID}
 }
 
 // buildWorkflowStartPayload assembles the JSON-encoded payload the runtime

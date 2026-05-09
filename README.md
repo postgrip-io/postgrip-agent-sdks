@@ -12,6 +12,16 @@ all four repos agree on the runtime contract.
 go get github.com/postgrip-io/agent-sdk-go
 ```
 
+The SDK is split into focused sub-packages — pick the ones your code needs:
+
+| Package                                             | Purpose                                                                       |
+| --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`client`](./client)     | `Connection`, `Client`, `Task` / `Workflow` / `Schedule` sub-clients, input shapes. |
+| [`worker`](./worker)     | `Worker` that polls, leases, and dispatches tasks to your registered bodies.        |
+| [`workflow`](./workflow) | `workflow.Context`, option structs, `SignalChannel`, `workflow.Func` / `Registry`.   |
+| [`activity`](./activity) | `activity.Func`, `Info`, `GetInfo`, `Heartbeat`, `Milestone`.                        |
+| [`failure`](./failure)   | Structured failures: `Application`, `Cancelled`, `Timeout`, `TaskFailed`.            |
+
 ## Quick start — enqueue a task
 
 ```go
@@ -22,21 +32,21 @@ import (
     "log"
     "os"
 
-    "github.com/postgrip-io/agent-sdk-go"
+    "github.com/postgrip-io/agent-sdk-go/client"
 )
 
 func main() {
-    conn, err := sdk.NewConnection(sdk.ConnectionOptions{
+    conn, err := client.NewConnection(client.ConnectionOptions{
         Address:   "http://127.0.0.1:4100",
         AuthToken: os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"),
     })
     if err != nil {
         log.Fatal(err)
     }
-    client := sdk.NewClient(conn)
+    c := client.New(conn)
 
-    // shell.exec — runs whatever's on the agent's PATH
-    task, err := client.Task.ShellExec(context.Background(), sdk.ShellExecInput{
+    // shell.exec — runs whatever's on the agent's PATH.
+    task, err := c.Task.ShellExec(context.Background(), client.ShellExecInput{
         Queue:   "default",
         Command: "echo",
         Args:    []string{"hello from agent"},
@@ -48,7 +58,7 @@ func main() {
 
     // container.exec — runs in a per-task container the Go agent launches
     // via its docker CLI. Polyglot without bloating the agent image.
-    _, err = client.Task.ContainerExec(context.Background(), sdk.ContainerExecInput{
+    _, err = c.Task.ContainerExec(context.Background(), client.ContainerExecInput{
         Queue:   "default",
         Image:   "node:22-alpine",
         Command: "node",
@@ -72,7 +82,10 @@ import (
     "context"
     "log"
 
-    "github.com/postgrip-io/agent-sdk-go"
+    "github.com/postgrip-io/agent-sdk-go/activity"
+    "github.com/postgrip-io/agent-sdk-go/client"
+    "github.com/postgrip-io/agent-sdk-go/worker"
+    "github.com/postgrip-io/agent-sdk-go/workflow"
 )
 
 // Activities are plain Go functions. The first arg is a regular
@@ -83,9 +96,9 @@ func GreetActivity(ctx context.Context, args []any) (any, error) {
     return "hello, " + name, nil
 }
 
-// Workflows take an sdk.Context that gives durable Sleep, ExecuteActivity,
-// ExecuteChildWorkflow, signals, queries, and updates.
-func GreetWorkflow(ctx sdk.Context, args []any) (any, error) {
+// Workflows take a workflow.Context that gives durable Sleep,
+// ExecuteActivity, ExecuteChildWorkflow, signals, queries, and updates.
+func GreetWorkflow(ctx workflow.Context, args []any) (any, error) {
     var greeting string
     if err := ctx.ExecuteActivity("GreetActivity", args, &greeting, nil); err != nil {
         return nil, err
@@ -93,13 +106,13 @@ func GreetWorkflow(ctx sdk.Context, args []any) (any, error) {
     return greeting, nil
 }
 
-func runWorker(ctx context.Context, conn *sdk.Connection) error {
-    w, err := sdk.NewWorker(sdk.WorkerOptions{
+func runWorker(ctx context.Context, conn *client.Connection) error {
+    w, err := worker.New(worker.Options{
         Connection: conn,
         AgentID:    "worker-1",
         Queue:      "default",
-        Workflows:  sdk.WorkflowRegistry{"Greet": GreetWorkflow},
-        Activities: sdk.ActivityRegistry{"GreetActivity": GreetActivity},
+        Workflows:  workflow.Registry{"Greet": GreetWorkflow},
+        Activities: activity.Registry{"GreetActivity": GreetActivity},
     })
     if err != nil {
         return err
@@ -107,9 +120,9 @@ func runWorker(ctx context.Context, conn *sdk.Connection) error {
     return w.Run(ctx)
 }
 
-func startGreet(ctx context.Context, conn *sdk.Connection) error {
-    client := sdk.NewClient(conn)
-    handle, err := client.Workflow.Start(ctx, "Greet", sdk.WorkflowStartOptions{
+func startGreet(ctx context.Context, conn *client.Connection) error {
+    c := client.New(conn)
+    handle, err := c.Workflow.Start(ctx, "Greet", client.WorkflowStartOptions{
         Args: []any{"world"},
     })
     if err != nil {
@@ -126,24 +139,25 @@ func startGreet(ctx context.Context, conn *sdk.Connection) error {
 
 ## Surface
 
-| Group           | Methods                                                                                |
-| --------------- | -------------------------------------------------------------------------------------- |
-| `Client.Task`   | `Enqueue`, `ShellExec`, `ContainerExec`, `Noop`, `Get`, `List`, `Events`, `Result`, `WatchEvents` |
-| `Client.Workflow` | `Start`, `SignalWithStart`, `GetHandle`                                              |
-| `WorkflowHandle` | `Result`, `Describe`, `Signal`, `Cancel`, `Terminate`, `History`                       |
-| `Client.Schedule` | `Create`, `List`, `Get`, `Update`, `Pause`, `Unpause`, `Trigger`, `Backfill`, `Delete` |
-| `sdk.Context` (workflow) | `Now`, `Logger`, `Sleep`, `ExecuteActivity`, `ExecuteChildWorkflow`, `GetSignalChannel`, `SetQueryHandler`, `SetUpdateHandler`, `Milestone`, `ContinueAsNew` |
-| activity helpers | `GetActivityInfo`, `Heartbeat`, `ActivityMilestone`                                   |
-| `Worker`        | `Run`, `Shutdown`                                                                      |
+| Group               | Methods                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `client.Task`       | `Enqueue`, `ShellExec`, `ContainerExec`, `Noop`, `Get`, `List`, `Events`, `Result`, `WatchEvents` |
+| `client.Workflow`   | `Start`, `SignalWithStart`, `GetHandle`                                                |
+| `client.WorkflowHandle` | `Result`, `Describe`, `Signal`, `Cancel`, `Terminate`, `History`                   |
+| `client.Schedule`   | `Create`, `List`, `Get`, `Update`, `Pause`, `Unpause`, `Trigger`, `Backfill`, `Delete` |
+| `workflow.Context`  | `Now`, `Logger`, `Sleep`, `ExecuteActivity`, `ExecuteChildWorkflow`, `GetSignalChannel`, `SetQueryHandler`, `SetUpdateHandler`, `Milestone`, `ContinueAsNew` |
+| activity helpers    | `activity.GetInfo`, `activity.Heartbeat`, `activity.Milestone`                         |
+| `worker.Worker`     | `Run`, `Shutdown`                                                                      |
 
 ## Status
 
-- The lower-level task surface (`Client.Task.*`, including `ContainerExec`),
-  `Client.Workflow.Start`, `WorkflowHandle.*`, and `Client.Schedule.*` are at
+- The lower-level task surface (`client.Task.*`, including `ContainerExec`),
+  `client.Workflow.Start`, `WorkflowHandle.*`, and `client.Schedule.*` are at
   parity with the TS / Python SDKs.
-- `Worker` polls, leases, dispatches `noop`, `activity:*`, and `workflow:*`
-  tasks. Activity execution honors heartbeats, milestones, and structured
-  failures (`ApplicationFailure`, `CancelledFailure`, `TimeoutFailure`).
+- `worker.Worker` polls, leases, dispatches `noop`, `activity:*`, and
+  `workflow:*` tasks. Activity execution honors heartbeats, milestones, and
+  structured failures (`failure.Application`, `failure.Cancelled`,
+  `failure.Timeout`).
 - Workflow execution does deterministic replay against durable history,
   matching the TS / Python SDKs:
   - Each lease, the Worker fetches the workflow's full history, builds a
@@ -160,10 +174,10 @@ func startGreet(ctx context.Context, conn *sdk.Connection) error {
     non-retryable `WorkflowDeterminismViolation` failure so misbehaving
     workflow code is caught early.
   - Signals delivered via `WorkflowSignaled` history events are seeded into
-    `SignalChannel` buffers on each replay. `Receive` drains the buffer
-    and suspends when empty.
+    `workflow.SignalChannel` buffers on each replay. `Receive` drains the
+    buffer and suspends when empty.
   - `WorkflowCancellationRequested` short-circuits subsequent commands with
-    `CancelledFailure`.
+    `failure.Cancelled`.
 - Query / update task types (`query:*`, `update:*`) still surface as
   unsupported — query/update handler invocation against a paused workflow
   isn't yet wired through Worker.
@@ -171,16 +185,16 @@ func startGreet(ctx context.Context, conn *sdk.Connection) error {
 ## Layout
 
 ```text
-*.go                  # Go package "sdk" — Connection / Client / Worker / replay runtime + tests, at module root (idiomatic Go)
-test/                 # reserved for future black-box / integration tests
-doc/                  # reserved for longer-form prose docs
-.github/workflows/    # CI: gofmt + go vet + go test
+client/             # Connection, Client, Task / Workflow / Schedule sub-clients
+worker/             # Worker, workflow.Context implementation, dispatch
+workflow/           # Context interface, options, Func, SignalChannel
+activity/           # Func, Info, GetInfo, Heartbeat, Milestone
+failure/            # Application / Cancelled / Timeout / TaskFailed
+internal/replay/    # Workflow replay engine (cursor over durable history)
+test/               # Reserved for future black-box / integration tests
+doc/                # Reserved for longer-form prose docs
+.github/workflows/  # CI: gofmt + go vet + go test
 ```
-
-Go source lives at the module root so a default `go get` + `import`
-work without a path-suffix. The TS and Python sibling SDKs keep their
-sources under `src/` per each language's idiom; only `test/`, `doc/`,
-and `.github/` are uniformly nested across all four repos.
 
 ## Development
 

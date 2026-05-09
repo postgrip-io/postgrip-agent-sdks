@@ -1,4 +1,4 @@
-package sdk
+package client
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"net/url"
 )
 
-// EnqueueTask enqueues a single task. Use Client.Task.Enqueue / ShellExec /
+// EnqueueTask enqueues a single task. Use TaskClient.Enqueue / ShellExec /
 // ContainerExec / Noop helpers for ergonomic construction; this is the raw
 // transport call.
 func (c *Connection) EnqueueTask(ctx context.Context, req EnqueueTaskRequest) (*Task, error) {
@@ -51,10 +51,17 @@ func (c *Connection) GetTaskEvents(ctx context.Context, taskID string) ([]TaskEv
 	return out, nil
 }
 
+// PollTaskResponse pairs the leased task (if any) with an optional poll
+// directive from the runtime service. Exported so /worker can consume it.
+type PollTaskResponse struct {
+	Task      *Task               `json:"task,omitempty"`
+	Directive *AgentPollDirective `json:"directive,omitempty"`
+}
+
 // PollTask leases the next task for the given namespace+queue for this
 // agent. Returns nil task when the queue is empty (HTTP 204 / empty body
 // equivalent). The agent_id is required by the runtime service.
-func (c *Connection) PollTask(ctx context.Context, namespace, queue, agentID string) (*protocolPollTaskResponse, error) {
+func (c *Connection) PollTask(ctx context.Context, namespace, queue, agentID string) (*PollTaskResponse, error) {
 	if err := c.ensureAgentSession(ctx, agentID, namespace, queue); err != nil {
 		return nil, err
 	}
@@ -63,20 +70,15 @@ func (c *Connection) PollTask(ctx context.Context, namespace, queue, agentID str
 	if q != "" {
 		path += "?" + q
 	}
-	var out protocolPollTaskResponse
+	var out PollTaskResponse
 	if err := c.do(ctx, http.MethodPost, path, nil, &out, true); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-type protocolPollTaskResponse struct {
-	Task      *Task               `json:"task,omitempty"`
-	Directive *AgentPollDirective `json:"directive,omitempty"`
-}
-
-// HeartbeatTask emits a TaskEventKindHeartbeat for a leased task. Workers
-// call this on a timer derived from the task's lease_timeout_seconds.
+// HeartbeatTask emits a heartbeat for a leased task. Workers call this on
+// a timer derived from the task's lease_timeout_seconds.
 func (c *Connection) HeartbeatTask(ctx context.Context, taskID, agentID string, ev *TaskEventInput) error {
 	if err := c.ensureAgentSession(ctx, agentID, "", ""); err != nil {
 		return err

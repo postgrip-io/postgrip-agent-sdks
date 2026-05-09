@@ -1,10 +1,14 @@
-package sdk
+// Package client exposes the management surface of the SDK: the HTTP
+// Connection, the high-level Client (grouping Task / Workflow / Schedule
+// sub-clients), and the input shapes for enqueueing work and managing
+// schedules. Customer code that just needs to enqueue tasks or start
+// workflows imports this package and nothing else.
+package client
 
 import "github.com/postgrip-io/agent-sdk-protocol"
 
-// Re-export the wire types so customer code can import everything from one
-// package. The SDK and the protocol layer agree on a single JSON shape per
-// resource; aliasing keeps that explicit.
+// Re-export the wire types so customer code can stay within the client
+// package when reading task / workflow / schedule responses.
 type (
 	Task                           = protocol.Task
 	TaskState                      = protocol.TaskState
@@ -50,8 +54,7 @@ type (
 	SignalWorkflowRequest          = protocol.SignalWorkflowRequest
 )
 
-// Re-export task type / event kind / state constants so customer code never
-// has to import the protocol package alongside the SDK.
+// Re-export task type / event kind / state constants.
 const (
 	TaskStateQueued    = protocol.TaskStateQueued
 	TaskStateLeased    = protocol.TaskStateLeased

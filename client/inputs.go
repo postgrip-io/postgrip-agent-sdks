@@ -1,72 +1,12 @@
-package sdk
+package client
 
-import "time"
+import (
+	"time"
 
-// WorkflowIDReusePolicy constrains whether a workflow id can be reused for a
-// new run, mirroring the TS/Python WorkflowIdReusePolicy.
-type WorkflowIDReusePolicy string
-
-const (
-	WorkflowIDReusePolicyAllowDuplicate           WorkflowIDReusePolicy = "allow_duplicate"
-	WorkflowIDReusePolicyAllowDuplicateFailedOnly WorkflowIDReusePolicy = "allow_duplicate_failed_only"
-	WorkflowIDReusePolicyRejectDuplicate          WorkflowIDReusePolicy = "reject_duplicate"
+	"github.com/postgrip-io/agent-sdk-go/workflow"
 )
 
-// WorkflowStartOptions is the SDK-side input to Client.Workflow.Start.
-// It carries the durable identity, queue routing, payload args, and the
-// retry / memo / search-attribute metadata the runtime service persists.
-type WorkflowStartOptions struct {
-	Namespace             string
-	WorkflowID            string
-	WorkflowIDReusePolicy WorkflowIDReusePolicy
-	TaskQueue             string
-	Args                  []any
-	LeaseTimeoutSeconds   int
-	WorkflowRunTimeoutMs  int
-	Retry                 *RetryPolicy
-	Memo                  map[string]any
-	SearchAttributes      map[string]any
-}
-
-// SignalWithStartOptions is the SDK-side input to Client.Workflow.SignalWithStart.
-type SignalWithStartOptions struct {
-	WorkflowStartOptions
-	SignalName string
-	SignalArgs []any
-}
-
-// ScheduleClient APIs accept this for create/update; mirrors the TS/Python shape.
-type ScheduleActionInput struct {
-	Namespace             string
-	Queue                 string
-	WorkflowType          string
-	WorkflowID            string
-	WorkflowIDReusePolicy WorkflowIDReusePolicy
-	RunTimeoutMs          int
-	Retry                 *RetryPolicy
-	Memo                  map[string]any
-	SearchAttributes      map[string]any
-	Args                  []any
-}
-
-// CreateScheduleInput is the SDK-side input to Client.Schedule.Create.
-type CreateScheduleInput struct {
-	ID            string
-	Namespace     string
-	OverlapPolicy string
-	Spec          ScheduleSpec
-	Action        ScheduleActionInput
-}
-
-// UpdateScheduleInput is the SDK-side input to Client.Schedule.Update; nil
-// fields are treated as "no change" by the runtime service.
-type UpdateScheduleInput struct {
-	OverlapPolicy *string
-	Spec          *ScheduleSpec
-	Action        *ScheduleActionInput
-}
-
-// EnqueueInput is the SDK-side input to Client.Task.Enqueue. Payload may be
+// EnqueueInput is the SDK-side input to TaskClient.Enqueue. Payload may be
 // any JSON-serializable value; the SDK marshals it for you.
 type EnqueueInput struct {
 	Namespace           string
@@ -76,7 +16,7 @@ type EnqueueInput struct {
 	LeaseTimeoutSeconds int
 }
 
-// ShellExecInput is the SDK-side input to Client.Task.ShellExec — same as
+// ShellExecInput is the SDK-side input to TaskClient.ShellExec — same as
 // the protocol.ShellExecPayload but with a Queue field for routing and
 // JSON-tag-free naming.
 type ShellExecInput struct {
@@ -88,7 +28,7 @@ type ShellExecInput struct {
 	TimeoutSeconds int
 }
 
-// ContainerExecInput is the SDK-side input to Client.Task.ContainerExec.
+// ContainerExecInput is the SDK-side input to TaskClient.ContainerExec.
 type ContainerExecInput struct {
 	Queue          string
 	Image          string
@@ -98,6 +38,61 @@ type ContainerExecInput struct {
 	WorkingDir     string
 	PullPolicy     string
 	TimeoutSeconds int
+}
+
+// WorkflowStartOptions is the SDK-side input to WorkflowClient.Start. It
+// carries the durable identity, queue routing, payload args, and the retry
+// / memo / search-attribute metadata the runtime service persists.
+type WorkflowStartOptions struct {
+	Namespace             string
+	WorkflowID            string
+	WorkflowIDReusePolicy workflow.IDReusePolicy
+	TaskQueue             string
+	Args                  []any
+	LeaseTimeoutSeconds   int
+	WorkflowRunTimeoutMs  int
+	Retry                 *RetryPolicy
+	Memo                  map[string]any
+	SearchAttributes      map[string]any
+}
+
+// SignalWithStartOptions is the SDK-side input to WorkflowClient.SignalWithStart.
+type SignalWithStartOptions struct {
+	WorkflowStartOptions
+	SignalName string
+	SignalArgs []any
+}
+
+// ScheduleActionInput is accepted by ScheduleClient APIs for create/update;
+// mirrors the TS/Python shape.
+type ScheduleActionInput struct {
+	Namespace             string
+	Queue                 string
+	WorkflowType          string
+	WorkflowID            string
+	WorkflowIDReusePolicy workflow.IDReusePolicy
+	RunTimeoutMs          int
+	Retry                 *RetryPolicy
+	Memo                  map[string]any
+	SearchAttributes      map[string]any
+	Args                  []any
+}
+
+// CreateScheduleInput is the SDK-side input to ScheduleClient.Create.
+type CreateScheduleInput struct {
+	ID            string
+	Namespace     string
+	OverlapPolicy string
+	Spec          ScheduleSpec
+	Action        ScheduleActionInput
+}
+
+// UpdateScheduleInput is the SDK-side input to ScheduleClient.Update; nil
+// fields are treated as "no change" by the runtime service.
+type UpdateScheduleInput struct {
+	OverlapPolicy *string
+	Spec          *ScheduleSpec
+	Action        *ScheduleActionInput
 }
 
 // WorkflowExecutionDescription mirrors the TS WorkflowExecutionDescription
@@ -120,12 +115,4 @@ type WorkflowExecutionDescription struct {
 	Error                string         `json:"error,omitempty"`
 	StartedAt            time.Time      `json:"startedAt"`
 	UpdatedAt            time.Time      `json:"updatedAt"`
-}
-
-// MilestoneOptions controls activity / workflow milestone emission so callers
-// can render ordered progress.
-type MilestoneOptions struct {
-	Index   int
-	Total   int
-	Details map[string]any
 }

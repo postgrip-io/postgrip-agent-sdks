@@ -1,4 +1,4 @@
-package sdk
+package client
 
 // Client is the high-level entry point. It groups the Task / Workflow /
 // Schedule sub-clients sharing a single Connection, mirroring the TS
@@ -10,8 +10,10 @@ type Client struct {
 	Schedule   *ScheduleClient
 }
 
-// NewClient wires up the sub-clients around an existing Connection.
-func NewClient(conn *Connection) *Client {
+// New wires up the sub-clients around an existing Connection. Use Dial
+// (or NewConnection + New) at the top of your program; share a single
+// Client across goroutines.
+func New(conn *Connection) *Client {
 	c := &Client{Connection: conn}
 	c.Task = &TaskClient{conn: conn}
 	c.Workflow = &WorkflowClient{conn: conn}

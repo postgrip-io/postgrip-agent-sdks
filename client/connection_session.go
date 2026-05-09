@@ -1,4 +1,4 @@
-package sdk
+package client
 
 import (
 	"context"
@@ -46,11 +46,11 @@ func (c *Connection) ensureAgentSession(ctx context.Context, agentID, namespace,
 
 func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken string) error {
 	body := map[string]string{"refreshToken": refreshToken}
-	var out agentSessionResponse
+	var out AgentSessionResponse
 	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/session/refresh", body, &out, false); err != nil {
 		return err
 	}
-	c.applyAgentSession(out)
+	c.ApplyAgentSession(out)
 	return nil
 }
 
@@ -65,15 +65,18 @@ func (c *Connection) enrollAgent(ctx context.Context, enrollmentKey string) erro
 		"queues":        []string{c.agentQueue},
 	}
 	c.agentMu.Unlock()
-	var out agentSessionResponse
+	var out AgentSessionResponse
 	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/enroll", body, &out, false); err != nil {
 		return err
 	}
-	c.applyAgentSession(out)
+	c.ApplyAgentSession(out)
 	return nil
 }
 
-type agentSessionResponse struct {
+// AgentSessionResponse is exported so tests in other packages (notably
+// /worker integration tests) can pre-seed an agent session on a Connection
+// without going through the enroll/refresh HTTP dance.
+type AgentSessionResponse struct {
 	AgentID          string    `json:"agentId"`
 	AccessToken      string    `json:"accessToken"`
 	RefreshToken     string    `json:"refreshToken"`
@@ -81,7 +84,10 @@ type agentSessionResponse struct {
 	RefreshExpiresAt time.Time `json:"refreshExpiresAt"`
 }
 
-func (c *Connection) applyAgentSession(s agentSessionResponse) {
+// ApplyAgentSession installs an AgentSessionResponse into the connection's
+// auth state. Exported for tests; production code paths (refreshAgentSession,
+// enrollAgent) call it implicitly.
+func (c *Connection) ApplyAgentSession(s AgentSessionResponse) {
 	c.agentMu.Lock()
 	defer c.agentMu.Unlock()
 	if s.AgentID != "" {

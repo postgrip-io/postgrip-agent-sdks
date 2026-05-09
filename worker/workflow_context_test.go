@@ -1,21 +1,25 @@
-package sdk
+package worker
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/postgrip-io/agent-sdk-go/client"
+	"github.com/postgrip-io/agent-sdk-go/failure"
 	"github.com/postgrip-io/agent-sdk-go/internal/replay"
+	"github.com/postgrip-io/agent-sdk-go/workflow"
 )
 
 func TestSignalChannelDrainsThenSuspends(t *testing.T) {
 	t.Parallel()
-	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
+	wfctx := newReplayCtx(t, []client.WorkflowHistoryEvent{
 		{Type: replay.EventWorkflowSignaled, Attributes: map[string]any{"name": "ready", "args": []any{"a"}}},
 		{Type: replay.EventWorkflowSignaled, Attributes: map[string]any{"name": "ready", "args": []any{"b"}}},
 	})
@@ -28,14 +32,14 @@ func TestSignalChannelDrainsThenSuspends(t *testing.T) {
 	if err != nil || args[0] != "b" {
 		t.Fatalf("second receive = %v, err=%v", args, err)
 	}
-	if _, err := ch.Receive(wfctx); !IsWorkflowSuspended(err) {
+	if _, err := ch.Receive(wfctx); !workflow.IsSuspended(err) {
 		t.Fatalf("expected suspend after draining buffer, got %v", err)
 	}
 }
 
 func TestSleepReturnsNilWhenTimerFiredInHistory(t *testing.T) {
 	t.Parallel()
-	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
+	wfctx := newReplayCtx(t, []client.WorkflowHistoryEvent{
 		{Type: replay.EventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1500)}},
 		{Type: replay.EventTimerFired, TaskID: "tmr-1"},
 	})
@@ -46,11 +50,11 @@ func TestSleepReturnsNilWhenTimerFiredInHistory(t *testing.T) {
 
 func TestSleepSuspendsWhenTimerStillPending(t *testing.T) {
 	t.Parallel()
-	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
+	wfctx := newReplayCtx(t, []client.WorkflowHistoryEvent{
 		{Type: replay.EventTimerStarted, TaskID: "tmr-1", Attributes: map[string]any{"duration_ms": float64(1500)}},
 	})
 	err := wfctx.Sleep(1500 * time.Millisecond)
-	if !IsWorkflowSuspended(err) {
+	if !workflow.IsSuspended(err) {
 		t.Fatalf("expected suspend when timer pending, got %v", err)
 	}
 }
@@ -59,7 +63,7 @@ func TestSleepSchedulesAndSuspendsWhenHistoryExhausted(t *testing.T) {
 	t.Parallel()
 	var seenType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req EnqueueTaskRequest
+		var req client.EnqueueTaskRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		seenType = req.Type
 		w.Header().Set("Content-Type", "application/json")
@@ -67,9 +71,10 @@ func TestSleepSchedulesAndSuspendsWhenHistoryExhausted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _ := NewConnection(ConnectionOptions{Address: server.URL})
+	conn, _ := client.NewConnection(client.ConnectionOptions{Address: server.URL})
 	wfctx := &workflowContext{
 		Context:    context.Background(),
+		logger:     slog.Default(),
 		conn:       conn,
 		namespace:  "default",
 		queue:      "default",
@@ -79,10 +84,10 @@ func TestSleepSchedulesAndSuspendsWhenHistoryExhausted(t *testing.T) {
 		replay:     replay.New(nil),
 	}
 	err := wfctx.Sleep(2 * time.Second)
-	if !IsWorkflowSuspended(err) {
+	if !workflow.IsSuspended(err) {
 		t.Fatalf("expected suspend after scheduling timer, got %v", err)
 	}
-	if seenType != TaskTypeTimer {
+	if seenType != client.TaskTypeTimer {
 		t.Fatalf("scheduled type = %q, want timer", seenType)
 	}
 }
@@ -95,11 +100,12 @@ func TestExecuteActivityReturnsHistoryResult(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _ := NewConnection(ConnectionOptions{Address: server.URL})
+	conn, _ := client.NewConnection(client.ConnectionOptions{Address: server.URL})
 	wfctx := &workflowContext{
 		Context: context.Background(),
+		logger:  slog.Default(),
 		conn:    conn,
-		replay: replay.New([]WorkflowHistoryEvent{
+		replay: replay.New([]client.WorkflowHistoryEvent{
 			{Type: replay.EventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
 		}),
 	}
@@ -120,17 +126,18 @@ func TestExecuteActivitySuspendsWhenActivityStillRunning(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _ := NewConnection(ConnectionOptions{Address: server.URL})
+	conn, _ := client.NewConnection(client.ConnectionOptions{Address: server.URL})
 	wfctx := &workflowContext{
 		Context: context.Background(),
+		logger:  slog.Default(),
 		conn:    conn,
-		replay: replay.New([]WorkflowHistoryEvent{
+		replay: replay.New([]client.WorkflowHistoryEvent{
 			{Type: replay.EventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
 		}),
 	}
 	var ignored string
 	err := wfctx.ExecuteActivity("Greet", nil, &ignored, nil)
-	if !IsWorkflowSuspended(err) {
+	if !workflow.IsSuspended(err) {
 		t.Fatalf("expected suspend, got %v", err)
 	}
 }
@@ -139,7 +146,8 @@ func TestExecuteActivityRaisesDeterminismOnNameDrift(t *testing.T) {
 	t.Parallel()
 	wfctx := &workflowContext{
 		Context: context.Background(),
-		replay: replay.New([]WorkflowHistoryEvent{
+		logger:  slog.Default(),
+		replay: replay.New([]client.WorkflowHistoryEvent{
 			{Type: replay.EventActivityTaskScheduled, TaskID: "act-1", Attributes: map[string]any{"activity_type": "Greet"}},
 		}),
 	}
@@ -147,36 +155,39 @@ func TestExecuteActivityRaisesDeterminismOnNameDrift(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "activity command changed") {
 		t.Fatalf("expected determinism violation, got %v", err)
 	}
-	if !IsApplicationFailure(err) {
-		t.Fatalf("determinism violation should surface as ApplicationFailure, got %T", err)
+	if !failure.IsApplication(err) {
+		t.Fatalf("determinism violation should surface as Application, got %T", err)
 	}
 }
 
 func TestCancellationRequestedShortCircuitsCommands(t *testing.T) {
 	t.Parallel()
-	wfctx := newReplayCtx(t, []WorkflowHistoryEvent{
+	wfctx := newReplayCtx(t, []client.WorkflowHistoryEvent{
 		{Type: replay.EventWorkflowCancellationRequest},
 	})
-	if err := wfctx.Sleep(time.Second); !IsCancelled(err) {
-		t.Fatalf("expected CancelledFailure, got %v", err)
+	if err := wfctx.Sleep(time.Second); !failure.IsCancelled(err) {
+		t.Fatalf("expected Cancelled, got %v", err)
 	}
-	if err := wfctx.ExecuteActivity("Greet", nil, nil, nil); !IsCancelled(err) {
-		t.Fatalf("ExecuteActivity expected CancelledFailure, got %v", err)
+	if err := wfctx.ExecuteActivity("Greet", nil, nil, nil); !failure.IsCancelled(err) {
+		t.Fatalf("ExecuteActivity expected Cancelled, got %v", err)
 	}
-	if err := wfctx.ExecuteChildWorkflow("Sub", nil, nil, nil); !IsCancelled(err) {
-		t.Fatalf("ExecuteChildWorkflow expected CancelledFailure, got %v", err)
+	if err := wfctx.ExecuteChildWorkflow("Sub", nil, nil, nil); !failure.IsCancelled(err) {
+		t.Fatalf("ExecuteChildWorkflow expected Cancelled, got %v", err)
 	}
 }
 
-func TestIsWorkflowSuspendedUnwrapsWrapped(t *testing.T) {
+func TestContinueAsNewSentinelFromContext(t *testing.T) {
 	t.Parallel()
-	original := newSuspended("activity")
-	wrapped := errors.New("workflow returned: " + original.Error())
-	if IsWorkflowSuspended(wrapped) {
-		t.Fatal("non-wrapped sentinel should not match")
+	wfctx := &workflowContext{
+		Context:      context.Background(),
+		logger:       slog.Default(),
+		workflowID:   "wf-1",
+		workflowType: "Greet",
+		queue:        "default",
 	}
-	if !IsWorkflowSuspended(original) {
-		t.Fatal("original sentinel should match")
+	err := wfctx.ContinueAsNew(workflow.ContinueAsNewOptions{Args: []any{"world"}})
+	if !workflow.IsContinueAsNew(err) {
+		t.Fatalf("expected continue-as-new sentinel, got %T", err)
 	}
 }
 
@@ -198,20 +209,20 @@ func TestRunWorkflowBlocksWhenHistoryFetchFails(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _ := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "tok"})
-	worker, err := NewWorker(WorkerOptions{
+	conn, _ := client.NewConnection(client.ConnectionOptions{Address: server.URL, AuthToken: "tok"})
+	w, err := New(Options{
 		Connection: conn,
 		AgentID:    "agent-1",
-		Workflows:  WorkflowRegistry{"Greet": func(ctx Context, args []any) (any, error) { return "ok", nil }},
+		Workflows:  workflow.Registry{"Greet": func(ctx workflow.Context, args []any) (any, error) { return "ok", nil }},
 	})
 	if err != nil {
-		t.Fatalf("NewWorker: %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	conn.applyAgentSession(agentSessionResponse{AgentID: "agent-1", AccessToken: "tok", AccessExpiresAt: time.Now().Add(time.Hour)})
+	conn.ApplyAgentSession(client.AgentSessionResponse{AgentID: "agent-1", AccessToken: "tok", AccessExpiresAt: time.Now().Add(time.Hour)})
 
-	res, err := worker.runWorkflow(context.Background(), &Task{
+	res, err := w.runWorkflow(context.Background(), &client.Task{
 		ID: "wf-task", Namespace: "default", Queue: "default",
-		Type: TaskTypePrefixWorkflow + "Greet",
+		Type: client.TaskTypePrefixWorkflow + "Greet",
 	})
 	if !errors.Is(err, errWorkflowAlreadyBlocked) {
 		t.Fatalf("err = %v, want errWorkflowAlreadyBlocked", err)
@@ -227,14 +238,15 @@ func TestRunWorkflowBlocksWhenHistoryFetchFails(t *testing.T) {
 // newReplayCtx builds a workflowContext suitable for unit tests that don't
 // need a live HTTP server. The Connection is a stub that fails any actual
 // HTTP call — tests that hit the network path build their own httptest.
-func newReplayCtx(t *testing.T, history []WorkflowHistoryEvent) *workflowContext {
+func newReplayCtx(t *testing.T, history []client.WorkflowHistoryEvent) *workflowContext {
 	t.Helper()
-	conn, err := NewConnection(ConnectionOptions{Address: "http://unused.test"})
+	conn, err := client.NewConnection(client.ConnectionOptions{Address: "http://unused.test"})
 	if err != nil {
 		t.Fatalf("NewConnection: %v", err)
 	}
 	return &workflowContext{
 		Context:    context.Background(),
+		logger:     slog.Default(),
 		conn:       conn,
 		namespace:  "default",
 		queue:      "default",
