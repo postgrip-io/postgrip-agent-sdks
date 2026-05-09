@@ -122,3 +122,56 @@ func IsApplicationFailure(err error) bool {
 	var a *ApplicationFailure
 	return errors.As(err, &a)
 }
+
+// failureToError converts a wire-protocol FailureInfo into an
+// ApplicationFailure / CancelledFailure / TimeoutFailure pointer. Callers
+// should errors.As to extract the typed failure.
+func failureToError(f *FailureInfo) error {
+	if f == nil {
+		return nil
+	}
+	switch f.Type {
+	case "CancelledFailure":
+		return &CancelledFailure{Message: f.Message, Details: f.Details}
+	case "TimeoutFailure":
+		return &TimeoutFailure{Message: f.Message}
+	default:
+		return failureInfoToApplicationFailure(f)
+	}
+}
+
+func failureInfoToApplicationFailure(f *FailureInfo) *ApplicationFailure {
+	if f == nil {
+		return nil
+	}
+	return &ApplicationFailure{
+		Message:      f.Message,
+		Type:         f.Type,
+		NonRetryable: f.NonRetryable,
+		Details:      f.Details,
+	}
+}
+
+func errorToFailure(err error) *FailureInfo {
+	if err == nil {
+		return nil
+	}
+	var app *ApplicationFailure
+	if errors.As(err, &app) {
+		return &FailureInfo{
+			Message:      app.Message,
+			Type:         app.Type,
+			NonRetryable: app.NonRetryable,
+			Details:      app.Details,
+		}
+	}
+	var cancelled *CancelledFailure
+	if errors.As(err, &cancelled) {
+		return &FailureInfo{Message: cancelled.Message, Type: "CancelledFailure", Details: cancelled.Details}
+	}
+	var timeout *TimeoutFailure
+	if errors.As(err, &timeout) {
+		return &FailureInfo{Message: timeout.Message, Type: "TimeoutFailure"}
+	}
+	return &FailureInfo{Message: err.Error()}
+}

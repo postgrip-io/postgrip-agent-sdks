@@ -1,0 +1,169 @@
+package sdk
+
+import (
+	"context"
+	"time"
+)
+
+// TaskClient exposes the lower-level enqueue + inspect operations the TS
+// SDK calls `client.task.*`.
+type TaskClient struct {
+	conn *Connection
+}
+
+// Enqueue posts an arbitrary task. The Payload is JSON-marshaled before
+// transit; pass any JSON-encodable value.
+func (t *TaskClient) Enqueue(ctx context.Context, in EnqueueInput) (*Task, error) {
+	req := EnqueueTaskRequest{
+		Namespace:           in.Namespace,
+		Queue:               in.Queue,
+		Type:                in.Type,
+		LeaseTimeoutSeconds: in.LeaseTimeoutSeconds,
+	}
+	if in.Payload != nil {
+		req.Payload = mustJSON(in.Payload)
+	}
+	return t.conn.EnqueueTask(ctx, req)
+}
+
+// ShellExec enqueues a shell.exec task. Mirrors TS client.task.shellExec /
+// Python client.task.shell_exec — the agent runs the command on its host
+// using whatever's installed in the agent image.
+func (t *TaskClient) ShellExec(ctx context.Context, in ShellExecInput) (*Task, error) {
+	payload := ShellExecPayload{
+		Command:        in.Command,
+		Args:           in.Args,
+		Env:            in.Env,
+		WorkingDir:     in.WorkingDir,
+		TimeoutSeconds: in.TimeoutSeconds,
+	}
+	return t.Enqueue(ctx, EnqueueInput{
+		Queue:   in.Queue,
+		Type:    TaskTypeShellExec,
+		Payload: payload,
+	})
+}
+
+// ContainerExec enqueues a container.exec task. Mirrors the TS / Python
+// containerExec / container_exec helpers added next to ShellExec. The Go
+// agent will launch a per-task container from `Image` via its docker CLI;
+// requires the agent process to have DOCKER_HOST set on it.
+func (t *TaskClient) ContainerExec(ctx context.Context, in ContainerExecInput) (*Task, error) {
+	payload := ContainerExecPayload{
+		Image:          in.Image,
+		Command:        in.Command,
+		Args:           in.Args,
+		Env:            in.Env,
+		WorkingDir:     in.WorkingDir,
+		PullPolicy:     in.PullPolicy,
+		TimeoutSeconds: in.TimeoutSeconds,
+	}
+	return t.Enqueue(ctx, EnqueueInput{
+		Queue:   in.Queue,
+		Type:    TaskTypeContainerExec,
+		Payload: payload,
+	})
+}
+
+// Noop enqueues a noop task — useful for smoke-testing agent connectivity.
+func (t *TaskClient) Noop(ctx context.Context, queue string) (*Task, error) {
+	return t.Enqueue(ctx, EnqueueInput{Queue: queue, Type: TaskTypeNoop})
+}
+
+// Get returns a single task by id.
+func (t *TaskClient) Get(ctx context.Context, taskID string) (*Task, error) {
+	return t.conn.GetTask(ctx, taskID)
+}
+
+// List returns tasks matching the optional filters (state=, queue=, etc.).
+func (t *TaskClient) List(ctx context.Context, filters map[string]string) ([]Task, error) {
+	return t.conn.ListTasks(ctx, filters)
+}
+
+// Events returns the full ordered event log for a task.
+func (t *TaskClient) Events(ctx context.Context, taskID string) ([]TaskEvent, error) {
+	return t.conn.GetTaskEvents(ctx, taskID)
+}
+
+// Result blocks until the task reaches a terminal state, then unmarshals
+// the result value into target (a pointer; may be nil if you don't need
+// the value). Polling cadence is 500ms by default.
+//
+// For workflow tasks, Result waits for the workflow run to finish — the
+// runtime service surfaces the workflow's terminal state through the
+// task. Use WorkflowHandle.Result for the same behavior keyed by
+// workflow id.
+func (t *TaskClient) Result(ctx context.Context, taskID string, target any) error {
+	return waitForTaskCompletion(ctx, t.conn, taskID, target)
+}
+
+// waitForTaskCompletion polls the task until it reaches a terminal state.
+// Used by TaskClient.Result and WorkflowHandle.Result so callers don't have
+// to hand-roll a polling loop.
+func waitForTaskCompletion(ctx context.Context, conn *Connection, taskID string, target any) error {
+	for {
+		task, err := conn.GetTask(ctx, taskID)
+		if err != nil {
+			return err
+		}
+		switch task.State {
+		case TaskStateSucceeded:
+			if target == nil || task.Result == nil {
+				return nil
+			}
+			if task.Result.Failure != nil {
+				return failureToError(task.Result.Failure)
+			}
+			return decodeResultValue(task.Result, target)
+		case TaskStateFailed:
+			reason := task.Error
+			if task.Result != nil && task.Result.Failure != nil {
+				return &TaskFailedError{
+					TaskID:  taskID,
+					Reason:  reason,
+					Failure: failureInfoToApplicationFailure(task.Result.Failure),
+				}
+			}
+			return &TaskFailedError{TaskID: taskID, Reason: reason}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+}
+
+// WatchEvents polls the events endpoint and pushes new events onto the
+// returned channel until the context is cancelled or the task reaches a
+// terminal state. The channel is closed on shutdown.
+func (t *TaskClient) WatchEvents(ctx context.Context, taskID string) (<-chan TaskEvent, error) {
+	out := make(chan TaskEvent, 32)
+	go func() {
+		defer close(out)
+		seen := 0
+		for {
+			events, err := t.conn.GetTaskEvents(ctx, taskID)
+			if err == nil {
+				for i := seen; i < len(events); i++ {
+					select {
+					case out <- events[i]:
+					case <-ctx.Done():
+						return
+					}
+				}
+				seen = len(events)
+				task, taskErr := t.conn.GetTask(ctx, taskID)
+				if taskErr == nil && (task.State == TaskStateSucceeded || task.State == TaskStateFailed) {
+					return
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(500 * time.Millisecond):
+			}
+		}
+	}()
+	return out, nil
+}
