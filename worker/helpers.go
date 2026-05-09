@@ -3,8 +3,8 @@ package worker
 import (
 	"encoding/json"
 
-	"github.com/postgrip-io/agent-sdk-go/client"
-	"github.com/postgrip-io/agent-sdk-go/internal/jsonenv"
+	"go.postgrip.io/sdk/client"
+	"go.postgrip.io/sdk/internal/jsonenv"
 )
 
 // marshalJSON is a thin private wrapper over jsonenv.Marshal so the rest

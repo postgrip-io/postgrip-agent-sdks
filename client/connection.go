@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-go/failure"
+	"go.postgrip.io/sdk/failure"
 )
 
 // ConnectionOptions configures the HTTP connection to the agent runtime

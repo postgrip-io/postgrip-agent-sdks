@@ -21,7 +21,7 @@
 //
 //	import (
 //	    "context"
-//	    "github.com/postgrip-io/agent-sdk-go/client"
+//	    "go.postgrip.io/sdk/client"
 //	)
 //
 //	conn, _ := client.NewConnection(client.ConnectionOptions{Address: "http://127.0.0.1:4100", AuthToken: token})
@@ -35,8 +35,8 @@
 //
 //	import (
 //	    "context"
-//	    "github.com/postgrip-io/agent-sdk-go/activity"
-//	    "github.com/postgrip-io/agent-sdk-go/worker"
+//	    "go.postgrip.io/sdk/activity"
+//	    "go.postgrip.io/sdk/worker"
 //	)
 //
 //	w, _ := worker.New(worker.Options{

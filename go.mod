@@ -1,4 +1,4 @@
-module github.com/postgrip-io/agent-sdk-go
+module go.postgrip.io/sdk
 
 go 1.25.0
 

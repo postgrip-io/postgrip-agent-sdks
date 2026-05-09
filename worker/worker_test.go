@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-go/client"
+	"go.postgrip.io/sdk/client"
 )
 
 func TestNewWorkerValidatesInputs(t *testing.T) {

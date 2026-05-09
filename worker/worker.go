@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-go/activity"
-	"github.com/postgrip-io/agent-sdk-go/client"
-	"github.com/postgrip-io/agent-sdk-go/failure"
-	"github.com/postgrip-io/agent-sdk-go/workflow"
+	"go.postgrip.io/sdk/activity"
+	"go.postgrip.io/sdk/client"
+	"go.postgrip.io/sdk/failure"
+	"go.postgrip.io/sdk/workflow"
 )
 
 // Options configures a customer-side worker that polls the runtime

@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/postgrip-io/agent-sdk-go/activity"
-	"github.com/postgrip-io/agent-sdk-go/client"
-	"github.com/postgrip-io/agent-sdk-go/failure"
-	"github.com/postgrip-io/agent-sdk-go/internal/replay"
+	"go.postgrip.io/sdk/activity"
+	"go.postgrip.io/sdk/client"
+	"go.postgrip.io/sdk/failure"
+	"go.postgrip.io/sdk/internal/replay"
 )
 
 func (w *Worker) runActivity(ctx context.Context, task *client.Task) (*client.TaskResult, error) {

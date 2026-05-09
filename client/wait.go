@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-go/failure"
+	"go.postgrip.io/sdk/failure"
 )
 
 // waitForTaskCompletion polls the task until it reaches a terminal state.

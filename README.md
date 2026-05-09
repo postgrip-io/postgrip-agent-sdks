@@ -9,7 +9,7 @@ shapes come from
 all four repos agree on the runtime contract.
 
 ```sh
-go get github.com/postgrip-io/agent-sdk-go
+go get go.postgrip.io/sdk
 ```
 
 The SDK is split into focused sub-packages — pick the ones your code needs:
@@ -32,7 +32,7 @@ import (
     "log"
     "os"
 
-    "github.com/postgrip-io/agent-sdk-go/client"
+    "go.postgrip.io/sdk/client"
 )
 
 func main() {
@@ -82,10 +82,10 @@ import (
     "context"
     "log"
 
-    "github.com/postgrip-io/agent-sdk-go/activity"
-    "github.com/postgrip-io/agent-sdk-go/client"
-    "github.com/postgrip-io/agent-sdk-go/worker"
-    "github.com/postgrip-io/agent-sdk-go/workflow"
+    "go.postgrip.io/sdk/activity"
+    "go.postgrip.io/sdk/client"
+    "go.postgrip.io/sdk/worker"
+    "go.postgrip.io/sdk/workflow"
 )
 
 // Activities are plain Go functions. The first arg is a regular
