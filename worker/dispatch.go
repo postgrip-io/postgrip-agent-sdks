@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/postgrip-io/agent-sdk-go/activity"
 	"github.com/postgrip-io/agent-sdk-go/client"
@@ -142,8 +141,3 @@ func decodeWorkflowPayload(task *client.Task) ([]any, string, error) {
 	}
 	return envelope.Args, wfID, nil
 }
-
-// fmtRFC3339Nano keeps the formatter consistent with the protocol's
-// expected timer fire_at format. Defined here (rather than as a constant)
-// so the workflow context can call it without importing time uselessly.
-func fmtRFC3339Nano(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }

@@ -46,11 +46,11 @@ func (c *Connection) ensureAgentSession(ctx context.Context, agentID, namespace,
 
 func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken string) error {
 	body := map[string]string{"refreshToken": refreshToken}
-	var out AgentSessionResponse
+	var out agentSessionResponse
 	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/session/refresh", body, &out, false); err != nil {
 		return err
 	}
-	c.ApplyAgentSession(out)
+	c.applyAgentSession(out)
 	return nil
 }
 
@@ -65,18 +65,15 @@ func (c *Connection) enrollAgent(ctx context.Context, enrollmentKey string) erro
 		"queues":        []string{c.agentQueue},
 	}
 	c.agentMu.Unlock()
-	var out AgentSessionResponse
+	var out agentSessionResponse
 	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/enroll", body, &out, false); err != nil {
 		return err
 	}
-	c.ApplyAgentSession(out)
+	c.applyAgentSession(out)
 	return nil
 }
 
-// AgentSessionResponse is exported so tests in other packages (notably
-// /worker integration tests) can pre-seed an agent session on a Connection
-// without going through the enroll/refresh HTTP dance.
-type AgentSessionResponse struct {
+type agentSessionResponse struct {
 	AgentID          string    `json:"agentId"`
 	AccessToken      string    `json:"accessToken"`
 	RefreshToken     string    `json:"refreshToken"`
@@ -84,10 +81,7 @@ type AgentSessionResponse struct {
 	RefreshExpiresAt time.Time `json:"refreshExpiresAt"`
 }
 
-// ApplyAgentSession installs an AgentSessionResponse into the connection's
-// auth state. Exported for tests; production code paths (refreshAgentSession,
-// enrollAgent) call it implicitly.
-func (c *Connection) ApplyAgentSession(s AgentSessionResponse) {
+func (c *Connection) applyAgentSession(s agentSessionResponse) {
 	c.agentMu.Lock()
 	defer c.agentMu.Unlock()
 	if s.AgentID != "" {
@@ -96,6 +90,21 @@ func (c *Connection) ApplyAgentSession(s AgentSessionResponse) {
 	c.agentAccessToken = s.AccessToken
 	c.agentRefreshToken = s.RefreshToken
 	c.agentAccessExpiresUnix = s.AccessExpiresAt.Unix()
+}
+
+// SeedAgentSession pre-installs an access token + expiration into the
+// connection's agent auth state, bypassing the enroll/refresh HTTP dance.
+//
+// Intended for tests that exercise agent-authenticated endpoints against
+// an httptest server that doesn't implement /api/v1/agent/enroll. Production
+// code reaches a session via NewConnection's AgentEnrollmentKey + the worker
+// poll loop, never via this method.
+func (c *Connection) SeedAgentSession(agentID, accessToken string, accessExpiresAt time.Time) {
+	c.applyAgentSession(agentSessionResponse{
+		AgentID:         agentID,
+		AccessToken:     accessToken,
+		AccessExpiresAt: accessExpiresAt,
+	})
 }
 
 func hostnameOrUnknown() string {

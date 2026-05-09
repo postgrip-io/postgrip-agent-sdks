@@ -123,7 +123,7 @@ func (w *workflowContext) Sleep(d time.Duration) error {
 		Payload: marshalJSON(map[string]any{
 			"workflow_id": w.workflowID,
 			"duration_ms": durationMs,
-			"fire_at":     fmtRFC3339Nano(w.now.Add(d)),
+			"fire_at":     w.now.Add(d).UTC().Format(time.RFC3339Nano),
 		}),
 	}); err != nil {
 		return fmt.Errorf("postgrip-agent: schedule timer: %w", err)

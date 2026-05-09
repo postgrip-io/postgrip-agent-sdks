@@ -131,14 +131,6 @@ func (c *WorkflowClient) GetHandle(workflowID string) *WorkflowHandle {
 	return &WorkflowHandle{conn: c.conn, WorkflowID: workflowID}
 }
 
-// HandleForTask constructs a WorkflowHandle keyed on a workflow id and an
-// existing workflow task id. Used by the worker package when surfacing the
-// handle for a workflow it just dispatched, without having to round-trip
-// GetWorkflowExecution.
-func HandleForTask(conn *Connection, workflowID, taskID string) *WorkflowHandle {
-	return &WorkflowHandle{conn: conn, WorkflowID: workflowID, TaskID: taskID}
-}
-
 // buildWorkflowStartPayload assembles the JSON-encoded payload the runtime
 // service expects for a workflow start. Kept centralized so Start and
 // SignalWithStart agree on the shape.

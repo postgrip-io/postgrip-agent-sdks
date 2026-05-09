@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 
 	"github.com/postgrip-io/agent-sdk-go/client"
+	"github.com/postgrip-io/agent-sdk-go/internal/jsonenv"
 )
 
-// marshalJSON delegates to client.MarshalJSON so the worker payloads use
-// the same panic-on-encode-failure semantics as the rest of the SDK.
-func marshalJSON(v any) json.RawMessage { return client.MarshalJSON(v) }
+// marshalJSON is a thin private wrapper over jsonenv.Marshal so the rest
+// of the worker package keeps its existing signature.
+func marshalJSON(v any) json.RawMessage { return jsonenv.Marshal(v) }
 
-// decodeResultValue delegates to client.DecodeResultValue so workflow
-// resolution paths share the same target-decode behavior as the client
-// result-waiting helper.
+// decodeResultValue is a thin private wrapper over jsonenv.DecodeResult.
 func decodeResultValue(result *client.TaskResult, target any) error {
-	return client.DecodeResultValue(result, target)
+	return jsonenv.DecodeResult(result, target)
 }

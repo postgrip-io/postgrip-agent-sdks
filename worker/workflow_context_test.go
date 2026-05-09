@@ -218,7 +218,7 @@ func TestRunWorkflowBlocksWhenHistoryFetchFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	conn.ApplyAgentSession(client.AgentSessionResponse{AgentID: "agent-1", AccessToken: "tok", AccessExpiresAt: time.Now().Add(time.Hour)})
+	conn.SeedAgentSession("agent-1", "tok", time.Now().Add(time.Hour))
 
 	res, err := w.runWorkflow(context.Background(), &client.Task{
 		ID: "wf-task", Namespace: "default", Queue: "default",
