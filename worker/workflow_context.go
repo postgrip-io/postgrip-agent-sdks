@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -116,14 +118,20 @@ func (w *workflowContext) Sleep(d time.Duration) error {
 		}
 	}
 
+	var idBytes [8]byte
+	if _, err := rand.Read(idBytes[:]); err != nil {
+		return fmt.Errorf("postgrip-agent: generate timerId: %w", err)
+	}
 	if _, err := w.conn.EnqueueTask(w.Context, client.EnqueueTaskRequest{
 		Namespace: w.namespace,
 		Queue:     w.queue,
 		Type:      client.TaskTypeTimer,
 		Payload: marshalJSON(map[string]any{
-			"workflow_id": w.workflowID,
-			"duration_ms": durationMs,
-			"fire_at":     w.now.Add(d).UTC().Format(time.RFC3339Nano),
+			"workflowId":     w.workflowID,
+			"workflowTaskId": w.taskID,
+			"timerId":        hex.EncodeToString(idBytes[:]),
+			"durationMs":     durationMs,
+			"fireAt":         w.now.Add(d).UTC().Format(time.RFC3339Nano),
 		}),
 	}); err != nil {
 		return fmt.Errorf("postgrip-agent: schedule timer: %w", err)
@@ -156,9 +164,10 @@ func (w *workflowContext) ExecuteActivity(activityType string, args []any, targe
 		retry = opts.Retry
 	}
 	payload := map[string]any{
-		"activityType": activityType,
-		"args":         args,
-		"workflowId":   w.workflowID,
+		"activityType":   activityType,
+		"args":           args,
+		"workflowId":     w.workflowID,
+		"workflowTaskId": w.taskID,
 	}
 	if retry != nil {
 		payload["retry"] = retry

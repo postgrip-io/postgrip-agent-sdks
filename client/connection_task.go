@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 )
@@ -65,13 +64,13 @@ func (c *Connection) PollTask(ctx context.Context, namespace, queue, agentID str
 	if err := c.ensureAgentSession(ctx, agentID, namespace, queue); err != nil {
 		return nil, err
 	}
-	path := fmt.Sprintf("/api/v1/agents/%s/poll", url.PathEscape(agentID))
-	q := encodeQuery(map[string]string{"namespace": namespace, "queue": queue})
+	path := "/api/v1/agent/poll"
+	q := encodeQuery(map[string]string{"namespace": namespace, "queue": queue, "agent_id": agentID})
 	if q != "" {
 		path += "?" + q
 	}
 	var out PollTaskResponse
-	if err := c.do(ctx, http.MethodPost, path, nil, &out, true); err != nil {
+	if err := c.do(ctx, http.MethodGet, path, nil, &out, true); err != nil {
 		return nil, err
 	}
 	return &out, nil

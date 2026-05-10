@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/postgrip-io/agent-sdk-protocol"
 	"go.postgrip.io/sdk/failure"
 )
 
@@ -59,6 +61,13 @@ type Connection struct {
 	agentAccessToken       string
 	agentRefreshToken      string
 	agentAccessExpiresUnix int64
+
+	// Ed25519 keypair the agent uses to sign requests to agent-authed
+	// endpoints. Generated lazily on first enroll and reused for the lifetime
+	// of the Connection. The orchestrator stores the matching public key on
+	// the agent record at enroll time and verifies every signed POST.
+	agentSignPriv ed25519.PrivateKey
+	agentSignPub  ed25519.PublicKey
 }
 
 // NewConnection constructs a Connection. URL validation is deferred to the
@@ -124,15 +133,19 @@ func (c *Connection) Health(ctx context.Context) (map[string]any, error) {
 
 // do is the single HTTP entrypoint; all the typed helpers funnel through
 // it. agentAuth selects between "use AuthToken" (false) and "use the
-// agent's refreshable access token" (true).
+// agent's refreshable access token" (true). When agentAuth is true and the
+// connection has a signing keypair, the request is also Ed25519-signed per
+// the protocol's agent-task-v1 canonical form.
 func (c *Connection) do(ctx context.Context, method, path string, body any, out any, agentAuth bool) error {
+	var rawBody []byte
 	var reader io.Reader
 	if body != nil {
-		raw, err := json.Marshal(body)
+		encoded, err := json.Marshal(body)
 		if err != nil {
 			return &failure.SDKError{Message: "encode request body", Cause: err}
 		}
-		reader = bytes.NewReader(raw)
+		rawBody = encoded
+		reader = bytes.NewReader(encoded)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.address+path, reader)
 	if err != nil {
@@ -147,9 +160,24 @@ func (c *Connection) do(ctx context.Context, method, path string, body any, out 
 	if agentAuth {
 		c.agentMu.Lock()
 		token := c.agentAccessToken
+		priv := c.agentSignPriv
+		pub := c.agentSignPub
 		c.agentMu.Unlock()
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		if len(priv) == ed25519.PrivateKeySize {
+			ts := time.Now().UTC()
+			payload := protocol.AgentRequestSignaturePayload{
+				Method:    method,
+				Path:      req.URL.Path,
+				Query:     req.URL.RawQuery,
+				Timestamp: ts,
+				Body:      rawBody,
+			}
+			req.Header.Set(protocol.HeaderAgentSignatureTimestamp, fmt.Sprintf("%d", ts.Unix()))
+			req.Header.Set(protocol.HeaderAgentSignatureKeyID, protocol.AgentSigningKeyID(pub))
+			req.Header.Set(protocol.HeaderAgentSignature, protocol.SignAgentRequest(priv, payload))
 		}
 	} else if c.authHeader != "" {
 		req.Header.Set("Authorization", c.authHeader)

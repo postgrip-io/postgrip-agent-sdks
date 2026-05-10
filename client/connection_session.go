@@ -2,10 +2,14 @@ package client
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/postgrip-io/agent-sdk-protocol"
 )
 
 // ensureAgentSession is a no-op when a non-expired access token is cached.
@@ -56,13 +60,23 @@ func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken strin
 
 func (c *Connection) enrollAgent(ctx context.Context, enrollmentKey string) error {
 	c.agentMu.Lock()
+	if len(c.agentSignPriv) != ed25519.PrivateKeySize {
+		pub, priv, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			c.agentMu.Unlock()
+			return err
+		}
+		c.agentSignPub = pub
+		c.agentSignPriv = priv
+	}
 	body := map[string]any{
-		"enrollmentKey": enrollmentKey,
-		"agentId":       c.agentID,
-		"name":          orDefault(c.agentName, c.agentID),
-		"host":          orDefault(c.agentHost, hostnameOrUnknown()),
-		"namespaces":    []string{c.agentNamespace},
-		"queues":        []string{c.agentQueue},
+		"enrollmentKey":      enrollmentKey,
+		"agentId":            c.agentID,
+		"name":               orDefault(c.agentName, c.agentID),
+		"host":               orDefault(c.agentHost, hostnameOrUnknown()),
+		"namespaces":         []string{c.agentNamespace},
+		"queues":             []string{c.agentQueue},
+		"signaturePublicKey": protocol.EncodeAgentPublicKey(c.agentSignPub),
 	}
 	c.agentMu.Unlock()
 	var out agentSessionResponse
