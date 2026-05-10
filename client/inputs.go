@@ -72,6 +72,17 @@ type WorkflowStartOptions struct {
 	Retry                 *RetryPolicy
 	Memo                  map[string]any
 	SearchAttributes      map[string]any
+	UI                    *WorkflowUIMetadata
+}
+
+// WorkflowUIMetadata is optional display metadata for PostGrip console
+// workflow views. The SDK stores it in memo["postgrip.ui"], so existing
+// runtime services persist it without requiring a protocol change.
+type WorkflowUIMetadata struct {
+	DisplayName string         `json:"displayName,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Details     map[string]any `json:"details,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
 }
 
 // SignalWithStartOptions is the SDK-side input to WorkflowClient.SignalWithStart.
@@ -93,6 +104,7 @@ type ScheduleActionInput struct {
 	Retry                 *RetryPolicy
 	Memo                  map[string]any
 	SearchAttributes      map[string]any
+	UI                    *WorkflowUIMetadata
 	Args                  []any
 }
 

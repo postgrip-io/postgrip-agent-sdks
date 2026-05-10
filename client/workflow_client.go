@@ -107,8 +107,9 @@ func (c *WorkflowClient) SignalWithStart(ctx context.Context, workflowType, sign
 	if opts.Retry != nil {
 		req.RetryPolicy = opts.Retry
 	}
-	if len(opts.Memo) > 0 {
-		req.Memo = opts.Memo
+	memo := memoWithWorkflowUI(opts.Memo, opts.UI)
+	if len(memo) > 0 {
+		req.Memo = memo
 	}
 	if len(opts.SearchAttributes) > 0 {
 		req.SearchAttributes = opts.SearchAttributes
@@ -150,8 +151,9 @@ func buildWorkflowStartPayload(workflowType string, opts WorkflowStartOptions) m
 	if opts.Retry != nil {
 		payload["retry"] = opts.Retry
 	}
-	if len(opts.Memo) > 0 {
-		payload["memo"] = opts.Memo
+	memo := memoWithWorkflowUI(opts.Memo, opts.UI)
+	if len(memo) > 0 {
+		payload["memo"] = memo
 	}
 	if len(opts.SearchAttributes) > 0 {
 		payload["search_attributes"] = opts.SearchAttributes

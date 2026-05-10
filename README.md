@@ -134,6 +134,27 @@ func runWorker(ctx context.Context, conn *client.Connection) error {
 }
 ```
 
+Workflow starts can attach SDK-owned console metadata. The SDK persists it inside
+workflow memo as `postgrip.ui`, so the Agents activity tab can show a friendly
+label, description, details, and tags while `Memo` remains available for your own
+data.
+
+```go
+handle, err := c.Workflow.Start(ctx, "Greet", client.WorkflowStartOptions{
+    WorkflowID: "greet-postgrip",
+    TaskQueue:  "default",
+    Args:       []any{"PostGrip"},
+    UI: &client.WorkflowUIMetadata{
+        DisplayName: "Say hello to PostGrip",
+        Description: "Shown on the PostGrip Agents activity tab.",
+        Details: map[string]any{
+            "sdk": "go",
+        },
+        Tags: []string{"demo"},
+    },
+})
+```
+
 Submit that runtime to an existing agent pool from your client process:
 
 ```go

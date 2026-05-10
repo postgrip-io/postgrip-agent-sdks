@@ -94,8 +94,9 @@ func scheduleActionInputToProtocol(in ScheduleActionInput) ScheduleAction {
 	if len(in.Args) > 0 {
 		out.Args = mustJSON(in.Args)
 	}
-	if len(in.Memo) > 0 {
-		out.Memo = in.Memo
+	memo := memoWithWorkflowUI(in.Memo, in.UI)
+	if len(memo) > 0 {
+		out.Memo = memo
 	}
 	if len(in.SearchAttributes) > 0 {
 		out.SearchAttributes = in.SearchAttributes

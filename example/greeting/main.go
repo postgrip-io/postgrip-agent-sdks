@@ -105,6 +105,14 @@ func main() {
 		WorkflowID: workflowID,
 		TaskQueue:  queue,
 		Args:       []any{envOr("SDK_EXAMPLE_GREETING_NAME", "PostGrip")},
+		UI: &client.WorkflowUIMetadata{
+			DisplayName: "Go greeting example",
+			Description: "Started from the Go SDK greeting example.",
+			Details: map[string]any{
+				"sdk": "go",
+			},
+			Tags: []string{"sdk-ui-demo", "go"},
+		},
 	})
 	if err != nil {
 		log.Fatalf("Workflow.Start: %v", err)

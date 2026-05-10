@@ -48,6 +48,7 @@ func main() {
 	stepsPerWorkflow := envIntAny([]string{"POSTGRIP_EXAMPLE_STEPS", "SDK_EXAMPLE_STEPS"}, defaultStepsPerWorkflow)
 	workflowRuns := envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_RUNS", "SDK_EXAMPLE_WORKFLOW_RUNS"}, defaultWorkflowRuns)
 	stepSleepDuration := time.Duration(envIntAny([]string{"POSTGRIP_EXAMPLE_STEP_SLEEP_SECONDS", "SDK_EXAMPLE_STEP_SLEEP_SECONDS"}, defaultStepSleepSeconds)) * time.Second
+	stepSleepSeconds := int(stepSleepDuration / time.Second)
 	runLabel := envOrAny([]string{"POSTGRIP_EXAMPLE_RUN_LABEL", "SDK_EXAMPLE_RUN_LABEL"}, "PostGrip")
 	runTimeout := time.Duration(envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS", "SDK_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS"}, int(defaultRunTimeout/time.Second))) * time.Second
 
@@ -130,6 +131,16 @@ func main() {
 			WorkflowID: workflowID,
 			TaskQueue:  queue,
 			Args:       []any{fmt.Sprintf("%s-%d", runLabel, i), stepsPerWorkflow},
+			UI: &client.WorkflowUIMetadata{
+				DisplayName: fmt.Sprintf("%s long run #%d", runLabel, i),
+				Description: fmt.Sprintf("Runs %d steps with %ds sleeps between steps.", stepsPerWorkflow, stepSleepSeconds),
+				Details: map[string]any{
+					"sdk":          "go",
+					"steps":        stepsPerWorkflow,
+					"sleepSeconds": stepSleepSeconds,
+				},
+				Tags: []string{"sdk-ui-demo", "go"},
+			},
 		})
 		if err != nil {
 			cancelRun()
