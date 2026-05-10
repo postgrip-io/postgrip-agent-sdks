@@ -59,12 +59,14 @@ type (
 // credentials and the SDK runtime polls workflow task families only.
 type WorkflowRuntimePayload struct {
 	RuntimeID      string            `json:"runtime_id,omitempty"`
+	Image          string            `json:"image,omitempty"`
 	Command        string            `json:"command"`
 	Args           []string          `json:"args,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
 	WorkingDir     string            `json:"working_dir,omitempty"`
 	Namespace      string            `json:"namespace,omitempty"`
 	Queue          string            `json:"queue,omitempty"`
+	PullPolicy     string            `json:"pull_policy,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
 }
 

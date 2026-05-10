@@ -158,14 +158,16 @@ func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
 		log.Fatalf("invalid SDK_EXAMPLE_RUNTIME_ARGS_JSON: %v", err)
 	}
 	queue := envOr("SDK_EXAMPLE_RUNTIME_QUEUE", envOr("POSTGRIP_EXAMPLE_RUNTIME_QUEUE", client.DefaultQueue))
-	runtimeQueue := envOr("SDK_EXAMPLE_RUNTIME_CHILD_QUEUE", envOr("POSTGRIP_EXAMPLE_RUNTIME_CHILD_QUEUE", queue))
+	runtimeQueue := envOr("SDK_EXAMPLE_RUNTIME_CHILD_QUEUE", envOr("POSTGRIP_EXAMPLE_RUNTIME_CHILD_QUEUE", fmt.Sprintf("postgrip-greeting-%d", time.Now().UnixNano())))
 	task, err := client.New(conn).Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
 		Namespace:           client.DefaultNamespace,
 		Queue:               queue,
+		Image:               envOr("SDK_EXAMPLE_RUNTIME_IMAGE", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_IMAGE")),
 		Command:             envOr("SDK_EXAMPLE_RUNTIME_COMMAND", envOr("POSTGRIP_EXAMPLE_RUNTIME_COMMAND", "sh")),
 		Args:                args,
 		RuntimeQueue:        runtimeQueue,
 		WorkingDir:          envOr("SDK_EXAMPLE_RUNTIME_WORKING_DIR", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_WORKING_DIR")),
+		PullPolicy:          envOr("SDK_EXAMPLE_RUNTIME_PULL_POLICY", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_PULL_POLICY")),
 		TimeoutSeconds:      300,
 		LeaseTimeoutSeconds: 30,
 		Env: map[string]string{

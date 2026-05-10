@@ -165,4 +165,29 @@ func TestWorkflowRuntimeSubmissionIsExternalPath(t *testing.T) {
 	if task.ID != "runtime-task" || seen.Type != TaskTypeWorkflowRuntime {
 		t.Fatalf("task = %+v seen type = %q", task, seen.Type)
 	}
+	var payload workflowRuntimePayload
+	if err := json.Unmarshal(seen.Payload, &payload); err != nil {
+		t.Fatalf("runtime payload: %v", err)
+	}
+	if payload.Queue == "" || payload.Queue == "default" {
+		t.Fatalf("runtime queue = %q, want generated isolated queue", payload.Queue)
+	}
+}
+
+func TestWorkflowStartPayloadUsesRuntimeContractCasing(t *testing.T) {
+	t.Parallel()
+	payload := buildWorkflowStartPayload("GreetingWorkflow", WorkflowStartOptions{
+		WorkflowID:           "workflow-1",
+		WorkflowRunTimeoutMs: 1500,
+		SearchAttributes:     map[string]any{"customer": "acme"},
+	})
+	if payload["workflowId"] != "workflow-1" {
+		t.Fatalf("workflowId = %v", payload["workflowId"])
+	}
+	if _, ok := payload["workflow_id"]; ok {
+		t.Fatalf("payload has legacy workflow_id key: %#v", payload)
+	}
+	if payload["runTimeoutMs"] != 1500 {
+		t.Fatalf("runTimeoutMs = %v", payload["runTimeoutMs"])
+	}
 }

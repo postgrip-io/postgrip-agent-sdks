@@ -42,16 +42,20 @@ type ContainerExecInput struct {
 
 // WorkflowRuntimeInput enqueues a managed SDK workflow runtime onto an
 // existing host-agent pool. The host agent leases the workflow.runtime task,
-// delegates credentials, then launches Command with Args. The launched process
+// delegates credentials, then launches Command with Args. If Image is set, the
+// host agent asks its lifecycle helper to run the command in that image instead
+// of requiring the agent image to contain the SDK runtime. The launched process
 // should start a SDK Agent using the injected POSTGRIP_AGENT_* environment.
 type WorkflowRuntimeInput struct {
 	Namespace           string
 	Queue               string
 	RuntimeID           string
+	Image               string
 	Command             string
 	Args                []string
 	Env                 map[string]string
 	WorkingDir          string
+	PullPolicy          string
 	RuntimeNamespace    string
 	RuntimeQueue        string
 	TimeoutSeconds      int

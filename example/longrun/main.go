@@ -70,7 +70,7 @@ func main() {
 	}
 
 	activities := activity.Registry{
-		"ProcessStep": func(ctx context.Context, args []any) (any, error) {
+		"processStep": func(ctx context.Context, args []any) (any, error) {
 			if len(args) < 2 {
 				return nil, fmt.Errorf("ProcessStep: expected 2 args, got %d", len(args))
 			}
@@ -92,7 +92,7 @@ func main() {
 			steps := int(args[1].(float64))
 			for i := 1; i <= steps; i++ {
 				var status string
-				if err := ctx.ExecuteActivity("ProcessStep", []any{name, i}, &status, nil); err != nil {
+				if err := ctx.ExecuteActivity("processStep", []any{name, i}, &status, nil); err != nil {
 					return nil, err
 				}
 				if err := ctx.Sleep(stepSleepDuration); err != nil {
@@ -248,18 +248,21 @@ func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
 	if len(args) == 0 {
 		log.Fatalf("SDK_EXAMPLE_RUNTIME_ARGS_JSON is required when submitting to the agent pool")
 	}
+	runLabel := envOrAny([]string{"POSTGRIP_EXAMPLE_RUN_LABEL", "SDK_EXAMPLE_RUN_LABEL"}, "PostGrip")
 	runtimeQueue := envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_QUEUE", "SDK_EXAMPLE_RUNTIME_QUEUE"}, client.DefaultQueue)
-	childQueue := envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_CHILD_QUEUE", "SDK_EXAMPLE_RUNTIME_CHILD_QUEUE"}, runtimeQueue)
+	childQueue := envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_CHILD_QUEUE", "SDK_EXAMPLE_RUNTIME_CHILD_QUEUE"}, fmt.Sprintf("sdk-runtime-%s-%d", slug(runLabel), time.Now().UnixNano()))
 	task, err := client.New(conn).Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
 		Namespace:      client.DefaultNamespace,
 		Queue:          runtimeQueue,
+		Image:          envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_IMAGE", "SDK_EXAMPLE_RUNTIME_IMAGE"}, ""),
 		Command:        command,
 		Args:           args,
 		RuntimeQueue:   childQueue,
 		WorkingDir:     envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_WORKING_DIR", "SDK_EXAMPLE_RUNTIME_WORKING_DIR"}, ""),
+		PullPolicy:     envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_PULL_POLICY", "SDK_EXAMPLE_RUNTIME_PULL_POLICY"}, ""),
 		TimeoutSeconds: envIntAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_TIMEOUT_SECONDS", "SDK_EXAMPLE_RUNTIME_TIMEOUT_SECONDS"}, 900),
 		Env: map[string]string{
-			"SDK_EXAMPLE_RUN_LABEL":                envOrAny([]string{"POSTGRIP_EXAMPLE_RUN_LABEL", "SDK_EXAMPLE_RUN_LABEL"}, "PostGrip"),
+			"SDK_EXAMPLE_RUN_LABEL":                runLabel,
 			"SDK_EXAMPLE_WORKFLOW_RUNS":            fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_RUNS", "SDK_EXAMPLE_WORKFLOW_RUNS"}, defaultWorkflowRuns)),
 			"SDK_EXAMPLE_STEPS":                    fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_STEPS", "SDK_EXAMPLE_STEPS"}, defaultStepsPerWorkflow)),
 			"SDK_EXAMPLE_STEP_SLEEP_SECONDS":       fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_STEP_SLEEP_SECONDS", "SDK_EXAMPLE_STEP_SLEEP_SECONDS"}, defaultStepSleepSeconds)),

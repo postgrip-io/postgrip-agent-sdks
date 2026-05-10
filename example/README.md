@@ -15,6 +15,7 @@ workflow.
 ```sh
 export POSTGRIP_AGENT_LIVE_SERVER_URL=https://postgrip.app
 export POSTGRIP_AGENT_AUTH_TOKEN=...           # management-side bearer token
+export SDK_EXAMPLE_RUNTIME_IMAGE=golang:1.25   # optional; runs via host agent helper
 export SDK_EXAMPLE_RUNTIME_ARGS_JSON='["-lc","./path/to/runtime"]'
 go run ./example/greeting
 ```

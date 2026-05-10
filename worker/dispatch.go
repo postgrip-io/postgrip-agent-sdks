@@ -129,13 +129,17 @@ func decodeWorkflowPayload(task *client.Task) ([]any, string, error) {
 		return nil, task.ID, nil
 	}
 	var envelope struct {
-		Args       []any  `json:"args"`
-		WorkflowID string `json:"workflow_id"`
+		Args             []any  `json:"args"`
+		WorkflowID       string `json:"workflowId"`
+		LegacyWorkflowID string `json:"workflow_id"`
 	}
 	if err := json.Unmarshal(task.Payload, &envelope); err != nil {
 		return nil, "", err
 	}
 	wfID := envelope.WorkflowID
+	if wfID == "" {
+		wfID = envelope.LegacyWorkflowID
+	}
 	if wfID == "" {
 		wfID = task.ID
 	}

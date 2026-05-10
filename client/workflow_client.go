@@ -137,16 +137,16 @@ func (c *WorkflowClient) GetHandle(workflowID string) *WorkflowHandle {
 // SignalWithStart agree on the shape.
 func buildWorkflowStartPayload(workflowType string, opts WorkflowStartOptions) map[string]any {
 	payload := map[string]any{
-		"workflowType": workflowType,
-		"workflow_id":  opts.WorkflowID,
-		"reuse_policy": string(opts.WorkflowIDReusePolicy),
-		"args":         opts.Args,
+		"workflowType":          workflowType,
+		"workflowId":            opts.WorkflowID,
+		"workflowIdReusePolicy": string(opts.WorkflowIDReusePolicy),
+		"args":                  opts.Args,
 	}
 	if opts.LeaseTimeoutSeconds > 0 {
 		payload["lease_timeout_seconds"] = opts.LeaseTimeoutSeconds
 	}
 	if opts.WorkflowRunTimeoutMs > 0 {
-		payload["run_timeout_ms"] = opts.WorkflowRunTimeoutMs
+		payload["runTimeoutMs"] = opts.WorkflowRunTimeoutMs
 	}
 	if opts.Retry != nil {
 		payload["retry"] = opts.Retry
@@ -156,7 +156,7 @@ func buildWorkflowStartPayload(workflowType string, opts WorkflowStartOptions) m
 		payload["memo"] = memo
 	}
 	if len(opts.SearchAttributes) > 0 {
-		payload["search_attributes"] = opts.SearchAttributes
+		payload["searchAttributes"] = opts.SearchAttributes
 	}
 	return payload
 }
