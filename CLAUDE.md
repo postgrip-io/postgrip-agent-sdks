@@ -68,9 +68,9 @@ The boundary translation happens in `worker/workflow_context.go` via `checkRepla
 `client.Connection` handles two auth flows in one type:
 
 - **Management endpoints** (Task / Workflow / Schedule / namespace CRUD): `Authorization: Bearer <ConnectionOptions.AuthToken>`.
-- **Agent endpoints** (`/api/v1/agent/*` and `/api/v1/agents/*/poll`): a refreshable access token. `ensureAgentSession` runs implicitly before every agent-authenticated request (poll, heartbeat, complete/fail/block, emit-event), refreshing via stored refresh token or re-enrolling via `AgentEnrollmentKey` as needed.
+- **Agent endpoints** (`/api/v1/agent/*` and `/api/v1/agents/*/poll`): a delegated refreshable access token injected by the host agent. `ensureAgentSession` runs implicitly before every agent-authenticated request (poll, heartbeat, complete/fail/block, emit-event), refreshing via the stored refresh token as needed. The SDK must not enroll standalone agents.
 
-The `do(ctx, method, path, body, out, agentAuth bool)` method picks the auth header based on the boolean. Preserve that contract when changing transport. For tests against a stub server that doesn't implement `/enroll`, use `Connection.SeedAgentSession(agentID, accessToken, expiresAt)` to skip the dance.
+The `do(ctx, method, path, body, out, agentAuth bool)` method picks the auth header based on the boolean. Preserve that contract when changing transport. For tests against a stub server, use `Connection.SeedAgentSession(agentID, accessToken, expiresAt)` to install delegated runtime credentials.
 
 ### Activity runtime
 

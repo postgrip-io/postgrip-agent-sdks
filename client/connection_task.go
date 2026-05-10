@@ -2,19 +2,35 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // EnqueueTask enqueues a single task. Use TaskClient.Enqueue / ShellExec /
 // ContainerExec / Noop helpers for ergonomic construction; this is the raw
 // transport call.
 func (c *Connection) EnqueueTask(ctx context.Context, req EnqueueTaskRequest) (*Task, error) {
+	if runtimeOnlyTaskType(req.Type) && !c.hasAgentRuntimeCredentials() {
+		return nil, errors.New("postgrip-agent: workflow tasks can only be enqueued from a managed runtime; submit workflow.runtime to an agent pool")
+	}
 	var out Task
 	if err := c.do(ctx, http.MethodPost, "/api/v1/tasks", req, &out, false); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+func runtimeOnlyTaskType(taskType string) bool {
+	switch strings.TrimSpace(taskType) {
+	case TaskTypeTimer:
+		return true
+	}
+	return strings.HasPrefix(taskType, TaskTypePrefixWorkflow) ||
+		strings.HasPrefix(taskType, TaskTypePrefixActivity) ||
+		strings.HasPrefix(taskType, TaskTypePrefixQuery) ||
+		strings.HasPrefix(taskType, TaskTypePrefixUpdate)
 }
 
 // ListTasks returns tasks matching the optional filters.

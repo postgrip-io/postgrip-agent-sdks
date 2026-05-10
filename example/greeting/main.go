@@ -1,25 +1,24 @@
 // Greeting is an end-to-end runnable example for the PostGrip Agent Go SDK.
 //
-// It registers one activity (`Greet`) and one workflow (`GreetingWorkflow`),
-// starts a worker that polls the runtime service for tasks on this example's
-// queue, then enqueues a workflow execution from the same process and waits
-// for the result. Useful as a smoke test of a live runtime, and as the
-// minimal "client + worker in one process" shape new SDK users start from.
+// Running it locally submits a workflow.runtime task to an existing agent
+// pool. When the host agent launches the runtime, it registers one activity
+// (`Greet`) and one workflow (`GreetingWorkflow`), then runs that workflow
+// with delegated agent credentials.
 //
 // Run:
 //
 //	export POSTGRIP_AGENT_LIVE_SERVER_URL=https://postgrip.app
 //	export POSTGRIP_AGENT_AUTH_TOKEN=...           # management-side bearer token
-//	export POSTGRIP_AGENT_ENROLLMENT_KEY=...       # local standalone only
+//	export SDK_EXAMPLE_RUNTIME_ARGS_JSON='["-lc","./path/to/greeting"]'
 //	go run ./example/greeting
 //
-// In production the PostGrip host agent launches this runtime and injects a
-// delegated agent session. `POSTGRIP_AGENT_ENROLLMENT_KEY` is only for local
-// standalone runs where no host agent is supervising the runtime.
+// The SDK does not enroll standalone agents; host agents inject delegated
+// managed-runtime credentials.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -36,18 +35,25 @@ import (
 func main() {
 	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
 	authToken := os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN")
+	tenantID := os.Getenv("POSTGRIP_AGENT_TENANT_ID")
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-example")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-example-agent")
 
 	conn, err := client.NewConnection(client.ConnectionOptions{
 		Address:        address,
 		AuthToken:      authToken,
+		Headers:        tenantHeader(tenantID),
 		AgentID:        agentID,
 		AgentNamespace: client.DefaultNamespace,
 		AgentQueue:     queue,
 	})
 	if err != nil {
 		log.Fatalf("connect: %v", err)
+	}
+
+	if os.Getenv("POSTGRIP_AGENT_MANAGED_RUNTIME") != "true" {
+		submitManagedRuntime(context.Background(), conn)
+		return
 	}
 
 	activities := activity.Registry{
@@ -98,7 +104,7 @@ func main() {
 	handle, err := c.Workflow.Start(startCtx, "GreetingWorkflow", client.WorkflowStartOptions{
 		WorkflowID: workflowID,
 		TaskQueue:  queue,
-		Args:       []any{"PostGrip"},
+		Args:       []any{envOr("SDK_EXAMPLE_GREETING_NAME", "PostGrip")},
 	})
 	if err != nil {
 		log.Fatalf("Workflow.Start: %v", err)
@@ -125,4 +131,41 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func tenantHeader(tenantID string) map[string]string {
+	if tenantID == "" {
+		return nil
+	}
+	return map[string]string{"x-postgrip-agent-tenant-id": tenantID}
+}
+
+func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
+	argsJSON := envOr("SDK_EXAMPLE_RUNTIME_ARGS_JSON", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_ARGS_JSON"))
+	if argsJSON == "" {
+		log.Fatalf("SDK_EXAMPLE_RUNTIME_ARGS_JSON is required to submit this runtime to an agent pool")
+	}
+	var args []string
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		log.Fatalf("invalid SDK_EXAMPLE_RUNTIME_ARGS_JSON: %v", err)
+	}
+	queue := envOr("SDK_EXAMPLE_RUNTIME_QUEUE", envOr("POSTGRIP_EXAMPLE_RUNTIME_QUEUE", client.DefaultQueue))
+	runtimeQueue := envOr("SDK_EXAMPLE_RUNTIME_CHILD_QUEUE", envOr("POSTGRIP_EXAMPLE_RUNTIME_CHILD_QUEUE", queue))
+	task, err := client.New(conn).Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
+		Namespace:           client.DefaultNamespace,
+		Queue:               queue,
+		Command:             envOr("SDK_EXAMPLE_RUNTIME_COMMAND", envOr("POSTGRIP_EXAMPLE_RUNTIME_COMMAND", "sh")),
+		Args:                args,
+		RuntimeQueue:        runtimeQueue,
+		WorkingDir:          envOr("SDK_EXAMPLE_RUNTIME_WORKING_DIR", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_WORKING_DIR")),
+		TimeoutSeconds:      300,
+		LeaseTimeoutSeconds: 30,
+		Env: map[string]string{
+			"SDK_EXAMPLE_GREETING_NAME": envOr("SDK_EXAMPLE_GREETING_NAME", "PostGrip"),
+		},
+	})
+	if err != nil {
+		log.Fatalf("submit workflow runtime: %v", err)
+	}
+	log.Printf("submitted managed workflow runtime task=%s queue=%s runtime_queue=%s", task.ID, queue, runtimeQueue)
 }

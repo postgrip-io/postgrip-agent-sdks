@@ -111,10 +111,11 @@ func GreetWorkflow(ctx workflow.Context, args []any) (any, error) {
 }
 
 func main() {
+    // This process is launched by a PostGrip host agent as workflow.runtime.
+    // The host injects POSTGRIP_AGENT_ID, POSTGRIP_AGENT_ACCESS_TOKEN,
+    // POSTGRIP_AGENT_REFRESH_TOKEN, and POSTGRIP_AGENT_SIGNING_PRIVATE_KEY.
     conn, err := client.NewConnection(client.ConnectionOptions{
-        Address:            "http://127.0.0.1:4100",
-        AgentEnrollmentKey: "<enrollment-key>",
-        AgentID:            "worker-1",
+        Address: "http://127.0.0.1:4100",
     })
     if err != nil {
         log.Fatal(err)
@@ -122,7 +123,6 @@ func main() {
 
     w, err := worker.New(worker.Options{
         Connection: conn,
-        AgentID:    "worker-1",
         Queue:      "default",
         Workflows:  workflow.Registry{"Greet": GreetWorkflow},
         Activities: activity.Registry{"GreetActivity": GreetActivity},
@@ -136,7 +136,7 @@ func main() {
 }
 ```
 
-The worker loops forever, leasing tasks from the configured queue, heartbeating each leased task on a timer derived from its lease timeout, and dispatching to your registered functions. `Run` returns when the context is cancelled or `Worker.Shutdown` is called.
+The worker loops forever inside the managed runtime, leasing tasks from the configured queue, heartbeating each leased task on a timer derived from its lease timeout, and dispatching to your registered functions. `Run` returns when the context is cancelled or `Worker.Shutdown` is called. Client code should submit the runtime with `client.Task.WorkflowRuntime`; the SDK does not enroll standalone agents.
 
 ## Start a workflow
 

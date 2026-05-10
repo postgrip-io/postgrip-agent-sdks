@@ -40,6 +40,24 @@ type ContainerExecInput struct {
 	TimeoutSeconds int
 }
 
+// WorkflowRuntimeInput enqueues a managed SDK workflow runtime onto an
+// existing host-agent pool. The host agent leases the workflow.runtime task,
+// delegates credentials, then launches Command with Args. The launched process
+// should start a SDK Agent using the injected POSTGRIP_AGENT_* environment.
+type WorkflowRuntimeInput struct {
+	Namespace           string
+	Queue               string
+	RuntimeID           string
+	Command             string
+	Args                []string
+	Env                 map[string]string
+	WorkingDir          string
+	RuntimeNamespace    string
+	RuntimeQueue        string
+	TimeoutSeconds      int
+	LeaseTimeoutSeconds int
+}
+
 // WorkflowStartOptions is the SDK-side input to WorkflowClient.Start. It
 // carries the durable identity, queue routing, payload args, and the retry
 // / memo / search-attribute metadata the runtime service persists.

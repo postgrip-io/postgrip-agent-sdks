@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewConnectionNormalizesAddress(t *testing.T) {
@@ -108,5 +110,59 @@ func TestContainerExecBuildsExpectedPayload(t *testing.T) {
 	}
 	if len(p.Args) != 2 || p.Args[0] != "-e" {
 		t.Fatalf("args = %#v, mismatch", p.Args)
+	}
+}
+
+func TestWorkflowTaskSubmissionRequiresManagedRuntime(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var seen EnqueueTaskRequest
+		_ = json.NewDecoder(r.Body).Decode(&seen)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"task-1","namespace":"default","queue":"default","type":"workflow:Greet","state":"queued","attempt":0,"lease_timeout_seconds":0,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	conn, _ := NewConnection(ConnectionOptions{Address: server.URL})
+	c := New(conn)
+	_, err := c.Task.Enqueue(context.Background(), EnqueueInput{
+		Queue: "default",
+		Type:  TaskTypePrefixWorkflow + "Greet",
+	})
+	if err == nil || !strings.Contains(err.Error(), "workflow.runtime") {
+		t.Fatalf("workflow enqueue err = %v, want managed runtime guidance", err)
+	}
+
+	conn.SeedAgentSession("agent-1", "tok", time.Now().Add(time.Hour))
+	if _, err := c.Task.Enqueue(context.Background(), EnqueueInput{
+		Queue: "default",
+		Type:  TaskTypePrefixWorkflow + "Greet",
+	}); err != nil {
+		t.Fatalf("managed workflow enqueue: %v", err)
+	}
+}
+
+func TestWorkflowRuntimeSubmissionIsExternalPath(t *testing.T) {
+	t.Parallel()
+	var seen EnqueueTaskRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&seen)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"runtime-task","namespace":"default","queue":"default","type":"workflow.runtime","state":"queued","attempt":0,"lease_timeout_seconds":0,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	conn, _ := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "management"})
+	c := New(conn)
+	task, err := c.Task.WorkflowRuntime(context.Background(), WorkflowRuntimeInput{
+		Queue:   "default",
+		Command: "sh",
+		Args:    []string{"-lc", "echo runtime"},
+	})
+	if err != nil {
+		t.Fatalf("WorkflowRuntime: %v", err)
+	}
+	if task.ID != "runtime-task" || seen.Type != TaskTypeWorkflowRuntime {
+		t.Fatalf("task = %+v seen type = %q", task, seen.Type)
 	}
 }

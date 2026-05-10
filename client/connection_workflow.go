@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 )
@@ -15,6 +16,9 @@ func (c *Connection) SignalWorkflow(ctx context.Context, workflowID string, req 
 // SignalWithStartWorkflow starts a workflow if it does not exist, otherwise
 // appends a signal to the existing run.
 func (c *Connection) SignalWithStartWorkflow(ctx context.Context, req SignalWithStartWorkflowRequest) (*Task, error) {
+	if !c.hasAgentRuntimeCredentials() {
+		return nil, errors.New("postgrip-agent: signal-with-start can only run from a managed runtime; submit workflow.runtime to an agent pool")
+	}
 	var out Task
 	if err := c.do(ctx, http.MethodPost, "/api/v1/workflows/signal-with-start", req, &out, false); err != nil {
 		return nil, err

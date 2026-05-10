@@ -1,19 +1,21 @@
 # example/
 
 Runnable examples that exercise the PostGrip Agent Go SDK end-to-end against a
-live runtime service. Each example is a standalone `package main` you can `go
-run` once the runtime address and auth tokens are exported.
+live runtime service. Running an example locally submits a managed
+`workflow.runtime` task to an existing agent pool. The SDK worker path runs
+only when a PostGrip host agent launches the example and injects delegated
+runtime credentials.
 
 ## greeting
 
-A single-process demo: it starts a worker that registers one activity and one
-workflow, then enqueues an execution of that workflow from the same process
-and waits for the result.
+A managed-runtime demo: the local process submits the runtime command to an
+agent pool, and the host-launched runtime registers one activity and one
+workflow.
 
 ```sh
 export POSTGRIP_AGENT_LIVE_SERVER_URL=https://postgrip.app
 export POSTGRIP_AGENT_AUTH_TOKEN=...           # management-side bearer token
-export POSTGRIP_AGENT_ENROLLMENT_KEY=...       # local standalone only
+export SDK_EXAMPLE_RUNTIME_ARGS_JSON='["-lc","./path/to/runtime"]'
 go run ./example/greeting
 ```
 
@@ -26,5 +28,4 @@ Optional overrides:
 
 When a PostGrip host agent launches this example as a `workflow.runtime` task,
 it injects `POSTGRIP_AGENT_MANAGED_RUNTIME=true`, delegated session tokens, and
-the agent signing key. `POSTGRIP_AGENT_ENROLLMENT_KEY` is only for local
-standalone runs where no host agent is supervising the runtime.
+the agent signing key. The SDK does not enroll standalone agents.

@@ -2,20 +2,15 @@ package client
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"errors"
 	"net/http"
-	"os"
 	"time"
-
-	"github.com/postgrip-io/agent-sdk-protocol"
 )
 
 // ensureAgentSession is a no-op when a non-expired access token is cached.
-// Otherwise it tries refresh; on refresh failure it falls back to enrollment
-// if an enrollment key is configured. Worker calls this implicitly before
-// every agent-authenticated request.
+// Otherwise it tries refresh. Worker calls this implicitly before every
+// agent-authenticated request. The SDK does not enroll agents; host agents
+// launch managed workflow runtimes and inject delegated session credentials.
 func (c *Connection) ensureAgentSession(ctx context.Context, agentID, namespace, queue string) error {
 	c.agentMu.Lock()
 	if agentID != "" {
@@ -42,55 +37,27 @@ func (c *Connection) ensureAgentSession(ctx context.Context, agentID, namespace,
 		return nil
 	}
 	refresh := c.agentRefreshToken
-	enroll := c.agentEnrollmentKey
 	c.agentMu.Unlock()
 
 	if refresh != "" {
-		if err := c.refreshAgentSession(ctx, refresh); err == nil {
-			return nil
-		} else if enroll == "" {
+		if err := c.refreshAgentSession(ctx, refresh); err != nil {
 			return err
 		}
+		return nil
 	}
-	if enroll == "" {
-		return errors.New("postgrip-agent: no agent session and no enrollment key configured")
-	}
-	return c.enrollAgent(ctx, enroll)
+	return errors.New("postgrip-agent: managed runtime credentials are required; submit workflow.runtime work to a host agent instead of enrolling SDK agents")
+}
+
+func (c *Connection) hasAgentRuntimeCredentials() bool {
+	c.agentMu.Lock()
+	defer c.agentMu.Unlock()
+	return c.agentAccessToken != "" || c.agentRefreshToken != ""
 }
 
 func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken string) error {
 	body := map[string]string{"refreshToken": refreshToken}
 	var out agentSessionResponse
 	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/session/refresh", body, &out, false); err != nil {
-		return err
-	}
-	c.applyAgentSession(out)
-	return nil
-}
-
-func (c *Connection) enrollAgent(ctx context.Context, enrollmentKey string) error {
-	c.agentMu.Lock()
-	if len(c.agentSignPriv) != ed25519.PrivateKeySize {
-		pub, priv, err := ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			c.agentMu.Unlock()
-			return err
-		}
-		c.agentSignPub = pub
-		c.agentSignPriv = priv
-	}
-	body := map[string]any{
-		"enrollmentKey":      enrollmentKey,
-		"agentId":            c.agentID,
-		"name":               orDefault(c.agentName, c.agentID),
-		"host":               orDefault(c.agentHost, hostnameOrUnknown()),
-		"namespaces":         []string{c.agentNamespace},
-		"queues":             []string{c.agentQueue},
-		"signaturePublicKey": protocol.EncodeAgentPublicKey(c.agentSignPub),
-	}
-	c.agentMu.Unlock()
-	var out agentSessionResponse
-	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/enroll", body, &out, false); err != nil {
 		return err
 	}
 	c.applyAgentSession(out)
@@ -120,20 +87,12 @@ func (c *Connection) applyAgentSession(s agentSessionResponse) {
 // connection's agent auth state, bypassing the enroll/refresh HTTP dance.
 //
 // Intended for tests that exercise agent-authenticated endpoints against
-// an httptest server that doesn't implement /api/v1/agent/enroll. Production
-// code reaches a session via NewConnection's AgentEnrollmentKey + the worker
-// poll loop, never via this method.
+// an httptest server. Production code receives these credentials from a host
+// agent when it launches a managed workflow runtime.
 func (c *Connection) SeedAgentSession(agentID, accessToken string, accessExpiresAt time.Time) {
 	c.applyAgentSession(agentSessionResponse{
 		AgentID:         agentID,
 		AccessToken:     accessToken,
 		AccessExpiresAt: accessExpiresAt,
 	})
-}
-
-func hostnameOrUnknown() string {
-	if h, err := os.Hostname(); err == nil && h != "" {
-		return h
-	}
-	return "unknown"
 }

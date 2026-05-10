@@ -92,13 +92,15 @@ allowlist as `shell.exec`.
 ```go
 import (
     "context"
-    "log"
 
     "go.postgrip.io/sdk/activity"
     "go.postgrip.io/sdk/client"
     "go.postgrip.io/sdk/worker"
     "go.postgrip.io/sdk/workflow"
 )
+
+// This process is launched by a PostGrip host agent from a workflow.runtime task.
+// The host injects POSTGRIP_AGENT_ID and delegated runtime credentials.
 
 // Activities are plain Go functions. The first arg is a regular
 // context.Context that honors the runtime service's cancel/heartbeat-loss
@@ -121,7 +123,6 @@ func GreetWorkflow(ctx workflow.Context, args []any) (any, error) {
 func runWorker(ctx context.Context, conn *client.Connection) error {
     w, err := worker.New(worker.Options{
         Connection: conn,
-        AgentID:    "worker-1",
         Queue:      "default",
         Workflows:  workflow.Registry{"Greet": GreetWorkflow},
         Activities: activity.Registry{"GreetActivity": GreetActivity},
@@ -131,21 +132,36 @@ func runWorker(ctx context.Context, conn *client.Connection) error {
     }
     return w.Run(ctx)
 }
+```
 
-func startGreet(ctx context.Context, conn *client.Connection) error {
-    c := client.New(conn)
-    handle, err := c.Workflow.Start(ctx, "Greet", client.WorkflowStartOptions{
-        Args: []any{"world"},
+Submit that runtime to an existing agent pool from your client process:
+
+```go
+import (
+    "context"
+    "os"
+
+    "go.postgrip.io/sdk/client"
+)
+
+func submitRuntime(ctx context.Context) error {
+    conn, err := client.NewConnection(client.ConnectionOptions{
+        Address:   "https://agentorchestrator.postgrip.app",
+        AuthToken: os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"),
     })
     if err != nil {
         return err
     }
-    var result string
-    if err := handle.Result(ctx, &result); err != nil {
-        return err
-    }
-    log.Println(result)
-    return nil
+    c := client.New(conn)
+    _, err = c.Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
+        Queue:        "default",
+        Command:      "./workflow-runtime",
+        RuntimeQueue: "default",
+        Env: map[string]string{
+            "POSTGRIP_EXAMPLE_RUN_LABEL": "PostGrip",
+        },
+    })
+    return err
 }
 ```
 
@@ -153,7 +169,7 @@ func startGreet(ctx context.Context, conn *client.Connection) error {
 
 | Group               | Methods                                                                                |
 | ------------------- | -------------------------------------------------------------------------------------- |
-| `client.Task`       | `Enqueue`, `ShellExec`, `ContainerExec`, `Noop`, `Get`, `List`, `Events`, `Result`, `WatchEvents` |
+| `client.Task`       | `Enqueue`, `WorkflowRuntime`, `ShellExec`, `ContainerExec`, `Noop`, `Get`, `List`, `Events`, `Result`, `WatchEvents` |
 | `client.Workflow`   | `Start`, `SignalWithStart`, `GetHandle`                                                |
 | `client.WorkflowHandle` | `Result`, `Describe`, `Signal`, `Cancel`, `Terminate`, `History`                   |
 | `client.Schedule`   | `Create`, `List`, `Get`, `Update`, `Pause`, `Unpause`, `Trigger`, `Backfill`, `Delete` |
@@ -163,8 +179,8 @@ func startGreet(ctx context.Context, conn *client.Connection) error {
 
 ## Status
 
-- The lower-level task surface (`client.Task.*`, including `ContainerExec`),
-  `client.Workflow.Start`, `WorkflowHandle.*`, and `client.Schedule.*` are at
+- The lower-level task surface (`client.Task.*`, including `WorkflowRuntime`
+  and `ContainerExec`), `client.Workflow.Start`, `WorkflowHandle.*`, and `client.Schedule.*` are at
   parity with the TS / Python SDKs.
 - `worker.Worker` polls workflow task families (`workflow:*`, `activity:*`,
   `query:*`, `update:*`). Activity execution honors heartbeats, milestones,

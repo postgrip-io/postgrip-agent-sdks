@@ -72,6 +72,7 @@ func TestSleepSchedulesAndSuspendsWhenHistoryExhausted(t *testing.T) {
 	defer server.Close()
 
 	conn, _ := client.NewConnection(client.ConnectionOptions{Address: server.URL})
+	conn.SeedAgentSession("agent-1", "tok", time.Now().Add(time.Hour))
 	wfctx := &workflowContext{
 		Context:    context.Background(),
 		logger:     slog.Default(),

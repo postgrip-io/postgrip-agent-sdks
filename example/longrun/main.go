@@ -1,27 +1,28 @@
-// Longrun is a stress example: it runs five workflows sequentially against
-// the runtime service, where each workflow internally chains five activity
-// calls separated by 13-second durable timers. Each workflow lasts ~65–75
-// seconds, so a full run takes ~5–6 minutes and exercises the replay,
-// suspension, and durable-timer paths repeatedly.
+// Longrun is a stress example. Running it locally submits a workflow.runtime
+// task to an existing agent pool. When the host agent launches the runtime,
+// it runs five workflows sequentially, where each workflow internally chains
+// five activity calls separated by 13-second durable timers.
 //
 // Run:
 //
 //	export POSTGRIP_AGENTORCHESTRATOR_URL=https://agentorchestrator.postgrip.app
 //	export POSTGRIP_AGENT_AUTH_TOKEN=...           # management bearer
-//	export POSTGRIP_AGENT_ENROLLMENT_KEY=...       # local standalone only
+//	export SDK_EXAMPLE_RUNTIME_ARGS_JSON='["-lc","./path/to/longrun"]'
 //	go run ./example/longrun
 //
-// In production the PostGrip host agent launches this runtime and injects a
-// delegated agent session. `POSTGRIP_AGENT_ENROLLMENT_KEY` is only for local
-// standalone runs where no host agent is supervising the runtime.
+// The SDK does not enroll standalone agents; host agents inject delegated
+// managed-runtime credentials.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,26 +33,39 @@ import (
 )
 
 const (
-	stepsPerWorkflow  = 5
-	workflowRuns      = 5
-	stepSleepDuration = 13 * time.Second
+	defaultStepsPerWorkflow = 5
+	defaultWorkflowRuns     = 5
+	defaultStepSleepSeconds = 13
+	defaultRunTimeout       = 5 * time.Minute
 )
 
 func main() {
 	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
 	authToken := os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN")
+	tenantID := os.Getenv("POSTGRIP_AGENT_TENANT_ID")
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-longrun")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-longrun-agent")
+	stepsPerWorkflow := envIntAny([]string{"POSTGRIP_EXAMPLE_STEPS", "SDK_EXAMPLE_STEPS"}, defaultStepsPerWorkflow)
+	workflowRuns := envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_RUNS", "SDK_EXAMPLE_WORKFLOW_RUNS"}, defaultWorkflowRuns)
+	stepSleepDuration := time.Duration(envIntAny([]string{"POSTGRIP_EXAMPLE_STEP_SLEEP_SECONDS", "SDK_EXAMPLE_STEP_SLEEP_SECONDS"}, defaultStepSleepSeconds)) * time.Second
+	runLabel := envOrAny([]string{"POSTGRIP_EXAMPLE_RUN_LABEL", "SDK_EXAMPLE_RUN_LABEL"}, "PostGrip")
+	runTimeout := time.Duration(envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS", "SDK_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS"}, int(defaultRunTimeout/time.Second))) * time.Second
 
 	conn, err := client.NewConnection(client.ConnectionOptions{
 		Address:        address,
 		AuthToken:      authToken,
+		Headers:        tenantHeader(tenantID),
 		AgentID:        agentID,
 		AgentNamespace: client.DefaultNamespace,
 		AgentQueue:     queue,
 	})
 	if err != nil {
 		log.Fatalf("connect: %v", err)
+	}
+
+	if os.Getenv("POSTGRIP_AGENT_MANAGED_RUNTIME") != "true" {
+		submitManagedRuntime(rootSignalContext(), conn)
+		return
 	}
 
 	activities := activity.Registry{
@@ -110,12 +124,12 @@ func main() {
 
 	for i := 1; i <= workflowRuns; i++ {
 		runStart := time.Now()
-		workflowID := fmt.Sprintf("go-longrun-%d-%d", time.Now().UnixNano(), i)
-		runCtx, cancelRun := context.WithTimeout(rootCtx, 5*time.Minute)
+		workflowID := fmt.Sprintf("go-longrun-%s-%d-%d", slug(runLabel), time.Now().UnixNano(), i)
+		runCtx, cancelRun := context.WithTimeout(rootCtx, runTimeout)
 		handle, err := c.Workflow.Start(runCtx, "LongRunningWorkflow", client.WorkflowStartOptions{
 			WorkflowID: workflowID,
 			TaskQueue:  queue,
-			Args:       []any{fmt.Sprintf("PostGrip-%d", i), stepsPerWorkflow},
+			Args:       []any{fmt.Sprintf("%s-%d", runLabel, i), stepsPerWorkflow},
 		})
 		if err != nil {
 			cancelRun()
@@ -144,6 +158,121 @@ func main() {
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envOrAny(keys []string, fallback string) string {
+	for _, key := range keys {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+	}
+	return fallback
+}
+
+func tenantHeader(tenantID string) map[string]string {
+	if tenantID == "" {
+		return nil
+	}
+	return map[string]string{"x-postgrip-agent-tenant-id": tenantID}
+}
+
+func envIntAny(keys []string, fallback int) int {
+	for _, key := range keys {
+		value := os.Getenv(key)
+		if value == "" {
+			continue
+		}
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed <= 0 {
+			log.Printf("invalid %s=%q; using %d", key, value, fallback)
+			return fallback
+		}
+		return parsed
+	}
+	return fallback
+}
+
+func envBoolAny(keys []string) bool {
+	for _, key := range keys {
+		switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+		case "1", "true", "yes", "on":
+			return true
+		}
+	}
+	return false
+}
+
+func slug(value string) string {
+	value = strings.ToLower(value)
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func rootSignalContext() context.Context {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+	return ctx
+}
+
+func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
+	command := envOr("SDK_EXAMPLE_RUNTIME_COMMAND", envOr("POSTGRIP_EXAMPLE_RUNTIME_COMMAND", "sh"))
+	args := envJSONStringsAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_ARGS_JSON", "SDK_EXAMPLE_RUNTIME_ARGS_JSON"}, []string{})
+	if len(args) == 0 {
+		log.Fatalf("SDK_EXAMPLE_RUNTIME_ARGS_JSON is required when submitting to the agent pool")
+	}
+	runtimeQueue := envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_QUEUE", "SDK_EXAMPLE_RUNTIME_QUEUE"}, client.DefaultQueue)
+	childQueue := envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_CHILD_QUEUE", "SDK_EXAMPLE_RUNTIME_CHILD_QUEUE"}, runtimeQueue)
+	task, err := client.New(conn).Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
+		Namespace:      client.DefaultNamespace,
+		Queue:          runtimeQueue,
+		Command:        command,
+		Args:           args,
+		RuntimeQueue:   childQueue,
+		WorkingDir:     envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_WORKING_DIR", "SDK_EXAMPLE_RUNTIME_WORKING_DIR"}, ""),
+		TimeoutSeconds: envIntAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_TIMEOUT_SECONDS", "SDK_EXAMPLE_RUNTIME_TIMEOUT_SECONDS"}, 900),
+		Env: map[string]string{
+			"SDK_EXAMPLE_RUN_LABEL":                envOrAny([]string{"POSTGRIP_EXAMPLE_RUN_LABEL", "SDK_EXAMPLE_RUN_LABEL"}, "PostGrip"),
+			"SDK_EXAMPLE_WORKFLOW_RUNS":            fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_RUNS", "SDK_EXAMPLE_WORKFLOW_RUNS"}, defaultWorkflowRuns)),
+			"SDK_EXAMPLE_STEPS":                    fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_STEPS", "SDK_EXAMPLE_STEPS"}, defaultStepsPerWorkflow)),
+			"SDK_EXAMPLE_STEP_SLEEP_SECONDS":       fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_STEP_SLEEP_SECONDS", "SDK_EXAMPLE_STEP_SLEEP_SECONDS"}, defaultStepSleepSeconds)),
+			"SDK_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS": fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS", "SDK_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS"}, int(defaultRunTimeout/time.Second))),
+		},
+		LeaseTimeoutSeconds: envIntAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_LEASE_TIMEOUT_SECONDS", "SDK_EXAMPLE_RUNTIME_LEASE_TIMEOUT_SECONDS"}, 30),
+	})
+	if err != nil {
+		log.Fatalf("submit workflow runtime: %v", err)
+	}
+	log.Printf("submitted managed workflow runtime task=%s queue=%s child_queue=%s command=%s args=%v", task.ID, runtimeQueue, childQueue, command, args)
+}
+
+func envJSONStringsAny(keys []string, fallback []string) []string {
+	for _, key := range keys {
+		value := os.Getenv(key)
+		if value == "" {
+			continue
+		}
+		var out []string
+		if err := json.Unmarshal([]byte(value), &out); err != nil {
+			log.Fatalf("invalid %s: %v", key, err)
+		}
+		return out
 	}
 	return fallback
 }

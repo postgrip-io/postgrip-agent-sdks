@@ -21,18 +21,15 @@ import (
 // ConnectionOptions configures the HTTP connection to the agent runtime
 // service. Address is the base URL (defaults to http://127.0.0.1:4100).
 // AuthToken is sent as `Authorization: Bearer <token>` on management
-// endpoints. AgentEnrollmentKey + AgentID + AgentName + AgentHost are used
-// only when this connection is also used as a Worker — the SDK exchanges
-// the enrollment key for a refresh+access token pair, then refreshes
-// transparently.
+// endpoints. AgentID + delegated AgentAccessToken / AgentRefreshToken /
+// AgentSigningPrivateKey are used only when this connection is running inside
+// a managed workflow runtime launched by a PostGrip host agent.
 type ConnectionOptions struct {
-	Address        string
-	AuthToken      string
-	HTTPClient     *http.Client
-	Headers        map[string]string
-	RequestTimeout time.Duration
-
-	AgentEnrollmentKey     string
+	Address                string
+	AuthToken              string
+	HTTPClient             *http.Client
+	Headers                map[string]string
+	RequestTimeout         time.Duration
 	AgentID                string
 	AgentName              string
 	AgentHost              string
@@ -52,12 +49,10 @@ type Connection struct {
 	headers    map[string]string
 
 	// Agent (worker-side) auth state. Mutated by ensureAgentSession; reads
-	// must hold agentMu. Pre-existing agentAccessToken is reused until 30s
-	// before it expires, then refreshed via the refresh token, then
-	// re-enrolled if that fails and an enrollment key is available.
+	// must hold agentMu. Agent sessions must be delegated by a host agent and
+	// injected into managed workflow runtimes.
 	agentMu                sync.Mutex
 	agentRefreshMu         sync.Mutex
-	agentEnrollmentKey     string
 	agentID                string
 	agentName              string
 	agentHost              string
@@ -67,10 +62,8 @@ type Connection struct {
 	agentRefreshToken      string
 	agentAccessExpiresUnix int64
 
-	// Ed25519 keypair the agent uses to sign requests to agent-authed
-	// endpoints. Generated lazily on first enroll and reused for the lifetime
-	// of the Connection. The orchestrator stores the matching public key on
-	// the agent record at enroll time and verifies every signed POST.
+	// Ed25519 keypair the managed runtime uses to sign requests to
+	// agent-authed endpoints. It is injected by the host agent.
 	agentSignPriv ed25519.PrivateKey
 	agentSignPub  ed25519.PublicKey
 }
@@ -100,11 +93,6 @@ func NewConnection(opts ConnectionOptions) (*Connection, error) {
 		}
 		httpClient = &http.Client{Timeout: timeout}
 	}
-	managedRuntime := strings.EqualFold(strings.TrimSpace(os.Getenv("POSTGRIP_AGENT_MANAGED_RUNTIME")), "true")
-	enroll := opts.AgentEnrollmentKey
-	if enroll == "" && !managedRuntime {
-		enroll = os.Getenv("POSTGRIP_AGENT_ENROLLMENT_KEY")
-	}
 	agentID := firstNonEmpty(opts.AgentID, os.Getenv("POSTGRIP_AGENT_ID"))
 	namespace := firstNonEmpty(opts.AgentNamespace, os.Getenv("POSTGRIP_AGENT_NAMESPACE"), DefaultNamespace)
 	queue := firstNonEmpty(opts.AgentQueue, os.Getenv("POSTGRIP_AGENT_TASK_QUEUE"), DefaultQueue)
@@ -132,7 +120,6 @@ func NewConnection(opts ConnectionOptions) (*Connection, error) {
 		httpClient:             httpClient,
 		authHeader:             authHeader,
 		headers:                headers,
-		agentEnrollmentKey:     enroll,
 		agentID:                agentID,
 		agentName:              opts.AgentName,
 		agentHost:              opts.AgentHost,

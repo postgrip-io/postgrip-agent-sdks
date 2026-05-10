@@ -63,6 +63,32 @@ func (t *TaskClient) ContainerExec(ctx context.Context, in ContainerExecInput) (
 	})
 }
 
+// WorkflowRuntime enqueues a managed SDK runtime on a host-agent pool.
+//
+// Use this from clients that want an existing PostGrip agent to orchestrate
+// SDK workflow execution. The launched runtime receives delegated
+// POSTGRIP_AGENT_* credentials from the host agent; SDK code should not enroll
+// its own agent.
+func (t *TaskClient) WorkflowRuntime(ctx context.Context, in WorkflowRuntimeInput) (*Task, error) {
+	payload := workflowRuntimePayload{
+		RuntimeID:      in.RuntimeID,
+		Command:        in.Command,
+		Args:           in.Args,
+		Env:            in.Env,
+		WorkingDir:     in.WorkingDir,
+		Namespace:      in.RuntimeNamespace,
+		Queue:          in.RuntimeQueue,
+		TimeoutSeconds: in.TimeoutSeconds,
+	}
+	return t.Enqueue(ctx, EnqueueInput{
+		Namespace:           in.Namespace,
+		Queue:               in.Queue,
+		Type:                TaskTypeWorkflowRuntime,
+		Payload:             payload,
+		LeaseTimeoutSeconds: in.LeaseTimeoutSeconds,
+	})
+}
+
 // Noop enqueues a noop task — useful for smoke-testing agent connectivity.
 func (t *TaskClient) Noop(ctx context.Context, queue string) (*Task, error) {
 	return t.Enqueue(ctx, EnqueueInput{Queue: queue, Type: TaskTypeNoop})
@@ -127,4 +153,15 @@ func (t *TaskClient) WatchEvents(ctx context.Context, taskID string) (<-chan Tas
 		}
 	}()
 	return out, nil
+}
+
+type workflowRuntimePayload struct {
+	RuntimeID      string            `json:"runtime_id,omitempty"`
+	Command        string            `json:"command"`
+	Args           []string          `json:"args,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	WorkingDir     string            `json:"working_dir,omitempty"`
+	Namespace      string            `json:"namespace,omitempty"`
+	Queue          string            `json:"queue,omitempty"`
+	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
 }
