@@ -8,8 +8,12 @@
 //
 //	export POSTGRIP_AGENTORCHESTRATOR_URL=https://agentorchestrator.postgrip.app
 //	export POSTGRIP_AGENT_AUTH_TOKEN=...           # management bearer
-//	export POSTGRIP_AGENT_ENROLLMENT_KEY=...       # per-org enrollment key
+//	export POSTGRIP_AGENT_ENROLLMENT_KEY=...       # local standalone only
 //	go run ./example/longrun
+//
+// In production the PostGrip host agent launches this runtime and injects a
+// delegated agent session. `POSTGRIP_AGENT_ENROLLMENT_KEY` is only for local
+// standalone runs where no host agent is supervising the runtime.
 package main
 
 import (

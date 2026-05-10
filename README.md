@@ -6,7 +6,10 @@
 [![Release](https://img.shields.io/github/v/release/postgrip-io/agent-sdk-go?label=release&color=2563EB)](https://github.com/postgrip-io/agent-sdk-go/releases)
 [![License](https://img.shields.io/github/license/postgrip-io/agent-sdk-go?color=2563EB)](LICENSE)
 
-Go SDK for the PostGrip Agent runtime service. Mirrors
+Go SDK for defining, submitting, and executing PostGrip workflows. In production,
+SDK workflow runtimes are supervised by an existing PostGrip agent: the host
+agent launches the runtime, injects delegated credentials, and keeps generic
+operational tasks separate from workflow/activity polling. Mirrors
 [`agent-sdk-typescript`](https://github.com/postgrip-io/agent-sdk-typescript)
 and [`agent-sdk-python`](https://github.com/postgrip-io/agent-sdk-python) so
 polyglot deployments can pick whichever language fits each task fleet. Wire
@@ -26,7 +29,7 @@ The SDK is split into focused sub-packages — pick the ones your code needs:
 | Package                                             | Purpose                                                                       |
 | --------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [`client`](./client)     | `Connection`, `Client`, `Task` / `Workflow` / `Schedule` sub-clients, input shapes. |
-| [`worker`](./worker)     | `Worker` that polls, leases, and dispatches tasks to your registered bodies.        |
+| [`worker`](./worker)     | Workflow runtime that polls workflow/activity task families and dispatches registered bodies. |
 | [`workflow`](./workflow) | `workflow.Context`, option structs, `SignalChannel`, `workflow.Func` / `Registry`.   |
 | [`activity`](./activity) | `activity.Func`, `Info`, `GetInfo`, `Heartbeat`, `Milestone`.                        |
 | [`failure`](./failure)   | Structured failures: `Application`, `Cancelled`, `Timeout`, `TaskFailed`.            |
@@ -163,9 +166,9 @@ func startGreet(ctx context.Context, conn *client.Connection) error {
 - The lower-level task surface (`client.Task.*`, including `ContainerExec`),
   `client.Workflow.Start`, `WorkflowHandle.*`, and `client.Schedule.*` are at
   parity with the TS / Python SDKs.
-- `worker.Worker` polls, leases, dispatches `noop`, `activity:*`, and
-  `workflow:*` tasks. Activity execution honors heartbeats, milestones, and
-  structured failures (`failure.Application`, `failure.Cancelled`,
+- `worker.Worker` polls workflow task families (`workflow:*`, `activity:*`,
+  `query:*`, `update:*`). Activity execution honors heartbeats, milestones,
+  and structured failures (`failure.Application`, `failure.Cancelled`,
   `failure.Timeout`).
 - Workflow execution does deterministic replay against durable history,
   matching the TS / Python SDKs:

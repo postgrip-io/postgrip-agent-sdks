@@ -65,7 +65,12 @@ func (c *Connection) PollTask(ctx context.Context, namespace, queue, agentID str
 		return nil, err
 	}
 	path := "/api/v1/agent/poll"
-	q := encodeQuery(map[string]string{"namespace": namespace, "queue": queue, "agent_id": agentID})
+	q := encodeQuery(map[string]string{
+		"namespace":  namespace,
+		"queue":      queue,
+		"agent_id":   agentID,
+		"task_types": TaskTypePrefixWorkflow + "," + TaskTypePrefixActivity + "," + TaskTypePrefixQuery + "," + TaskTypePrefixUpdate,
+	})
 	if q != "" {
 		path += "?" + q
 	}

@@ -32,12 +32,16 @@ type ConnectionOptions struct {
 	Headers        map[string]string
 	RequestTimeout time.Duration
 
-	AgentEnrollmentKey string
-	AgentID            string
-	AgentName          string
-	AgentHost          string
-	AgentNamespace     string
-	AgentQueue         string
+	AgentEnrollmentKey     string
+	AgentID                string
+	AgentName              string
+	AgentHost              string
+	AgentNamespace         string
+	AgentQueue             string
+	AgentAccessToken       string
+	AgentRefreshToken      string
+	AgentAccessExpiresAt   time.Time
+	AgentSigningPrivateKey string
 }
 
 // Connection is the HTTP transport layer. It is safe for concurrent use.
@@ -52,6 +56,7 @@ type Connection struct {
 	// before it expires, then refreshed via the refresh token, then
 	// re-enrolled if that fails and an enrollment key is available.
 	agentMu                sync.Mutex
+	agentRefreshMu         sync.Mutex
 	agentEnrollmentKey     string
 	agentID                string
 	agentName              string
@@ -75,6 +80,9 @@ type Connection struct {
 func NewConnection(opts ConnectionOptions) (*Connection, error) {
 	address := strings.TrimSpace(opts.Address)
 	if address == "" {
+		address = strings.TrimSpace(os.Getenv("POSTGRIP_AGENTORCHESTRATOR_URL"))
+	}
+	if address == "" {
 		address = "http://127.0.0.1:4100"
 	}
 	if !strings.Contains(address, "://") {
@@ -92,9 +100,24 @@ func NewConnection(opts ConnectionOptions) (*Connection, error) {
 		}
 		httpClient = &http.Client{Timeout: timeout}
 	}
+	managedRuntime := strings.EqualFold(strings.TrimSpace(os.Getenv("POSTGRIP_AGENT_MANAGED_RUNTIME")), "true")
 	enroll := opts.AgentEnrollmentKey
-	if enroll == "" {
+	if enroll == "" && !managedRuntime {
 		enroll = os.Getenv("POSTGRIP_AGENT_ENROLLMENT_KEY")
+	}
+	agentID := firstNonEmpty(opts.AgentID, os.Getenv("POSTGRIP_AGENT_ID"))
+	namespace := firstNonEmpty(opts.AgentNamespace, os.Getenv("POSTGRIP_AGENT_NAMESPACE"), DefaultNamespace)
+	queue := firstNonEmpty(opts.AgentQueue, os.Getenv("POSTGRIP_AGENT_TASK_QUEUE"), DefaultQueue)
+	accessToken := firstNonEmpty(opts.AgentAccessToken, os.Getenv("POSTGRIP_AGENT_ACCESS_TOKEN"))
+	refreshToken := firstNonEmpty(opts.AgentRefreshToken, os.Getenv("POSTGRIP_AGENT_REFRESH_TOKEN"))
+	accessExpiresAt := opts.AgentAccessExpiresAt
+	if accessExpiresAt.IsZero() {
+		accessExpiresAt = parseAgentAccessExpiresAt(os.Getenv("POSTGRIP_AGENT_ACCESS_EXPIRES_AT"))
+	}
+	signingPrivateKey := firstNonEmpty(opts.AgentSigningPrivateKey, os.Getenv("POSTGRIP_AGENT_SIGNING_PRIVATE_KEY"))
+	signPriv, signPub, err := decodeAgentSigningPrivateKey(signingPrivateKey)
+	if err != nil {
+		return nil, err
 	}
 	authHeader := ""
 	if opts.AuthToken != "" {
@@ -105,16 +128,21 @@ func NewConnection(opts ConnectionOptions) (*Connection, error) {
 		headers[k] = v
 	}
 	return &Connection{
-		address:            address,
-		httpClient:         httpClient,
-		authHeader:         authHeader,
-		headers:            headers,
-		agentEnrollmentKey: enroll,
-		agentID:            opts.AgentID,
-		agentName:          opts.AgentName,
-		agentHost:          opts.AgentHost,
-		agentNamespace:     orDefault(opts.AgentNamespace, DefaultNamespace),
-		agentQueue:         orDefault(opts.AgentQueue, DefaultQueue),
+		address:                address,
+		httpClient:             httpClient,
+		authHeader:             authHeader,
+		headers:                headers,
+		agentEnrollmentKey:     enroll,
+		agentID:                agentID,
+		agentName:              opts.AgentName,
+		agentHost:              opts.AgentHost,
+		agentNamespace:         namespace,
+		agentQueue:             queue,
+		agentAccessToken:       accessToken,
+		agentRefreshToken:      refreshToken,
+		agentAccessExpiresUnix: accessExpiresAt.Unix(),
+		agentSignPriv:          signPriv,
+		agentSignPub:           signPub,
 	}, nil
 }
 
@@ -137,6 +165,12 @@ func (c *Connection) Health(ctx context.Context) (map[string]any, error) {
 // connection has a signing keypair, the request is also Ed25519-signed per
 // the protocol's agent-task-v1 canonical form.
 func (c *Connection) do(ctx context.Context, method, path string, body any, out any, agentAuth bool) error {
+	if !agentAuth && c.shouldUseAgentRuntimeAuth(path) {
+		if err := c.ensureAgentSession(ctx, "", "", ""); err != nil {
+			return err
+		}
+		agentAuth = true
+	}
 	var rawBody []byte
 	var reader io.Reader
 	if body != nil {
@@ -205,6 +239,23 @@ func (c *Connection) do(ctx context.Context, method, path string, body any, out 
 		return &failure.SDKError{Message: fmt.Sprintf("decode response from %s %s", method, path), Cause: err}
 	}
 	return nil
+}
+
+func (c *Connection) shouldUseAgentRuntimeAuth(path string) bool {
+	c.agentMu.Lock()
+	hasAgentSession := c.agentAccessToken != "" || c.agentRefreshToken != ""
+	c.agentMu.Unlock()
+	if !hasAgentSession {
+		return false
+	}
+	if queryStart := strings.Index(path, "?"); queryStart >= 0 {
+		path = path[:queryStart]
+	}
+	return path == "/api/v1/tasks" ||
+		strings.HasPrefix(path, "/api/v1/tasks/") ||
+		path == "/api/v1/workflows" ||
+		strings.HasPrefix(path, "/api/v1/workflows/") ||
+		path == "/api/v1/namespaces"
 }
 
 func encodeQuery(params map[string]string) string {

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -68,13 +69,22 @@ func New(opts Options) (*Worker, error) {
 		return nil, errors.New("postgrip-agent: worker.Options.Connection is required")
 	}
 	if opts.AgentID == "" {
+		opts.AgentID = os.Getenv("POSTGRIP_AGENT_ID")
+	}
+	if opts.AgentID == "" {
 		return nil, errors.New("postgrip-agent: worker.Options.AgentID is required")
 	}
 	if opts.Namespace == "" {
 		opts.Namespace = client.DefaultNamespace
+		if namespace := os.Getenv("POSTGRIP_AGENT_NAMESPACE"); namespace != "" {
+			opts.Namespace = namespace
+		}
 	}
 	if opts.Queue == "" {
 		opts.Queue = client.DefaultQueue
+		if queue := os.Getenv("POSTGRIP_AGENT_TASK_QUEUE"); queue != "" {
+			opts.Queue = queue
+		}
 	}
 	if opts.MaxConcurrentTasks <= 0 {
 		opts.MaxConcurrentTasks = 4

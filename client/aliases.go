@@ -54,6 +54,20 @@ type (
 	SignalWorkflowRequest          = protocol.SignalWorkflowRequest
 )
 
+// WorkflowRuntimePayload starts a supervised SDK workflow runtime under an
+// already-enrolled PostGrip agent. The host agent injects delegated agent
+// credentials and the SDK runtime polls workflow task families only.
+type WorkflowRuntimePayload struct {
+	RuntimeID      string            `json:"runtime_id,omitempty"`
+	Command        string            `json:"command"`
+	Args           []string          `json:"args,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	WorkingDir     string            `json:"working_dir,omitempty"`
+	Namespace      string            `json:"namespace,omitempty"`
+	Queue          string            `json:"queue,omitempty"`
+	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+}
+
 // Re-export task type / event kind / state constants.
 const (
 	TaskStateQueued    = protocol.TaskStateQueued
@@ -72,10 +86,11 @@ const (
 	TaskEventKindCompleted = protocol.TaskEventKindCompleted
 	TaskEventKindFailed    = protocol.TaskEventKindFailed
 
-	TaskTypeNoop          = protocol.TaskTypeNoop
-	TaskTypeShellExec     = protocol.TaskTypeShellExec
-	TaskTypeContainerExec = protocol.TaskTypeContainerExec
-	TaskTypeTimer         = protocol.TaskTypeTimer
+	TaskTypeNoop            = protocol.TaskTypeNoop
+	TaskTypeShellExec       = protocol.TaskTypeShellExec
+	TaskTypeContainerExec   = protocol.TaskTypeContainerExec
+	TaskTypeWorkflowRuntime = "workflow.runtime"
+	TaskTypeTimer           = protocol.TaskTypeTimer
 
 	TaskTypePrefixWorkflow = protocol.TaskTypePrefixWorkflow
 	TaskTypePrefixActivity = protocol.TaskTypePrefixActivity

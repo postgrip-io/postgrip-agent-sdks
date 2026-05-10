@@ -31,6 +31,16 @@ func (c *Connection) ensureAgentSession(ctx context.Context, agentID, namespace,
 		c.agentMu.Unlock()
 		return nil
 	}
+	c.agentMu.Unlock()
+
+	c.agentRefreshMu.Lock()
+	defer c.agentRefreshMu.Unlock()
+
+	c.agentMu.Lock()
+	if c.agentAccessToken != "" && c.agentAccessExpiresUnix > time.Now().Unix()+30 {
+		c.agentMu.Unlock()
+		return nil
+	}
 	refresh := c.agentRefreshToken
 	enroll := c.agentEnrollmentKey
 	c.agentMu.Unlock()
