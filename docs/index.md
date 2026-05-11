@@ -27,7 +27,7 @@ The SDK ships as five focused sub-packages under `go.postgrip.io/sdk`. You only 
 | `client`   | `Connection`, `Client`, the `Task` / `Workflow` / `Schedule` sub-clients.           |
 | `worker`   | The polling agent that leases tasks and dispatches your registered functions.       |
 | `workflow` | The `Context` interface workflows receive, plus options and signal channels.        |
-| `activity` | The `Func` shape for activities and helpers (`GetInfo`, `Heartbeat`, `Milestone`). |
+| `activity` | The `Func` shape for activities and helpers (`GetInfo`, `Heartbeat`, `Milestone`, `Stdout`, `Stderr`). |
 | `failure`  | Structured failure types (`Application`, `Cancelled`, `Timeout`, `TaskFailed`).     |
 
 ## Polyglot

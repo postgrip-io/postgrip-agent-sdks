@@ -31,7 +31,7 @@ The SDK is split into focused sub-packages — pick the ones your code needs:
 | [`client`](./client)     | `Connection`, `Client`, `Task` / `Workflow` / `Schedule` sub-clients, input shapes. |
 | [`worker`](./worker)     | Workflow runtime that polls workflow/activity task families and dispatches registered bodies. |
 | [`workflow`](./workflow) | `workflow.Context`, option structs, `SignalChannel`, `workflow.Func` / `Registry`.   |
-| [`activity`](./activity) | `activity.Func`, `Info`, `GetInfo`, `Heartbeat`, `Milestone`.                        |
+| [`activity`](./activity) | `activity.Func`, `Info`, `GetInfo`, `Heartbeat`, `Milestone`, `Stdout`, `Stderr`.     |
 | [`failure`](./failure)   | Structured failures: `Application`, `Cancelled`, `Timeout`, `TaskFailed`.            |
 
 ## Quick start — enqueue a task
@@ -195,7 +195,7 @@ func submitRuntime(ctx context.Context) error {
 | `client.WorkflowHandle` | `Result`, `Describe`, `Signal`, `Cancel`, `Terminate`, `History`                   |
 | `client.Schedule`   | `Create`, `List`, `Get`, `Update`, `Pause`, `Unpause`, `Trigger`, `Backfill`, `Delete` |
 | `workflow.Context`  | `Now`, `Logger`, `Sleep`, `ExecuteActivity`, `ExecuteChildWorkflow`, `GetSignalChannel`, `SetQueryHandler`, `SetUpdateHandler`, `Milestone`, `ContinueAsNew` |
-| activity helpers    | `activity.GetInfo`, `activity.Heartbeat`, `activity.Milestone`                         |
+| activity helpers    | `activity.GetInfo`, `activity.Heartbeat`, `activity.Milestone`, `activity.Stdout`, `activity.Stderr` |
 | `worker.Worker`     | `Run`, `Shutdown`                                                                      |
 
 ## Status

@@ -18,6 +18,12 @@ func TestHelpersFailOutsideActivity(t *testing.T) {
 	if err := Milestone(context.Background(), "step", MilestoneOptions{}); err == nil {
 		t.Fatal("Milestone should error outside an activity")
 	}
+	if err := Stdout(context.Background(), "hello"); err == nil {
+		t.Fatal("Stdout should error outside an activity")
+	}
+	if err := Stderr(context.Background(), "warning"); err == nil {
+		t.Fatal("Stderr should error outside an activity")
+	}
 }
 
 func TestHelpersInsideActivityCarryInfo(t *testing.T) {
@@ -41,7 +47,13 @@ func TestHelpersInsideActivityCarryInfo(t *testing.T) {
 	if err := Milestone(ctx, "step-2", MilestoneOptions{Index: 2, Total: 10}); err != nil {
 		t.Fatalf("Milestone: %v", err)
 	}
-	if len(emitted) != 2 {
+	if err := Stdout(ctx, "processed row\n", OutputOptions{Stage: "processStep", Details: map[string]any{"row": 1}}); err != nil {
+		t.Fatalf("Stdout: %v", err)
+	}
+	if err := Stderr(ctx, "retrying row\n"); err != nil {
+		t.Fatalf("Stderr: %v", err)
+	}
+	if len(emitted) != 4 {
 		t.Fatalf("emitted = %#v", emitted)
 	}
 	if emitted[0].Kind != protocol.TaskEventKindHeartbeat || emitted[1].Kind != protocol.TaskEventKindMilestone {
@@ -49,5 +61,14 @@ func TestHelpersInsideActivityCarryInfo(t *testing.T) {
 	}
 	if emitted[1].Details["index"] != 2 || emitted[1].Details["total"] != 10 {
 		t.Fatalf("milestone details = %#v", emitted[1].Details)
+	}
+	if emitted[2].Kind != protocol.TaskEventKindStdout || emitted[2].Stream != "stdout" || emitted[2].Data != "processed row\n" {
+		t.Fatalf("stdout event = %#v", emitted[2])
+	}
+	if emitted[2].Stage != "processStep" || emitted[2].Details["row"] != 1 {
+		t.Fatalf("stdout metadata = %#v", emitted[2])
+	}
+	if emitted[3].Kind != protocol.TaskEventKindStderr || emitted[3].Stream != "stderr" || emitted[3].Data != "retrying row\n" {
+		t.Fatalf("stderr event = %#v", emitted[3])
 	}
 }

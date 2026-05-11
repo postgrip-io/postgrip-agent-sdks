@@ -82,7 +82,17 @@ func main() {
 			if !ok {
 				return nil, fmt.Errorf("ProcessStep: arg 1 is %T, expected number", args[1])
 			}
-			return fmt.Sprintf("processed step %d for %s", int(step), name), nil
+			result := fmt.Sprintf("processed step %d for %s", int(step), name)
+			if err := activity.Stdout(ctx, result+"\n", activity.OutputOptions{
+				Stage: "processStep",
+				Details: map[string]any{
+					"step": int(step),
+					"name": name,
+				},
+			}); err != nil {
+				return nil, err
+			}
+			return result, nil
 		},
 	}
 

@@ -111,6 +111,7 @@ The function shape activities satisfy and the helpers customer activity code cal
 func GreetActivity(ctx context.Context, args []any) (any, error) {
     info, _ := activity.GetInfo(ctx)
     activity.Heartbeat(ctx, map[string]any{"step": "greeting"})
+    activity.Stdout(ctx, "generated greeting\n", activity.OutputOptions{Stage: "greeting"})
     return "hello, " + args[0].(string), nil
 }
 ```
@@ -119,7 +120,7 @@ func GreetActivity(ctx context.Context, args []any) (any, error) {
 
 - `Func`, `Registry` — the activity equivalent of `workflow.Func`.
 - `Info` — runtime metadata about the in-flight activity (task ID, agent ID, attempt, args).
-- `GetInfo`, `Heartbeat`, `Milestone` — read or emit events from inside the activity body. Each errors if called outside an activity invocation.
+- `GetInfo`, `Heartbeat`, `Milestone`, `Stdout`, `Stderr` — read or emit events from inside the activity body. `Stdout` and `Stderr` attach task output to the current activity task for the console Activity detail view. Each errors if called outside an activity invocation.
 
 The Worker constructs an `activity.Runtime` per task and attaches it to the context via `WithRuntime` before invoking your `Func`. The helpers read it back out of the context.
 

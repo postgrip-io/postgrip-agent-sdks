@@ -1,12 +1,13 @@
 // Package activity exposes the activity-side surface of the SDK: the Func
 // type customer activity bodies satisfy, the Info struct describing the
-// in-flight task, and the Heartbeat / Milestone helpers customer code calls
-// from inside an activity.
+// in-flight task, and the Heartbeat / Milestone / Stdout / Stderr helpers
+// customer code calls from inside an activity.
 //
 // The Worker constructs a runtime per activity task and stashes it on the
 // context the activity body receives (via WithRuntime). GetInfo / Heartbeat
-// / Milestone read from that context value, so calling them outside an
-// activity invocation returns an error rather than silently no-oping.
+// / Milestone / Stdout / Stderr read from that context value, so calling them
+// outside an activity invocation returns an error rather than silently
+// no-oping.
 package activity
 
 import (
@@ -48,10 +49,17 @@ type MilestoneOptions struct {
 	Details map[string]any
 }
 
+// OutputOptions controls stdout/stderr event emission for an activity.
+type OutputOptions struct {
+	Stage   string
+	Message string
+	Details map[string]any
+}
+
 // Runtime is the per-task scaffolding the worker constructs and attaches to
 // the activity context. Customer code never constructs one directly —
-// worker calls WithRuntime so GetInfo / Heartbeat / Milestone can read it
-// back out of the context inside the activity body.
+// worker calls WithRuntime so GetInfo / Heartbeat / Milestone / Stdout /
+// Stderr can read it back out of the context inside the activity body.
 type Runtime struct {
 	Info    Info
 	Emitter func(ctx context.Context, ev EventInput) error
@@ -59,8 +67,9 @@ type Runtime struct {
 
 type contextKey struct{}
 
-// WithRuntime returns a derived context that GetInfo / Heartbeat / Milestone
-// can read. The worker package calls this before invoking the activity Func.
+// WithRuntime returns a derived context that GetInfo / Heartbeat / Milestone /
+// Stdout / Stderr can read. The worker package calls this before invoking the
+// activity Func.
 func WithRuntime(parent context.Context, runtime *Runtime) context.Context {
 	return context.WithValue(parent, contextKey{}, runtime)
 }
@@ -125,4 +134,43 @@ func Milestone(ctx context.Context, name string, opts MilestoneOptions) error {
 		Message: name,
 		Details: details,
 	})
+}
+
+// Stdout emits a stdout event for the in-flight activity task. The PostGrip
+// console renders these events in the task output panel.
+func Stdout(ctx context.Context, data string, opts ...OutputOptions) error {
+	return emitOutput(ctx, protocol.TaskEventKindStdout, "stdout", data, opts...)
+}
+
+// Stderr emits a stderr event for the in-flight activity task. The PostGrip
+// console renders these events in the task output panel.
+func Stderr(ctx context.Context, data string, opts ...OutputOptions) error {
+	return emitOutput(ctx, protocol.TaskEventKindStderr, "stderr", data, opts...)
+}
+
+func emitOutput(ctx context.Context, kind protocol.TaskEventKind, stream, data string, opts ...OutputOptions) error {
+	r, err := runtimeFromCtx(ctx)
+	if err != nil {
+		return err
+	}
+	event := EventInput{
+		Kind:   kind,
+		Stage:  "activity",
+		Stream: stream,
+		Data:   data,
+	}
+	if len(opts) > 0 {
+		opt := opts[0]
+		if opt.Stage != "" {
+			event.Stage = opt.Stage
+		}
+		event.Message = opt.Message
+		if len(opt.Details) > 0 {
+			event.Details = map[string]any{}
+			for k, v := range opt.Details {
+				event.Details[k] = v
+			}
+		}
+	}
+	return r.Emitter(ctx, event)
 }
