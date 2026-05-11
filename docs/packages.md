@@ -49,12 +49,14 @@ c := client.New(conn)
 
 | Path                        | Purpose                                                        |
 |:----------------------------|:---------------------------------------------------------------|
-| `c.Task.Enqueue / ShellExec / ContainerExec / Noop`  | Enqueue tasks of various kinds. |
+| `c.Task.WorkflowRuntime`  | Submit a managed SDK runtime to an existing agent pool. |
 | `c.Task.Get / List / Events / Result / WatchEvents`  | Inspect tasks; wait for results. |
 | `c.Workflow.Start / SignalWithStart / GetHandle`     | Start workflows; reach existing ones. |
 | `c.Schedule.Create / List / Get / Update / Pause / Unpause / Trigger / Backfill / Delete` | Manage scheduled workflows. |
 
-`Connection` itself exposes the lower-level wire methods if you need them — `c.Task.ShellExec` is a typed wrapper over `Connection.EnqueueTask`.
+Client-side SDK applications should submit workflow runtimes with
+`c.Task.WorkflowRuntime`. Lower-level task helpers are runtime integration
+primitives, not the documented SDK workflow submission path.
 
 `WorkflowHandle` (returned from `Workflow.Start` and `Workflow.GetHandle`) is the durable reference to a workflow run: `Result`, `Describe`, `Signal`, `Cancel`, `Terminate`, `History`.
 
@@ -62,12 +64,12 @@ The package re-exports the wire types from `agent-sdk-protocol` (`Task`, `Workfl
 
 ## worker
 
-The polling agent. Use this only if your process leases tasks; pure clients don't need it.
+The managed runtime worker. Use this only inside a process launched by a
+`workflow.runtime` task; pure submitters don't need it.
 
 ```go
 w, _ := worker.New(worker.Options{
     Connection: conn,
-    AgentID:    "worker-1",
     Queue:      "default",
     Workflows:  workflow.Registry{"Greet": GreetWorkflow},
     Activities: activity.Registry{"GreetActivity": GreetActivity},

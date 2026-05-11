@@ -46,14 +46,13 @@ func main() {
 	loadExampleEnv()
 
 	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
-	authToken, headers := agentConnectionAuth()
+	authToken := os.Getenv("POSTGRIP_AGENT_TOKEN")
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-example")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-example-agent")
 
 	conn, err := client.NewConnection(client.ConnectionOptions{
 		Address:        address,
 		AuthToken:      authToken,
-		Headers:        headers,
 		AgentID:        agentID,
 		AgentNamespace: client.DefaultNamespace,
 		AgentQueue:     queue,
@@ -150,24 +149,6 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func agentConnectionAuth() (string, map[string]string) {
-	if token := os.Getenv("POSTGRIP_AGENT_TOKEN"); token != "" {
-		return token, nil
-	}
-	headers := tenantHeaderFromEnv()
-	if token := os.Getenv("POSTGRIP_AGENT_MANAGEMENT_TOKEN"); token != "" {
-		return token, headers
-	}
-	return os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"), headers
-}
-
-func tenantHeaderFromEnv() map[string]string {
-	if tenantID := os.Getenv("POSTGRIP_AGENT_TENANT_ID"); tenantID != "" {
-		return map[string]string{"x-postgrip-agent-tenant-id": tenantID}
-	}
-	return nil
 }
 
 func submitManagedRuntime(ctx context.Context, conn *client.Connection) {

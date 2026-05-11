@@ -6,11 +6,15 @@ nav_order: 3
 
 # Quick start
 
-Two examples: enqueueing a task as a client, and running a worker that registers a workflow + activity.
+Two pieces make up the normal SDK flow: a client submits a managed
+`workflow.runtime` task to an existing PostGrip agent pool, and that managed
+runtime registers workflow and activity functions.
 
-## Enqueue a task
+## Submit a workflow runtime
 
-A program that just hands work to the runtime service needs only the `client` package.
+A client process uses an Agent token from Settings > Organization > Agent tokens
+and submits a `workflow.runtime` task. The host PostGrip agent launches the
+runtime process and injects delegated credentials.
 
 ```go
 package main
@@ -33,51 +37,29 @@ func main() {
     }
     c := client.New(conn)
 
-    // shell.exec — runs whatever's on the agent's PATH.
-    task, err := c.Task.ShellExec(context.Background(), client.ShellExecInput{
-        Queue:   "default",
-        Command: "echo",
-        Args:    []string{"hello from agent"},
+    task, err := c.Task.WorkflowRuntime(context.Background(), client.WorkflowRuntimeInput{
+        Queue:        "default",
+        Command:      "./workflow-runtime",
+        RuntimeQueue: "default",
+        Env: map[string]string{
+            "POSTGRIP_EXAMPLE_RUN_LABEL": "PostGrip",
+        },
     })
     if err != nil {
         log.Fatal(err)
     }
-    log.Println("enqueued", task.ID)
-
-    // container.exec — runs in a per-task container the agent launches via
-    // its docker CLI. Polyglot without bloating the agent image.
-    _, err = c.Task.ContainerExec(context.Background(), client.ContainerExecInput{
-        Queue:   "default",
-        Image:   "node:22-alpine",
-        Command: "node",
-        Args:    []string{"-e", "console.log('hi from node')"},
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
+    log.Println("submitted workflow runtime", task.ID)
 }
 ```
 
 {: .note }
-> `container.exec` requires the agent process to have `DOCKER_HOST` set so the container runs through the worker stack's docker socket proxy. Containers run with `--rm --network=none`, no host volume mounts, and the same env-key allowlist as `shell.exec`.
+> The SDK does not enroll standalone PostGrip agents. It submits workflow runtimes to agent pools that are already enrolled in PostGrip.
 
-## Wait for a result
+## Run a managed workflow runtime worker
 
-`TaskClient.Result` blocks until the task reaches a terminal state and unmarshals the result value into your target:
-
-```go
-var output map[string]any
-if err := c.Task.Result(ctx, task.ID, &output); err != nil {
-    log.Fatal(err)
-}
-log.Println("result:", output)
-```
-
-Polling cadence is 500ms; pass a context with a deadline if you want to cap how long you wait.
-
-## Run a worker
-
-Workers register workflow and activity functions, then poll the runtime service for tasks to dispatch.
+The runtime process is launched by a host agent from the `workflow.runtime`
+task. Inside that process, a worker registers workflow and activity functions,
+then polls for workflow/activity tasks using delegated credentials.
 
 ```go
 package main
@@ -114,8 +96,7 @@ func main() {
     // This process is launched by a PostGrip host agent as workflow.runtime.
     // The host injects POSTGRIP_AGENT_ID, POSTGRIP_AGENT_ACCESS_TOKEN,
     // POSTGRIP_AGENT_REFRESH_TOKEN, and POSTGRIP_AGENT_SIGNING_PRIVATE_KEY.
-    conn, err := client.NewConnection(client.ConnectionOptions{
-    })
+    conn, err := client.NewConnection(client.ConnectionOptions{})
     if err != nil {
         log.Fatal(err)
     }
@@ -135,11 +116,11 @@ func main() {
 }
 ```
 
-The worker loops forever inside the managed runtime, leasing tasks from the configured queue, heartbeating each leased task on a timer derived from its lease timeout, and dispatching to your registered functions. `Run` returns when the context is cancelled or `Worker.Shutdown` is called. Client code should submit the runtime with `client.Task.WorkflowRuntime`; the SDK does not enroll standalone agents.
+The worker loops forever inside the managed runtime, leasing tasks from the configured queue, heartbeating each leased task on a timer derived from its lease timeout, and dispatching to your registered functions. `Run` returns when the context is cancelled or `Worker.Shutdown` is called. Client code should submit the runtime with `client.Task.WorkflowRuntime`.
 
 ## Start a workflow
 
-From the client side, start the workflow you registered above:
+From inside the managed runtime, start the workflow you registered above:
 
 ```go
 c := client.New(conn)

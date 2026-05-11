@@ -50,7 +50,7 @@ func main() {
 	loadExampleEnv()
 
 	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
-	authToken, headers := agentConnectionAuth()
+	authToken := os.Getenv("POSTGRIP_AGENT_TOKEN")
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-longrun")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-longrun-agent")
 	stepsPerWorkflow := envIntAny([]string{"POSTGRIP_EXAMPLE_STEPS", "SDK_EXAMPLE_STEPS"}, defaultStepsPerWorkflow)
@@ -63,7 +63,6 @@ func main() {
 	conn, err := client.NewConnection(client.ConnectionOptions{
 		Address:        address,
 		AuthToken:      authToken,
-		Headers:        headers,
 		AgentID:        agentID,
 		AgentNamespace: client.DefaultNamespace,
 		AgentQueue:     queue,
@@ -198,24 +197,6 @@ func envOrAny(keys []string, fallback string) string {
 		}
 	}
 	return fallback
-}
-
-func agentConnectionAuth() (string, map[string]string) {
-	if token := os.Getenv("POSTGRIP_AGENT_TOKEN"); token != "" {
-		return token, nil
-	}
-	headers := tenantHeaderFromEnv()
-	if token := os.Getenv("POSTGRIP_AGENT_MANAGEMENT_TOKEN"); token != "" {
-		return token, headers
-	}
-	return os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"), headers
-}
-
-func tenantHeaderFromEnv() map[string]string {
-	if tenantID := os.Getenv("POSTGRIP_AGENT_TENANT_ID"); tenantID != "" {
-		return map[string]string{"x-postgrip-agent-tenant-id": tenantID}
-	}
-	return nil
 }
 
 func envIntAny(keys []string, fallback int) int {

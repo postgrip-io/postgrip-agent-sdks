@@ -17,7 +17,7 @@
 // wire shapes come from [agent-sdk-protocol] so all four SDKs agree on the
 // runtime contract.
 //
-// Quick start — enqueue a task:
+// Quick start — submit a workflow runtime:
 //
 //	import (
 //	    "context"
@@ -26,12 +26,11 @@
 //
 //	conn, _ := client.NewConnection(client.ConnectionOptions{Address: "http://127.0.0.1:4100", AuthToken: token})
 //	c := client.New(conn)
-//	task, err := c.Task.ContainerExec(ctx, client.ContainerExecInput{
-//	    Image: "node:22-alpine", Command: "node",
-//	    Args:  []string{"-e", "console.log('hi')"},
+//	task, err := c.Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
+//	    Queue: "default", Command: "./workflow-runtime", RuntimeQueue: "default",
 //	})
 //
-// Quick start — run a worker that registers an activity:
+// Quick start — run a managed workflow runtime worker:
 //
 //	import (
 //	    "context"
@@ -41,7 +40,7 @@
 //
 //	w, _ := worker.New(worker.Options{
 //	    Connection: conn,
-//	    AgentID:    "agent-1",
+//	    Queue:      "default",
 //	    Activities: activity.Registry{
 //	        "GreetActivity": func(ctx context.Context, args []any) (any, error) {
 //	            return "hello, " + args[0].(string), nil

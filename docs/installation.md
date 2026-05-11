@@ -37,7 +37,8 @@ import (
 )
 ```
 
-A program that just enqueues tasks — no workflow code, no worker — needs only `client`.
+A program that submits a managed `workflow.runtime` task — no workflow code, no
+runtime worker — needs only `client`.
 
 ## Fetching from the GitHub URL directly
 

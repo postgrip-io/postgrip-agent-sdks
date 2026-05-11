@@ -34,7 +34,11 @@ The SDK is split into focused sub-packages — pick the ones your code needs:
 | [`activity`](./activity) | `activity.Func`, `Info`, `GetInfo`, `Heartbeat`, `Milestone`, `Stdout`, `Stderr`.     |
 | [`failure`](./failure)   | Structured failures: `Application`, `Cancelled`, `Timeout`, `TaskFailed`.            |
 
-## Quick start — enqueue a task
+## Quick start — submit a workflow runtime
+
+Client-side SDK code submits a `workflow.runtime` task to an existing PostGrip
+agent pool. The host agent launches your runtime process and injects delegated
+credentials; the SDK does not enroll or spawn standalone PostGrip agents.
 
 ```go
 package main
@@ -57,35 +61,20 @@ func main() {
     }
     c := client.New(conn)
 
-    // shell.exec — runs whatever's on the agent's PATH.
-    task, err := c.Task.ShellExec(context.Background(), client.ShellExecInput{
-        Queue:   "default",
-        Command: "echo",
-        Args:    []string{"hello from agent"},
+    task, err := c.Task.WorkflowRuntime(context.Background(), client.WorkflowRuntimeInput{
+        Queue:        "default",
+        Command:      "./workflow-runtime",
+        RuntimeQueue: "default",
+        Env: map[string]string{
+            "POSTGRIP_EXAMPLE_RUN_LABEL": "PostGrip",
+        },
     })
     if err != nil {
         log.Fatal(err)
     }
-    log.Println("enqueued", task.ID)
-
-    // container.exec — runs in a per-task container the Go agent launches
-    // via its docker CLI. Polyglot without bloating the agent image.
-    _, err = c.Task.ContainerExec(context.Background(), client.ContainerExecInput{
-        Queue:   "default",
-        Image:   "node:22-alpine",
-        Command: "node",
-        Args:    []string{"-e", "console.log('hi from node')"},
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
+    log.Println("submitted workflow runtime", task.ID)
 }
 ```
-
-`container.exec` requires the agent process to have `DOCKER_HOST` set so the
-container runs through the worker stack's docker socket proxy. The container
-runs with `--rm --network=none`, no host volume mounts, and the same env-key
-allowlist as `shell.exec`.
 
 ## Workflows and activities
 
@@ -190,7 +179,7 @@ func submitRuntime(ctx context.Context) error {
 
 | Group               | Methods                                                                                |
 | ------------------- | -------------------------------------------------------------------------------------- |
-| `client.Task`       | `Enqueue`, `WorkflowRuntime`, `ShellExec`, `ContainerExec`, `Noop`, `Get`, `List`, `Events`, `Result`, `WatchEvents` |
+| `client.Task`       | `WorkflowRuntime`, `Get`, `List`, `Events`, `Result`, `WatchEvents`                 |
 | `client.Workflow`   | `Start`, `SignalWithStart`, `GetHandle`                                                |
 | `client.WorkflowHandle` | `Result`, `Describe`, `Signal`, `Cancel`, `Terminate`, `History`                   |
 | `client.Schedule`   | `Create`, `List`, `Get`, `Update`, `Pause`, `Unpause`, `Trigger`, `Backfill`, `Delete` |
@@ -200,9 +189,9 @@ func submitRuntime(ctx context.Context) error {
 
 ## Status
 
-- The lower-level task surface (`client.Task.*`, including `WorkflowRuntime`
-  and `ContainerExec`), `client.Workflow.Start`, `WorkflowHandle.*`, and `client.Schedule.*` are at
-  parity with the TS / Python SDKs.
+- Client-side SDK submissions should use `client.Task.WorkflowRuntime` to hand
+  a managed runtime to an existing agent pool. Workflow starts, handles, and
+  schedules are at parity with the TS / Python SDKs.
 - `worker.Worker` polls workflow task families (`workflow:*`, `activity:*`,
   `query:*`, `update:*`). Activity execution honors heartbeats, milestones,
   and structured failures (`failure.Application`, `failure.Cancelled`,
