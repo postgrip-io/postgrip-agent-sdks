@@ -38,18 +38,19 @@ const (
 	defaultRunTimeout       = 5 * time.Minute
 	defaultRuntimeImage     = "golang:1.25-bookworm"
 	defaultRuntimeCommand   = "sh"
+	defaultRuntimeRef       = "8b4e5df94c646350b51c0162d7030b1d38830f73"
 )
 
 var defaultRuntimeArgs = []string{
 	"-lc",
-	"git clone --depth 1 https://github.com/postgrip-io/agent-sdk-go /tmp/agent-sdk-go && cd /tmp/agent-sdk-go && PATH=/usr/local/go/bin:$PATH go run ./example/longrun",
+	`git init /tmp/agent-sdk-go && cd /tmp/agent-sdk-go && git remote add origin https://github.com/postgrip-io/agent-sdk-go && git fetch --depth 1 origin "${SDK_EXAMPLE_RUNTIME_REF:-8b4e5df94c646350b51c0162d7030b1d38830f73}" && git checkout --detach FETCH_HEAD && PATH=/usr/local/go/bin:$PATH go run ./example/longrun`,
 }
 
 func main() {
 	loadExampleEnv()
 
 	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
-	authToken := agentTokenFromEnv()
+	authToken, headers := agentConnectionAuth()
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-longrun")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-longrun-agent")
 	stepsPerWorkflow := envIntAny([]string{"POSTGRIP_EXAMPLE_STEPS", "SDK_EXAMPLE_STEPS"}, defaultStepsPerWorkflow)
@@ -62,6 +63,7 @@ func main() {
 	conn, err := client.NewConnection(client.ConnectionOptions{
 		Address:        address,
 		AuthToken:      authToken,
+		Headers:        headers,
 		AgentID:        agentID,
 		AgentNamespace: client.DefaultNamespace,
 		AgentQueue:     queue,
@@ -198,11 +200,22 @@ func envOrAny(keys []string, fallback string) string {
 	return fallback
 }
 
-func agentTokenFromEnv() string {
+func agentConnectionAuth() (string, map[string]string) {
 	if token := os.Getenv("POSTGRIP_AGENT_TOKEN"); token != "" {
-		return token
+		return token, nil
 	}
-	return os.Getenv("POSTGRIP_AGENT_MANAGEMENT_TOKEN")
+	headers := tenantHeaderFromEnv()
+	if token := os.Getenv("POSTGRIP_AGENT_MANAGEMENT_TOKEN"); token != "" {
+		return token, headers
+	}
+	return os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"), headers
+}
+
+func tenantHeaderFromEnv() map[string]string {
+	if tenantID := os.Getenv("POSTGRIP_AGENT_TENANT_ID"); tenantID != "" {
+		return map[string]string{"x-postgrip-agent-tenant-id": tenantID}
+	}
+	return nil
 }
 
 func envIntAny(keys []string, fallback int) int {
@@ -280,6 +293,7 @@ func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
 			"SDK_EXAMPLE_STEPS":                    fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_STEPS", "SDK_EXAMPLE_STEPS"}, defaultStepsPerWorkflow)),
 			"SDK_EXAMPLE_STEP_SLEEP_SECONDS":       fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_STEP_SLEEP_SECONDS", "SDK_EXAMPLE_STEP_SLEEP_SECONDS"}, defaultStepSleepSeconds)),
 			"SDK_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS": fmt.Sprint(envIntAny([]string{"POSTGRIP_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS", "SDK_EXAMPLE_WORKFLOW_TIMEOUT_SECONDS"}, int(defaultRunTimeout/time.Second))),
+			"SDK_EXAMPLE_RUNTIME_REF":              envOrAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_REF", "SDK_EXAMPLE_RUNTIME_REF"}, defaultRuntimeRef),
 		},
 		LeaseTimeoutSeconds: envIntAny([]string{"POSTGRIP_EXAMPLE_RUNTIME_LEASE_TIMEOUT_SECONDS", "SDK_EXAMPLE_RUNTIME_LEASE_TIMEOUT_SECONDS"}, 30),
 	})

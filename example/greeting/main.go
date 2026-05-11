@@ -34,24 +34,26 @@ import (
 const (
 	defaultRuntimeImage   = "golang:1.25-bookworm"
 	defaultRuntimeCommand = "sh"
+	defaultRuntimeRef     = "8b4e5df94c646350b51c0162d7030b1d38830f73"
 )
 
 var defaultRuntimeArgs = []string{
 	"-lc",
-	"git clone --depth 1 https://github.com/postgrip-io/agent-sdk-go /tmp/agent-sdk-go && cd /tmp/agent-sdk-go && PATH=/usr/local/go/bin:$PATH go run ./example/greeting",
+	`git init /tmp/agent-sdk-go && cd /tmp/agent-sdk-go && git remote add origin https://github.com/postgrip-io/agent-sdk-go && git fetch --depth 1 origin "${SDK_EXAMPLE_RUNTIME_REF:-8b4e5df94c646350b51c0162d7030b1d38830f73}" && git checkout --detach FETCH_HEAD && PATH=/usr/local/go/bin:$PATH go run ./example/greeting`,
 }
 
 func main() {
 	loadExampleEnv()
 
 	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
-	authToken := agentTokenFromEnv()
+	authToken, headers := agentConnectionAuth()
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-example")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-example-agent")
 
 	conn, err := client.NewConnection(client.ConnectionOptions{
 		Address:        address,
 		AuthToken:      authToken,
+		Headers:        headers,
 		AgentID:        agentID,
 		AgentNamespace: client.DefaultNamespace,
 		AgentQueue:     queue,
@@ -150,11 +152,22 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func agentTokenFromEnv() string {
+func agentConnectionAuth() (string, map[string]string) {
 	if token := os.Getenv("POSTGRIP_AGENT_TOKEN"); token != "" {
-		return token
+		return token, nil
 	}
-	return os.Getenv("POSTGRIP_AGENT_MANAGEMENT_TOKEN")
+	headers := tenantHeaderFromEnv()
+	if token := os.Getenv("POSTGRIP_AGENT_MANAGEMENT_TOKEN"); token != "" {
+		return token, headers
+	}
+	return os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"), headers
+}
+
+func tenantHeaderFromEnv() map[string]string {
+	if tenantID := os.Getenv("POSTGRIP_AGENT_TENANT_ID"); tenantID != "" {
+		return map[string]string{"x-postgrip-agent-tenant-id": tenantID}
+	}
+	return nil
 }
 
 func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
@@ -180,6 +193,7 @@ func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
 		LeaseTimeoutSeconds: 30,
 		Env: map[string]string{
 			"SDK_EXAMPLE_GREETING_NAME": envOr("SDK_EXAMPLE_GREETING_NAME", "PostGrip"),
+			"SDK_EXAMPLE_RUNTIME_REF":   envOr("POSTGRIP_EXAMPLE_RUNTIME_REF", envOr("SDK_EXAMPLE_RUNTIME_REF", defaultRuntimeRef)),
 		},
 	})
 	if err != nil {
