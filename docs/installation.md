@@ -21,7 +21,7 @@ go get go.postgrip.io/sdk@v0.1.0
 ## Requirements
 
 - Go 1.25 or newer (the module's `go.mod` declares 1.25).
-- A reachable PostGrip Agent runtime service. The default address is `http://127.0.0.1:4100`.
+- A reachable PostGrip Agent runtime service. The default address is `https://agentorchestrator.postgrip.app`.
 
 ## What gets imported
 
@@ -62,4 +62,4 @@ conn, _ := client.NewConnection(client.ConnectionOptions{
 })
 ```
 
-`Address` defaults to `http://127.0.0.1:4100` if empty, so you can omit it for the standard local setup.
+`Address` defaults to PostGrip Cloud if empty. For local or self-hosted development, pass `Address` explicitly or set `POSTGRIP_AGENTORCHESTRATOR_URL`.

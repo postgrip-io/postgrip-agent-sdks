@@ -16,7 +16,7 @@ func TestNewConnectionNormalizesAddress(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"", "http://127.0.0.1:4100"},
+		{"", DefaultAddress},
 		{"127.0.0.1:4100", "http://127.0.0.1:4100"},
 		{"http://example.com:1234/", "http://example.com:1234"},
 		{"https://agent.test", "https://agent.test"},

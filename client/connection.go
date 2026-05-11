@@ -18,8 +18,10 @@ import (
 	"go.postgrip.io/sdk/failure"
 )
 
+const DefaultAddress = "https://agentorchestrator.postgrip.app"
+
 // ConnectionOptions configures the HTTP connection to the agent runtime
-// service. Address is the base URL (defaults to http://127.0.0.1:4100).
+// service. Address is the base URL (defaults to DefaultAddress).
 // AuthToken is sent as `Authorization: Bearer <token>` on management
 // endpoints. AgentID + delegated AgentAccessToken / AgentRefreshToken /
 // AgentSigningPrivateKey are used only when this connection is running inside
@@ -76,7 +78,7 @@ func NewConnection(opts ConnectionOptions) (*Connection, error) {
 		address = strings.TrimSpace(os.Getenv("POSTGRIP_AGENTORCHESTRATOR_URL"))
 	}
 	if address == "" {
-		address = "http://127.0.0.1:4100"
+		address = DefaultAddress
 	}
 	if !strings.Contains(address, "://") {
 		address = "http://" + address

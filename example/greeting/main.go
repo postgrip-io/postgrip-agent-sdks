@@ -7,9 +7,8 @@
 //
 // Run:
 //
-//	export POSTGRIP_AGENT_LIVE_SERVER_URL=https://postgrip.app
-//	export POSTGRIP_AGENT_AUTH_TOKEN=...           # management-side bearer token
-//	export SDK_EXAMPLE_RUNTIME_ARGS_JSON='["-lc","./path/to/greeting"]'
+//	cp example/.env.example .env
+//	# edit .env and set POSTGRIP_AGENT_TOKEN to your Agent token
 //	go run ./example/greeting
 //
 // The SDK does not enroll standalone agents; host agents inject delegated
@@ -32,17 +31,27 @@ import (
 	"go.postgrip.io/sdk/workflow"
 )
 
+const (
+	defaultRuntimeImage   = "golang:1.25-bookworm"
+	defaultRuntimeCommand = "sh"
+)
+
+var defaultRuntimeArgs = []string{
+	"-lc",
+	"git clone --depth 1 https://github.com/postgrip-io/agent-sdk-go /tmp/agent-sdk-go && cd /tmp/agent-sdk-go && PATH=/usr/local/go/bin:$PATH go run ./example/greeting",
+}
+
 func main() {
+	loadExampleEnv()
+
 	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
-	authToken := os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN")
-	tenantID := os.Getenv("POSTGRIP_AGENT_TENANT_ID")
+	authToken := agentTokenFromEnv()
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-example")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-example-agent")
 
 	conn, err := client.NewConnection(client.ConnectionOptions{
 		Address:        address,
 		AuthToken:      authToken,
-		Headers:        tenantHeader(tenantID),
 		AgentID:        agentID,
 		AgentNamespace: client.DefaultNamespace,
 		AgentQueue:     queue,
@@ -141,29 +150,28 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func tenantHeader(tenantID string) map[string]string {
-	if tenantID == "" {
-		return nil
+func agentTokenFromEnv() string {
+	if token := os.Getenv("POSTGRIP_AGENT_TOKEN"); token != "" {
+		return token
 	}
-	return map[string]string{"x-postgrip-agent-tenant-id": tenantID}
+	return os.Getenv("POSTGRIP_AGENT_MANAGEMENT_TOKEN")
 }
 
 func submitManagedRuntime(ctx context.Context, conn *client.Connection) {
+	args := defaultRuntimeArgs
 	argsJSON := envOr("SDK_EXAMPLE_RUNTIME_ARGS_JSON", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_ARGS_JSON"))
-	if argsJSON == "" {
-		log.Fatalf("SDK_EXAMPLE_RUNTIME_ARGS_JSON is required to submit this runtime to an agent pool")
-	}
-	var args []string
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
-		log.Fatalf("invalid SDK_EXAMPLE_RUNTIME_ARGS_JSON: %v", err)
+	if argsJSON != "" {
+		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+			log.Fatalf("invalid SDK_EXAMPLE_RUNTIME_ARGS_JSON: %v", err)
+		}
 	}
 	queue := envOr("SDK_EXAMPLE_RUNTIME_QUEUE", envOr("POSTGRIP_EXAMPLE_RUNTIME_QUEUE", client.DefaultQueue))
 	runtimeQueue := envOr("SDK_EXAMPLE_RUNTIME_CHILD_QUEUE", envOr("POSTGRIP_EXAMPLE_RUNTIME_CHILD_QUEUE", fmt.Sprintf("postgrip-greeting-%d", time.Now().UnixNano())))
 	task, err := client.New(conn).Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
 		Namespace:           client.DefaultNamespace,
 		Queue:               queue,
-		Image:               envOr("SDK_EXAMPLE_RUNTIME_IMAGE", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_IMAGE")),
-		Command:             envOr("SDK_EXAMPLE_RUNTIME_COMMAND", envOr("POSTGRIP_EXAMPLE_RUNTIME_COMMAND", "sh")),
+		Image:               envOr("SDK_EXAMPLE_RUNTIME_IMAGE", envOr("POSTGRIP_EXAMPLE_RUNTIME_IMAGE", defaultRuntimeImage)),
+		Command:             envOr("SDK_EXAMPLE_RUNTIME_COMMAND", envOr("POSTGRIP_EXAMPLE_RUNTIME_COMMAND", defaultRuntimeCommand)),
 		Args:                args,
 		RuntimeQueue:        runtimeQueue,
 		WorkingDir:          envOr("SDK_EXAMPLE_RUNTIME_WORKING_DIR", os.Getenv("POSTGRIP_EXAMPLE_RUNTIME_WORKING_DIR")),

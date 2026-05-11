@@ -49,8 +49,8 @@ import (
 
 func main() {
     conn, err := client.NewConnection(client.ConnectionOptions{
-        Address:   "http://127.0.0.1:4100",
-        AuthToken: os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"),
+        // Agent token from Settings > Organization > Agent tokens.
+        AuthToken: os.Getenv("POSTGRIP_AGENT_TOKEN"),
     })
     if err != nil {
         log.Fatal(err)
@@ -167,8 +167,8 @@ import (
 
 func submitRuntime(ctx context.Context) error {
     conn, err := client.NewConnection(client.ConnectionOptions{
-        Address:   "https://agentorchestrator.postgrip.app",
-        AuthToken: os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"),
+        // Agent token from Settings > Organization > Agent tokens.
+        AuthToken: os.Getenv("POSTGRIP_AGENT_TOKEN"),
     })
     if err != nil {
         return err

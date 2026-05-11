@@ -13,12 +13,13 @@ agent pool, and the host-launched runtime registers one activity and one
 workflow.
 
 ```sh
-export POSTGRIP_AGENT_LIVE_SERVER_URL=https://postgrip.app
-export POSTGRIP_AGENT_AUTH_TOKEN=...           # management-side bearer token
-export SDK_EXAMPLE_RUNTIME_IMAGE=golang:1.25   # optional; runs via host agent helper
-export SDK_EXAMPLE_RUNTIME_ARGS_JSON='["-lc","./path/to/runtime"]'
+cp example/.env.example .env
+# edit .env and set POSTGRIP_AGENT_TOKEN to your Agent token
 go run ./example/greeting
 ```
+
+The generated `.env` file is ignored by git. The committed
+`example/.env.example` contains placeholders only.
 
 Optional overrides:
 

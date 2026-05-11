@@ -25,8 +25,8 @@ import (
 
 func main() {
     conn, err := client.NewConnection(client.ConnectionOptions{
-        Address:   "http://127.0.0.1:4100",
-        AuthToken: os.Getenv("POSTGRIP_AGENT_AUTH_TOKEN"),
+        // Agent token from Settings > Organization > Agent tokens.
+        AuthToken: os.Getenv("POSTGRIP_AGENT_TOKEN"),
     })
     if err != nil {
         log.Fatal(err)
@@ -115,7 +115,6 @@ func main() {
     // The host injects POSTGRIP_AGENT_ID, POSTGRIP_AGENT_ACCESS_TOKEN,
     // POSTGRIP_AGENT_REFRESH_TOKEN, and POSTGRIP_AGENT_SIGNING_PRIVATE_KEY.
     conn, err := client.NewConnection(client.ConnectionOptions{
-        Address: "http://127.0.0.1:4100",
     })
     if err != nil {
         log.Fatal(err)
