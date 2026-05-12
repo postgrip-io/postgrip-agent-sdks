@@ -29,7 +29,7 @@ The repository is at [github.com/postgrip-io/agent-sdk-go](https://github.com/po
 The SDK uses Go modules and semantic versioning. Pin to a specific version in your `go.mod`:
 
 ```sh
-go get go.postgrip.io/sdk@v0.1.0
+go get go.postgrip.io/sdk@v0.11.0
 ```
 
 While the version stays at `v0.x.x`, the public API may evolve. Pin to a tag for stability and read release notes when upgrading.

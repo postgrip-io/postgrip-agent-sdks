@@ -15,7 +15,7 @@ go get go.postgrip.io/sdk@latest
 To pin a specific version:
 
 ```sh
-go get go.postgrip.io/sdk@v0.1.0
+go get go.postgrip.io/sdk@v0.11.0
 ```
 
 ## Requirements
@@ -45,7 +45,7 @@ runtime worker — needs only `client`.
 If the vanity path isn't yet routable from your environment for any reason, you can fetch via the GitHub URL:
 
 ```sh
-go get github.com/postgrip-io/agent-sdk-go@v0.1.0
+go get github.com/postgrip-io/agent-sdk-go@v0.11.0
 ```
 
 The package import paths in your code stay `go.postgrip.io/sdk/...` — Go resolves the vanity path through the repo's `go-import` meta tag. Both URLs reach the same module.

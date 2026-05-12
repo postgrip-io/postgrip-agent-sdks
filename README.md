@@ -20,6 +20,8 @@ all four repos agree on the runtime contract.
 **Docs:** [postgrip-io.github.io/agent-sdk-go](https://postgrip-io.github.io/agent-sdk-go) — quick start, package guide, workflow runtime model.
 **API:** [pkg.go.dev/go.postgrip.io/sdk](https://pkg.go.dev/go.postgrip.io/sdk) — auto-generated godoc.
 
+**Current release:** `v0.11.0`
+
 ```sh
 go get go.postgrip.io/sdk
 ```
