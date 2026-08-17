@@ -58,6 +58,7 @@ export type {
   CreateScheduleRequest,
   EnqueueTaskRequest,
   FailureInfo,
+  IsolationTier,
   Namespace,
   PauseScheduleRequest,
   RetryPolicy,
