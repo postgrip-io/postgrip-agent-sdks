@@ -311,3 +311,9 @@ func (c *Connection) doStream(ctx context.Context, method, path string, body io.
 	}
 	return nil
 }
+
+// AuthHeader returns the management Authorization header value, empty when the
+// connection has no management token. The sandbox relay dial needs it: the
+// session ticket authorizes the session, but the request is still
+// authenticated normally.
+func (c *Connection) AuthHeader() string { return c.authHeader }
