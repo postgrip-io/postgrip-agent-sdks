@@ -793,3 +793,94 @@ class TypesExportSurfaceTest(unittest.TestCase):
         exec("from postgrip_agent.types import *", namespace)
         self.assertIn("Sandbox", namespace)
         self.assertIn("SandboxCreateRequest", namespace)
+
+
+class SandboxClientDetailsTest(unittest.TestCase):
+    def test_relay_url_accepts_mixed_case_schemes(self):
+        """URL schemes are case-insensitive and urllib accepts `HTTPS://` for
+        every other call, so rejecting it here made opening a session the one
+        operation a mixed-case address broke."""
+        from postgrip_agent.sandbox import sandbox_relay_url
+
+        for base in ("HTTPS://agents.example.com", "Https://agents.example.com"):
+            self.assertTrue(
+                sandbox_relay_url(base, "ses_1", "t").startswith("wss://agents.example.com/"),
+                f"{base} did not map to wss://",
+            )
+        self.assertTrue(sandbox_relay_url("HTTP://127.0.0.1:4100", "ses_1", "t").startswith("ws://"))
+        self.assertTrue(sandbox_relay_url("WSS://agents.example.com", "ses_1", "t").startswith("wss://"))
+        with self.assertRaises(ValueError):
+            sandbox_relay_url("ftp://nope", "ses_1", "t")
+        with self.assertRaises(ValueError):
+            sandbox_relay_url("agents.example.com", "ses_1", "t")
+
+    def test_authorization_header_detected_regardless_of_case(self):
+        """`urllib` normalizes header names, so a lowercase spelling plus a
+        configured token collapsed into one header with the *added* token
+        winning — inverting the documented explicit-header precedence."""
+        from postgrip_agent.client import has_authorization_header
+
+        self.assertTrue(has_authorization_header({"authorization": "Bearer a"}))
+        self.assertTrue(has_authorization_header({"Authorization": "Bearer a"}))
+        self.assertTrue(has_authorization_header({"AUTHORIZATION": "Bearer a"}))
+        self.assertFalse(has_authorization_header({"X-Other": "v"}))
+        self.assertFalse(has_authorization_header({}))
+
+    def test_explicit_lowercase_authorization_is_not_overridden(self):
+        conn = Connection("http://agent.test", auth_token="token-from-config",
+                          headers={"authorization": "Bearer explicit"})
+        headers = dict(conn.headers)
+        from postgrip_agent.client import has_authorization_header
+
+        self.assertTrue(has_authorization_header(headers))
+        self.assertEqual(headers["authorization"], "Bearer explicit")
+
+    def test_relay_dial_carries_configured_headers(self):
+        """A caller authenticating via `Connection(headers=...)` got an
+        unauthenticated relay dial, so the dial failed *after* the single-use
+        ticket had already been spent."""
+        from postgrip_agent.sandbox import SandboxClient
+
+        conn = Connection("http://agent.test", headers={
+            "Authorization": "Bearer explicit",
+            "X-Gateway-Token": "gw",
+        })
+        client = SandboxClient(conn)
+        captured: dict[str, dict[str, str]] = {}
+
+        def fake_create_session(sandbox_id, **kwargs):
+            return {"id": "ses_1", "ticket": "pgss_t"}
+
+        class FakeSession:
+            def __init__(self, url, headers):
+                captured["headers"] = headers
+
+        client.create_session = fake_create_session  # type: ignore[method-assign]
+        import postgrip_agent.sandbox as sandbox_module
+
+        original = sandbox_module.SandboxSession
+        sandbox_module.SandboxSession = FakeSession  # type: ignore[misc]
+        try:
+            client.open_session("sbx_1", kind="exec", command=["true"])
+        finally:
+            sandbox_module.SandboxSession = original  # type: ignore[misc]
+
+        self.assertEqual(captured["headers"].get("Authorization"), "Bearer explicit")
+        self.assertEqual(captured["headers"].get("X-Gateway-Token"), "gw")
+
+    def test_wait_until_running_clamps_the_poll_sleep(self):
+        """A poll_interval larger than the time remaining postponed the next
+        deadline check by the whole interval, so the advertised timeout was not
+        the one kept."""
+        from postgrip_agent.sandbox import SandboxClient
+
+        conn = Connection("http://agent.test")
+        client = SandboxClient(conn)
+        client.get = lambda sandbox_id: {  # type: ignore[method-assign]
+            "id": sandbox_id, "observedState": "provisioning",
+            "generation": 1, "observedGeneration": 1,
+        }
+        started = time.monotonic()
+        with self.assertRaises(TimeoutError):
+            client.wait_until_running("sbx_1", timeout=0.2, poll_interval=30.0)
+        self.assertLess(time.monotonic() - started, 5.0, "slept the poll interval instead of the timeout")

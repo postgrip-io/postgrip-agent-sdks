@@ -25,6 +25,20 @@ _POSTGRIP_UI_MEMO_KEY = "postgrip.ui"
 DEFAULT_ADDRESS = "https://agentorchestrator.postgrip.app"
 
 
+def has_authorization_header(headers: dict[str, str]) -> bool:
+    """Whether *headers* already carries an Authorization header, any casing.
+
+    HTTP header names are case-insensitive and ``urllib.request.Request``
+    normalizes them, so a caller passing ``{"authorization": "Bearer …"}`` — a
+    perfectly valid spelling — did not match an exact-case ``"Authorization"``
+    check. The configured token was then added under the capitalized name, both
+    collapsed to one header, and the *added* one won: the explicit-header
+    precedence this SDK documents was inverted, and a request could go out
+    authenticated as the wrong tenant.
+    """
+    return any(name.lower() == "authorization" for name in headers)
+
+
 class Connection:
     def __init__(
         self,
@@ -127,7 +141,7 @@ class Connection:
         headers.setdefault("User-Agent", "postgrip-agent-python")
         if use_agent_auth and self._agent_access_token:
             headers["Authorization"] = f"Bearer {self._agent_access_token}"
-        elif not use_agent_auth and self.auth_token and "Authorization" not in headers:
+        elif not use_agent_auth and self.auth_token and not has_authorization_header(headers):
             # An explicitly supplied header wins, so existing callers that
             # hand-build one keep working.
             headers["Authorization"] = f"Bearer {self.auth_token}"

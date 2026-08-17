@@ -14,6 +14,8 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
+from .client import has_authorization_header
+
 if TYPE_CHECKING:  # pragma: no cover - import cycle only matters for typing
     from .client import Connection
 
@@ -45,12 +47,18 @@ def sandbox_exec_exit_code(close_status: int) -> int | None:
 def sandbox_relay_url(base_url: str, session_id: str, ticket: str) -> str:
     """Build the ``ws(s)://`` relay URL from an ``http(s)`` API base URL."""
     base = base_url.strip().rstrip("/")
-    if base.startswith("https://"):
-        origin = "wss://" + base[len("https://"):]
-    elif base.startswith("http://"):
-        origin = "ws://" + base[len("http://"):]
-    elif base.startswith(("wss://", "ws://")):
-        origin = base
+    # URL schemes are case-insensitive (RFC 3986 §3.1), and urllib accepts
+    # `HTTPS://…` for every other request this SDK makes. Matching the literal
+    # prefix rejected an address that works everywhere else, which made opening
+    # a session the single operation a mixed-case address broke.
+    scheme, separator, remainder = base.partition("://")
+    scheme = scheme.lower()
+    if separator and scheme == "https":
+        origin = "wss://" + remainder
+    elif separator and scheme == "http":
+        origin = "ws://" + remainder
+    elif separator and scheme in ("wss", "ws"):
+        origin = f"{scheme}://{remainder}"
     else:
         raise ValueError(f"postgrip-agent: sandbox relay base must be http(s) or ws(s): {base_url}")
     return (
@@ -150,7 +158,7 @@ class SandboxClient:
         headers = dict(self.connection.headers)
         headers.setdefault("User-Agent", "postgrip-agent-python")
         headers["Content-Type"] = "application/gzip"
-        if self.connection.auth_token and "Authorization" not in headers:
+        if self.connection.auth_token and not has_authorization_header(headers):
             headers["Authorization"] = f"Bearer {self.connection.auth_token}"
         if repository_name:
             headers["X-PostGrip-Repository"] = repository_name
@@ -205,7 +213,12 @@ class SandboxClient:
                     f"postgrip-agent: sandbox {sandbox_id} was not running within {timeout}s "
                     f"(last observed state: {last.get('observedState', 'unknown')})"
                 )
-            time.sleep(poll_interval)
+            # Never sleep past the deadline. An unclamped sleep meant a
+            # poll_interval larger than the time remaining postponed the next
+            # deadline check by the whole interval — `timeout=5,
+            # poll_interval=60` blocked for about a minute before raising, so
+            # the timeout this call advertises was not the one it kept.
+            time.sleep(min(poll_interval, max(0.0, deadline - time.monotonic())))
 
     # --- sessions ----------------------------------------------------------
 
@@ -231,8 +244,14 @@ class SandboxClient:
         url = sandbox_relay_url(
             relay_base_url or self.connection.address, session["id"], session["ticket"]
         )
-        headers = {}
-        if self.connection.auth_token:
+        # Start from the connection's configured headers rather than only its
+        # auth_token. A caller authenticating through
+        # `Connection(headers={"Authorization": ...})` — a supported way to do
+        # it, and the way a header-authenticating gateway is fed — got an
+        # unauthenticated relay dial, so session creation succeeded and the
+        # dial failed *after* burning the single-use ticket.
+        headers = dict(self.connection.headers)
+        if self.connection.auth_token and not has_authorization_header(headers):
             # The ticket authorizes the session; the management credential
             # still authenticates the request. Both are required.
             headers["Authorization"] = f"Bearer {self.connection.auth_token}"
