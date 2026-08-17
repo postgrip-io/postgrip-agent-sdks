@@ -502,9 +502,6 @@ class ActivityOptions(TypedDict, total=False):
     retry: RetryPolicy
 
 
-__all__ = [name for name in globals() if not name.startswith("_")]
-
-
 # --- sandbox platform ------------------------------------------------------
 #
 # Mirrors agent-sdk-protocol/sandbox.go. Timestamps are RFC3339 strings, as
@@ -577,39 +574,53 @@ class Sandbox(TypedDict, total=False):
     runtimeInstanceId: str
     failureCode: str
     failureMessage: str
-    expiresAt: str
-    lastActivityAt: str
+    # The lifecycle timestamps are `*time.Time` on the wire, so an unset one
+    # arrives as JSON null, not as an absent key. total=False covers only the
+    # absent case, which left a typed consumer unable to represent a response
+    # the server genuinely sends.
+    expiresAt: str | None
+    lastActivityAt: str | None
     createdAt: str
     updatedAt: str
-    stoppedAt: str
-    deletedAt: str
+    stoppedAt: str | None
+    deletedAt: str | None
 
 
-class SandboxCreateRequest(TypedDict, total=False):
+class SandboxCreateRequest(TypedDict):
     """Body of ``POST /api/v1/sandboxes``.
 
     ``name`` must match ``^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$`` and is unique per
-    tenant among live sandboxes, so a duplicate is a 409. ``image`` is required
-    despite being optional here. ``credentialRefs`` is reserved — any non-empty
-    value is rejected with 400 today.
+    tenant among live sandboxes, so a duplicate is a 409. ``credentialRefs`` is
+    reserved — any non-empty value is rejected with 400 today.
+
+    ``name`` and ``image`` are required keys, following this module's
+    ``NotRequired`` convention rather than ``total=False``: under total=False a
+    type checker accepted ``{}`` as a valid request, so the one thing this
+    mirror could have caught before the round trip — a create the server
+    answers with 400 — went through as well-typed.
     """
 
     name: str
-    backend: SandboxBackend
     image: str
-    architecture: str
-    workspaceId: str
-    repositoryName: str
-    setupCommand: list[str]
-    credentialRefs: list[str]
-    resourceLimits: SandboxResourceLimits
-    networkPolicy: SandboxNetworkPolicy
-    labels: dict[str, str]
-    expiresAt: str
+    backend: NotRequired[SandboxBackend]
+    architecture: NotRequired[str]
+    workspaceId: NotRequired[str]
+    repositoryName: NotRequired[str]
+    setupCommand: NotRequired[list[str]]
+    credentialRefs: NotRequired[list[str]]
+    resourceLimits: NotRequired[SandboxResourceLimits]
+    networkPolicy: NotRequired[SandboxNetworkPolicy]
+    labels: NotRequired[dict[str, str]]
+    expiresAt: NotRequired[str]
 
 
-class SandboxListResponse(TypedDict, total=False):
-    """The list endpoint returns this envelope, not a bare array."""
+class SandboxListResponse(TypedDict):
+    """The list endpoint returns this envelope, not a bare array.
+
+    Required, not ``total=False``: the envelope is always present and an empty
+    result is an empty list, so allowing a missing key would have described a
+    response the endpoint never sends.
+    """
 
     sandboxes: list[Sandbox]
 
@@ -647,3 +658,11 @@ class CreateSandboxSessionResponse(TypedDict, total=False):
     id: str
     ticket: str
     expiresAt: str
+
+
+# Computed last, deliberately. It used to sit above the sandbox section, and a
+# `globals()` comprehension only sees what has already been defined — so every
+# sandbox type was silently absent from `from postgrip_agent.types import *`,
+# unlike every other public type in this module. Keep new declarations above
+# this line.
+__all__ = [name for name in globals() if not name.startswith("_")]

@@ -753,3 +753,43 @@ class PythonSdkTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TypesExportSurfaceTest(unittest.TestCase):
+    """``types.__all__`` is a ``globals()`` comprehension, so it only sees what
+    is defined above it. It used to sit above the sandbox section, which left
+    every sandbox type absent from ``from postgrip_agent.types import *`` while
+    every other public type was present — invisible unless you tried the star
+    import."""
+
+    def test_sandbox_types_are_exported(self):
+        expected = [
+            "Sandbox",
+            "SandboxBackend",
+            "SandboxCreateRequest",
+            "SandboxDesiredState",
+            "SandboxListResponse",
+            "SandboxObservedState",
+            "SandboxWorkspace",
+            "CreateSandboxSessionRequest",
+            "CreateSandboxSessionResponse",
+        ]
+        missing = [name for name in expected if name not in types.__all__]
+        self.assertEqual(missing, [], f"missing from types.__all__: {missing}")
+
+    def test_every_public_name_is_exported(self):
+        """Catches the general case rather than today's list: any public name
+        declared below the ``__all__`` assignment would be dropped the same
+        way."""
+        public = {
+            name
+            for name in vars(types)
+            if not name.startswith("_") and name not in {"annotations"}
+        }
+        self.assertEqual(sorted(public - set(types.__all__)), [])
+
+    def test_star_import_reaches_the_sandbox_types(self):
+        namespace: dict[str, object] = {}
+        exec("from postgrip_agent.types import *", namespace)
+        self.assertIn("Sandbox", namespace)
+        self.assertIn("SandboxCreateRequest", namespace)
