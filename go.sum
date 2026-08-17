@@ -1,4 +1,2 @@
-github.com/postgrip-io/agent-sdk-protocol v0.0.0-20260509131312-60a66801a2fd h1:mXQt7FAs9WIpzAQJBBhaf/V88oxtc7tg2n9RclLcMSY=
-github.com/postgrip-io/agent-sdk-protocol v0.0.0-20260509131312-60a66801a2fd/go.mod h1:df2XnW30FdgfXLTUvbLtxnYPylgI7vSa4yztRBQr64Q=
-github.com/postgrip-io/agent-sdk-protocol v0.1.1-0.20260817044823-2294811fe496 h1:mGJcPlrcjiy7nF/ROL/GrUbV1c1An0MrLSyB0LaDPRA=
-github.com/postgrip-io/agent-sdk-protocol v0.1.1-0.20260817044823-2294811fe496/go.mod h1:df2XnW30FdgfXLTUvbLtxnYPylgI7vSa4yztRBQr64Q=
+github.com/postgrip-io/agent-sdk-protocol v0.1.1-0.20260817055536-e87484aeb8e5 h1:tvdmqup1wIBH/Ic9hpYWg+DdzglPcKI6ZUgIsvUWXOw=
+github.com/postgrip-io/agent-sdk-protocol v0.1.1-0.20260817055536-e87484aeb8e5/go.mod h1:df2XnW30FdgfXLTUvbLtxnYPylgI7vSa4yztRBQr64Q=
