@@ -187,3 +187,88 @@ describe('sandbox relay contract', () => {
     expect(SANDBOX_RELAY_MAX_FRAME_BYTES).toBe(1 << 20);
   });
 });
+
+describe('sandbox wait and session preconditions', () => {
+  // A `failed` reading from the previous generation does not describe the
+  // state just requested. Treating it as terminal made a start issued against
+  // a failed sandbox reject during the reconciliation window — precisely when
+  // the caller is trying to recover.
+  it('ignores a failure from a superseded generation', async () => {
+    let call = 0;
+    const { client } = await sandboxClient(() => {
+      call += 1;
+      // First poll: stale failure from generation 1 while 2 is in flight.
+      if (call === 1) {
+        return jsonResponse({
+          id: 'sbx_1', observedState: 'failed', generation: 2, observedGeneration: 1,
+          failureMessage: 'stale failure',
+        });
+      }
+      return jsonResponse({ id: 'sbx_1', observedState: 'running', generation: 2, observedGeneration: 2 });
+    });
+
+    const record = await client.sandbox.waitUntilRunning('sbx_1', {
+      timeoutMs: 5_000,
+      pollIntervalMs: 1,
+    });
+    expect(record.observedState).toBe('running');
+    expect(call).toBeGreaterThan(1);
+  });
+
+  // A failure at the current generation is still terminal.
+  it('rejects a failure at the current generation', async () => {
+    const { client } = await sandboxClient(() =>
+      jsonResponse({
+        id: 'sbx_1', observedState: 'failed', generation: 1, observedGeneration: 1,
+        failureMessage: 'image pull failed',
+      }),
+    );
+    await expect(
+      client.sandbox.waitUntilRunning('sbx_1', { timeoutMs: 5_000, pollIntervalMs: 1 }),
+    ).rejects.toThrow(/image pull failed/);
+  });
+
+  // Without a signal on the request, a stalled management call stays pending
+  // forever and the loop never reaches its own deadline check.
+  it('bounds each poll by the remaining timeout', async () => {
+    const { client } = await sandboxClient((url, init) => {
+      // connect() performs a /healthz handshake, which must still complete.
+      // Only the sandbox poll stalls — that is the case under test.
+      if (url.includes('/healthz')) {
+        return jsonResponse({ status: 'ok' });
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        // Never settles on its own; only the signal can end it.
+        init.signal?.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+        );
+      });
+    });
+    const started = Date.now();
+    await expect(
+      client.sandbox.waitUntilRunning('sbx_1', { timeoutMs: 150, pollIntervalMs: 10 }),
+    ).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  // Creating the session first meant that on a runtime with no WebSocket the
+  // server-side session already existed — and an exec command may have already
+  // run — before the capability check threw, so a retry could execute a
+  // side-effecting command twice.
+  it('checks for a WebSocket implementation before creating the session', async () => {
+    const { client, fetchImpl } = await sandboxClient(() =>
+      jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+    );
+    const globalWebSocket = globalThis.WebSocket;
+    // @ts-expect-error - simulating a runtime without a global WebSocket
+    delete globalThis.WebSocket;
+    try {
+      await expect(
+        client.sandbox.openSession('sbx_1', 'exec', { command: ['rm', '-rf', 'data'] }),
+      ).rejects.toThrow(/no WebSocket implementation/);
+      expect(fetchImpl, 'a session was created before the capability check').not.toHaveBeenCalled();
+    } finally {
+      globalThis.WebSocket = globalWebSocket;
+    }
+  });
+});

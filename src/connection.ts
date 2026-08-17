@@ -425,8 +425,8 @@ export class Connection {
     return response?.sandboxes ?? [];
   }
 
-  async getSandbox(sandboxId: string): Promise<Sandbox> {
-    return this.request('GET', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}`);
+  async getSandbox(sandboxId: string, signal?: AbortSignal): Promise<Sandbox> {
+    return this.request('GET', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}`, undefined, signal);
   }
 
   async startSandbox(sandboxId: string): Promise<Sandbox> {

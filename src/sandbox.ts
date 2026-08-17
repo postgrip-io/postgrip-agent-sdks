@@ -131,8 +131,8 @@ export class SandboxClient {
     return this.connection.listSandboxes();
   }
 
-  async get(sandboxId: string): Promise<Sandbox> {
-    return this.connection.getSandbox(requireSandboxId(sandboxId));
+  async get(sandboxId: string, signal?: AbortSignal): Promise<Sandbox> {
+    return this.connection.getSandbox(requireSandboxId(sandboxId), signal);
   }
 
   async start(sandboxId: string): Promise<Sandbox> {
@@ -177,12 +177,25 @@ export class SandboxClient {
 
     for (;;) {
       options.signal?.throwIfAborted();
-      const record = await this.get(sandboxId);
+      // Bound the request itself, not just the gaps between requests. Without
+      // a signal a stalled management call stays pending forever, and the loop
+      // never reaches the deadline check below — so waitUntilRunning could
+      // outlive its own timeout indefinitely. The signal combines the caller's
+      // with what remains of the deadline, so whichever comes first wins.
+      const remaining = deadline - Date.now();
+      const pollSignal = combineAbortSignals(options.signal, remaining > 0 ? remaining : 1);
+      const record = await this.get(sandboxId, pollSignal);
       last = record;
-      if (record.observedState === 'running' && (record.observedGeneration ?? 0) >= (record.generation ?? 0)) {
+      // Both readiness and failure are read at the current generation. A
+      // `failed` left over from the previous generation does not describe the
+      // state just requested, so treating it as terminal made a start issued
+      // against a failed sandbox reject during the reconciliation window —
+      // exactly when a caller is trying to recover.
+      const observed = (record.observedGeneration ?? 0) >= (record.generation ?? 0);
+      if (record.observedState === 'running' && observed) {
         return record;
       }
-      if (record.observedState === 'failed') {
+      if (record.observedState === 'failed' && observed) {
         throw new Error(
           `postgrip-agent: sandbox ${sandboxId} failed: ` +
             (record.failureMessage || record.failureCode || 'no failure detail reported'),
@@ -214,19 +227,24 @@ export class SandboxClient {
     if (kind === 'exec' && (!options.command || options.command.length === 0)) {
       throw new Error('postgrip-agent: sandbox exec requires a command');
     }
-    const session = await this.createSession(sandboxId, {
-      kind,
-      command: options.command,
-      rows: options.rows,
-      columns: options.columns,
-    });
-
+    // Resolved before the session is created, not after. Creating first meant
+    // that on a runtime with no global WebSocket the server-side session was
+    // already made — and for an exec session the command may have started —
+    // before this threw. The caller then saw an error, never the output, and
+    // retrying with an implementation supplied would run a side-effecting
+    // command a second time.
     const WebSocketImpl = options.webSocketImpl ?? globalThis.WebSocket;
     if (!WebSocketImpl) {
       throw new Error(
         'postgrip-agent: no WebSocket implementation available; pass webSocketImpl (Node 22+ has a global WebSocket)',
       );
     }
+    const session = await this.createSession(sandboxId, {
+      kind,
+      command: options.command,
+      rows: options.rows,
+      columns: options.columns,
+    });
     const url = sandboxRelayUrl(
       options.relayBaseUrl ?? this.connection.baseUrl,
       session.id!,
@@ -289,4 +307,27 @@ function requireSandboxId(sandboxId: string): string {
     throw new Error('postgrip-agent: sandbox id is required');
   }
   return sandboxId;
+}
+
+/**
+ * A signal that aborts on the caller's signal or after `timeoutMs`, whichever
+ * comes first.
+ *
+ * `AbortSignal.any` and `AbortSignal.timeout` are both Node 20+ / modern
+ * browsers, which this package already targets, but they are guarded anyway:
+ * on a runtime without them, falling back to the caller's signal alone leaves
+ * the previous behaviour rather than throwing at an unrelated call site.
+ */
+function combineAbortSignals(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal | undefined {
+  if (typeof AbortSignal?.timeout !== 'function') {
+    return signal;
+  }
+  const deadlineSignal = AbortSignal.timeout(timeoutMs);
+  if (!signal) {
+    return deadlineSignal;
+  }
+  if (typeof AbortSignal.any !== 'function') {
+    return signal;
+  }
+  return AbortSignal.any([signal, deadlineSignal]);
 }
