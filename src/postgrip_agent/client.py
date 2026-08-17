@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from . import _signing
 from .errors import TaskFailedError, TimeoutFailure
+from .types import IsolationTier
 from .workflow import workflow_name
 
 _MISSING = object()
@@ -629,6 +630,7 @@ class TaskClient:
         working_dir: str | None = None,
         pull_policy: str | None = None,
         timeout_seconds: int | None = None,
+        isolation: IsolationTier | None = None,
         queue: str = "default",
         namespace: str = "default",
         runtime_queue: str | None = None,
@@ -636,7 +638,15 @@ class TaskClient:
         runtime_id: str | None = None,
         lease_timeout_seconds: int = 0,
     ) -> dict[str, Any]:
-        """Enqueue a managed SDK runtime on an existing host-agent pool."""
+        """Enqueue a managed SDK runtime on an existing host-agent pool.
+
+        ``isolation`` is the isolation floor the workload requires, one of
+        ``"container"`` (the default) or ``"microvm"``. It is a floor, not an
+        exact match: container work may be scheduled onto a stronger tier,
+        microvm work is never downgraded. It requires ``image`` — the
+        orchestrator rejects an isolation floor on a command-only runtime,
+        which would execute directly on the agent host honoring no floor.
+        """
         payload: dict[str, Any] = {}
         if image is not None:
             payload["image"] = image
@@ -652,6 +662,8 @@ class TaskClient:
             payload["pull_policy"] = pull_policy
         if timeout_seconds is not None:
             payload["timeout_seconds"] = timeout_seconds
+        if isolation is not None:
+            payload["isolation"] = isolation
         payload["queue"] = runtime_queue or f"postgrip-runtime-{uuid.uuid4().hex[:16]}"
         if runtime_namespace is not None:
             payload["namespace"] = runtime_namespace
