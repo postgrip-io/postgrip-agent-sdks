@@ -39,5 +39,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Run the detectors against synthetic sources first. A green drift check
+      # only proves the current type files agree; it never proves the checker
+      # still detects disagreement, and a regex that quietly stops matching
+      # turns this job into a rubber stamp.
+      - name: self-test the drift checker
+        run: python3 tools/check_drift.py --self-test
       - name: check drift against agent-sdk-typescript and agent-sdk-python
         run: python3 tools/check_drift.py --local go --from-github --github-ref "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
