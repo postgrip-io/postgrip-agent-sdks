@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "gofmt-dirty:" >&2
+            echo "$out" >&2
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+
+  # This repo had no drift job at all, which is how it came to carry its own
+  # copies of WorkflowRuntimePayload and TaskTypeWorkflowRuntime against a
+  # protocol pin from before either existed. Unlike the TS/Python mirrors
+  # there are no field sets to compare here — the SDK aliases the protocol
+  # package — so the check is that it never *redeclares* what protocol owns.
+  # A local copy compiles cleanly against a stale pin instead of failing to
+  # build, which is exactly why nothing noticed.
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: fetch drift check from agent-sdk-protocol
+        run: |
+          mkdir -p tools
+          ref="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
+          curl -fsSL "https://raw.githubusercontent.com/postgrip-io/agent-sdk-protocol/${ref}/tools/check_drift.py" -o tools/check_drift.py \
+            || curl -fsSL https://raw.githubusercontent.com/postgrip-io/agent-sdk-protocol/main/tools/check_drift.py -o tools/check_drift.py
+      # Self-test first: a tree that redeclares nothing proves the tree is
+      # clean, never that the checker still detects a redeclaration.
+      - name: self-test the drift checker
+        run: python3 tools/check_drift.py --self-test
+      - name: check for redeclared protocol types
+        run: python3 tools/check_drift.py --local go-sdk --from-github --github-ref "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"

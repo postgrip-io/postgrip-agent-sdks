@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<!--
+  Required for `go get go.postgrip.io/sdk` to resolve. Go's module proxy
+  fetches https://go.postgrip.io/sdk?go-get=1, parses the meta tags below,
+  and uses them to find the upstream git repo.
+-->
+<meta name="go-import" content="go.postgrip.io/sdk git https://github.com/postgrip-io/agent-sdk-go">
+<meta name="go-source" content="go.postgrip.io/sdk https://github.com/postgrip-io/agent-sdk-go https://github.com/postgrip-io/agent-sdk-go/tree/main{/dir} https://github.com/postgrip-io/agent-sdk-go/blob/main{/dir}/{file}#L{line}">
+
+<title>go.postgrip.io/sdk — PostGrip Agent Go SDK</title>
+<meta name="description" content="Go SDK for the PostGrip Agent runtime service. Tasks, workflows, schedules, and a polling worker.">
+
+<style>
+  :root {
+    --fg: #1f2937;
+    --muted: #6b7280;
+    --bg: #ffffff;
+    --accent: #2563eb;
+    --code-bg: #f3f4f6;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.55;
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+  }
+  h1 {
+    font-size: 2rem;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.01em;
+  }
+  .tagline {
+    color: var(--muted);
+    font-size: 1.05rem;
+    margin: 0 0 2rem;
+  }
+  pre, code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+  }
+  code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 3px; }
+  pre code { background: none; padding: 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 2rem 0 0;
+  }
+  .links a {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .links a:hover {
+    border-color: var(--accent);
+    background: var(--code-bg);
+    text-decoration: none;
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+  footer { color: var(--muted); font-size: 0.85rem; }
+  footer a { color: var(--muted); text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PostGrip Agent — Go SDK</h1>
+  <p class="tagline">
+    Run shell commands, container workloads, and durable workflows on the
+    PostGrip Agent runtime service from your Go code.
+  </p>
+
+  <pre><code>go get go.postgrip.io/sdk</code></pre>
+
+  <p>
+    Then import the sub-packages you need:
+  </p>
+
+  <pre><code>import (
+    "go.postgrip.io/sdk/client"
+    "go.postgrip.io/sdk/worker"
+    "go.postgrip.io/sdk/workflow"
+    "go.postgrip.io/sdk/activity"
+    "go.postgrip.io/sdk/failure"
+)</code></pre>
+
+  <div class="links">
+    <a href="https://postgrip-io.github.io/agent-sdk-go/">Documentation</a>
+    <a href="https://pkg.go.dev/go.postgrip.io/sdk">API reference</a>
+    <a href="https://github.com/postgrip-io/agent-sdk-go">GitHub</a>
+    <a href="https://github.com/postgrip-io/agent-sdk-go/releases">Releases</a>
+  </div>
+
+  <hr>
+
+  <footer>
+    Mirrors
+    <a href="https://github.com/postgrip-io/agent-sdk-typescript">agent-sdk-typescript</a>
+    and
+    <a href="https://github.com/postgrip-io/agent-sdk-python">agent-sdk-python</a>;
+    wire shapes from
+    <a href="https://github.com/postgrip-io/agent-sdk-protocol">agent-sdk-protocol</a>.
+  </footer>
+</main>
+</body>
+</html>
