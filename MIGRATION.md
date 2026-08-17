@@ -43,6 +43,21 @@ After package publishing and Go resolution are verified:
 3. Move issue templates, branch protections, environments, and repository secrets.
 4. Archive legacy repositories only after released versions remain installable.
 
+## OpenAPI Generation Cutover
+
+The code-generation cutover is complete. The canonical contract defines every
+public HTTP request, response, path, query, and enum shape. The generator emits
+public models, operation aliases, metadata for all 42 operations, and typed
+low-level clients for the 40 JSON operations in Go, TypeScript, and Python.
+Existing ergonomic methods are compatibility adapters over generated clients,
+so their public call patterns remain stable without owning duplicate schemas.
+
+Two operations remain custom by design: gzipped workspace archive streaming
+and sandbox WebSocket sessions. Session refresh, authentication, signing, and
+long-poll behavior also stay in transport adapters, but their routes and wire
+types come from generated metadata. CI rejects stale generated output and
+checks OpenAPI-owned models against the Go protocol wire types.
+
 ## Landing This Migration
 
 Merge the consolidation pull request with a merge commit. Do not squash or

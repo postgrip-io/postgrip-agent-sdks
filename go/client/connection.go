@@ -141,11 +141,11 @@ func (c *Connection) Address() string { return c.address }
 // Health hits /healthz; returns the parsed JSON body. Useful as a smoke
 // test at startup before consuming Client APIs.
 func (c *Connection) Health(ctx context.Context) (map[string]any, error) {
-	var out map[string]any
-	if err := c.doOpenAPI(ctx, openAPIHealth, nil, nil, nil, &out); err != nil {
+	out, err := c.OpenAPI().Health(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	return map[string]any{"status": out.Status}, nil
 }
 
 // doOpenAPI resolves the generated method, path, and authentication lane,

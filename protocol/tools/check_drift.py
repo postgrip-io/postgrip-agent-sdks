@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail-loud drift check between this Go protocol package and the
-hand-mirrored TypeScript / Python definitions in the SDK monorepo.
+TypeScript / Python definitions in the SDK monorepo.
 
 The contract being checked: every exported wire-format struct in
 types.go has an equivalent type with matching field names in
@@ -8,11 +8,10 @@ agent-sdk-typescript/src/types.ts and agent-sdk-python/src/postgrip_agent/types.
 
 What we check (deliberately narrow, since the source of truth is Go):
 
-    * Every exported Go struct in types.go (excluding pure-internal
-      helpers like requests/responses unique to the runtime API surface)
-      appears with the same name in the TS and Python type files.
-    * Every JSON-tagged field on those Go structs has a same-name field on
-      the TS interface and the Python TypedDict.
+    * OpenAPI-owned models have matching Go fields and are exposed through
+      generated-model aliases in TypeScript and Python.
+    * Runtime-only models that are outside OpenAPI remain hand-mirrored with
+      matching field names in all three languages.
 
 agent-sdk-go is checked under a *different* contract (`--local go-sdk`). It
 isn't a mirror — it imports this package and re-exports the wire types as
@@ -49,6 +48,8 @@ Exit codes: 0 clean, 1 drift detected, 2 tooling failure.
 from __future__ import annotations
 
 import argparse
+import ast
+import json
 import os
 import re
 import sys
@@ -72,10 +73,10 @@ class FetchError(RuntimeError):
     """
 
 
-# Wire types we actively contract on. Keep this list narrow on purpose —
-# every type added here is a commitment that TS / Python will mirror it.
-# Server-only request shapes (e.g. CompactRequest, EnrollAgentRequest) and
-# unauthenticated bootstrap shapes don't belong here.
+# Runtime-only wire types mirrored by TypeScript/Python plus historical public
+# OpenAPI models that must retain compatibility aliases. Every protocol-backed
+# OpenAPI schema is validated separately from the generator's ownership table,
+# so generated-only request/response types do not need to be duplicated here.
 TRACKED_TYPES = [
     "Task",
     "TaskResult",
@@ -101,9 +102,7 @@ TRACKED_TYPES = [
     "RetryPolicy",
     # Sandbox platform, client-facing shapes only. The agent-plane sandbox
     # types (SandboxObservation, SandboxReconcile*, SandboxSessionAssignment,
-    # SandboxEvent) are deliberately absent: they never cross a client SDK, and
-    # tracking them would force TS/Python to mirror types nothing there uses —
-    # the same reason EnrollAgentRequest and PollTaskResponse aren't listed.
+    # SandboxEvent) are deliberately absent: they never cross a client SDK.
     "Sandbox",
     "SandboxCreateRequest",
     "SandboxListResponse",
@@ -159,6 +158,8 @@ MONOREPO_PATHS = {
     "ts":     [MONOREPO_ROOT / "typescript" / "src" / "types.ts"],
     "python": [MONOREPO_ROOT / "python" / "src" / "postgrip_agent" / "types.py"],
 }
+MONOREPO_OPENAPI_PATH = MONOREPO_ROOT / "openapi.json"
+MONOREPO_GENERATOR_PATH = MONOREPO_ROOT / "scripts" / "generate_openapi.py"
 
 # json:"..." -> field name (strip ",omitempty" etc.)
 JSON_TAG_RE = re.compile(r'json:"([^",]+)')
@@ -193,6 +194,10 @@ GO_ALIAS_RE = re.compile(r'^type\s+(\w+)\s*=\s*(\w+)\s*$', re.MULTILINE)
 # re-export form) is deliberately not a hit.
 GO_LITERAL_CONST_RE = re.compile(
     r'^\s*(?:(?:const|var)\s+)?(\w+)(?:\s+[\w.]+)?\s*=\s*["`]', re.MULTILINE,
+)
+GO_STRING_TYPE_RE = re.compile(r'^type\s+(\w+)\s+string\s*$', re.MULTILINE)
+GO_TYPED_STRING_CONST_RE = re.compile(
+    r'^\s*\w+\s+(\w+)\s*=\s*(?:"([^"]*)"|`([^`]*)`)', re.MULTILINE,
 )
 
 # Directories skipped when scanning the Go SDK tree: generated docs sites and
@@ -302,6 +307,17 @@ def go_type_declarations(source: str) -> list[tuple[str, bool, str]]:
 def go_literal_const_names(source: str) -> set[str]:
     """Names bound to a string literal in a const/var block."""
     return {m.group(1) for m in GO_LITERAL_CONST_RE.finditer(source)}
+
+
+def parse_go_enum_values(source: str) -> dict[str, set[str]]:
+    """Map named Go string types to their explicitly typed constant values."""
+    string_types = set(GO_STRING_TYPE_RE.findall(source))
+    values: dict[str, set[str]] = {name: set() for name in string_types}
+    for match in GO_TYPED_STRING_CONST_RE.finditer(source):
+        type_name = match.group(1)
+        if type_name in values:
+            values[type_name].add(match.group(2) if match.group(2) is not None else match.group(3))
+    return values
 
 
 def iter_go_sdk_sources(root: Path) -> Iterable[Path]:
@@ -442,6 +458,68 @@ def parse_py_types(source: str) -> dict[str, set[str]]:
     return out
 
 
+def openapi_field_names(
+    schema: dict, schemas: dict[str, dict], seen: set[str] | None = None,
+) -> set[str]:
+    """Return an OpenAPI component's object property names, resolving local refs."""
+    seen = set() if seen is None else seen
+    reference = schema.get("$ref")
+    if reference:
+        prefix = "#/components/schemas/"
+        if not reference.startswith(prefix):
+            return set()
+        name = reference[len(prefix):]
+        if name in seen or name not in schemas:
+            return set()
+        return openapi_field_names(schemas[name], schemas, seen | {name})
+    fields = set(schema.get("properties", {}))
+    for part in schema.get("allOf", []):
+        fields.update(openapi_field_names(part, schemas, seen))
+    return fields
+
+
+def generator_go_protocol_ownership(source: str) -> tuple[set[str], dict[str, str]]:
+    """Read the generator's authoritative OpenAPI-to-protocol ownership table."""
+    tree = ast.parse(source)
+    values: dict[str, object] = {}
+    wanted = {"GO_PROTOCOL_SCHEMAS", "GO_PROTOCOL_TYPE_OVERRIDES"}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in wanted:
+                values[target.id] = ast.literal_eval(node.value)
+    schemas = values.get("GO_PROTOCOL_SCHEMAS")
+    overrides = values.get("GO_PROTOCOL_TYPE_OVERRIDES")
+    if not isinstance(schemas, set) or not all(isinstance(name, str) for name in schemas):
+        raise ValueError("GO_PROTOCOL_SCHEMAS is missing or is not a string set")
+    if not isinstance(overrides, dict) or not all(
+        isinstance(name, str) and isinstance(target, str)
+        for name, target in overrides.items()
+    ):
+        raise ValueError("GO_PROTOCOL_TYPE_OVERRIDES is missing or is not a string map")
+    return schemas, overrides
+
+
+def has_typescript_openapi_alias(source: str, name: str) -> bool:
+    """Whether the public compatibility type is backed by its OpenAPI component."""
+    pattern = (
+        rf"export\s+type\s+{re.escape(name)}(?:<[^>]*>)?\s*=\s*"
+        rf"[^;]*OpenAPIComponents\[['\"]{re.escape(name)}['\"]\]"
+    )
+    return re.search(pattern, source, re.MULTILINE | re.DOTALL) is not None
+
+
+def has_python_openapi_alias(source: str, name: str) -> bool:
+    """Whether the public compatibility type is backed by its OpenAPI component."""
+    pattern = (
+        rf"^{re.escape(name)}:\s*TypeAlias\s*=\s*"
+        rf"_openapi\.OpenAPI{re.escape(name)}\s*$"
+    )
+    return re.search(pattern, source, re.MULTILINE) is not None
+
+
 # Statuses worth retrying rather than reporting. raw.githubusercontent
 # rate-limits (429) and sheds load (5xx) during GitHub incidents, and a fetch
 # that fails for those reasons says nothing about the type files.
@@ -533,6 +611,15 @@ def diff_field_sets(
         yield f"  {name}.{lang}: missing fields present in Go: {', '.join(missing)}"
     if extra:
         yield f"  {name}.{lang}: extra fields not present in Go: {', '.join(extra)}"
+
+
+def diff_enum_values(name: str, go_values: set[str], schema_values: set[str]) -> Iterable[str]:
+    missing = sorted(go_values - schema_values)
+    extra = sorted(schema_values - go_values)
+    if missing:
+        yield f"  {name}.OpenAPI enum: missing values present in Go: {', '.join(missing)}"
+    if extra:
+        yield f"  {name}.OpenAPI enum: extra values not present in Go: {', '.join(extra)}"
 
 
 SELF_TEST_GO = '''
@@ -629,6 +716,44 @@ def self_test() -> int:
     check("parse_go_types fields", go_types.get("TimerPayload"), {"timerId", "durationMs"})
     check("parse_ts_types fields", parse_ts_types(SELF_TEST_TS).get("TimerPayload"), {"timerId", "durationMs"})
     check("parse_py_types fields", parse_py_types(SELF_TEST_PY).get("TimerPayload"), {"timerId", "durationMs"})
+    check(
+        "openapi_field_names",
+        openapi_field_names(
+            {"allOf": [{"$ref": "#/components/schemas/Base"}], "properties": {"durationMs": {}}},
+            {"Base": {"properties": {"timerId": {}}}},
+        ),
+        {"timerId", "durationMs"},
+    )
+    check(
+        "parse_go_enum_values",
+        parse_go_enum_values(
+            'type Mode string\nconst (\n\tModeOne Mode = "one"\n\tModeTwo Mode = `two`\n)\n'
+        ).get("Mode"),
+        {"one", "two"},
+    )
+    check(
+        "generator_go_protocol_ownership",
+        generator_go_protocol_ownership(
+            'GO_PROTOCOL_SCHEMAS = {"Task", "Mode"}\n'
+            'GO_PROTOCOL_TYPE_OVERRIDES = {"Mode": "WireMode"}\n'
+        ),
+        ({"Task", "Mode"}, {"Mode": "WireMode"}),
+    )
+    check(
+        "has_typescript_openapi_alias",
+        has_typescript_openapi_alias(
+            "export type TimerPayload<T = unknown> = Omit<OpenAPIComponents['TimerPayload'], 'value'> & { value?: T };",
+            "TimerPayload",
+        ),
+        True,
+    )
+    check(
+        "has_python_openapi_alias",
+        has_python_openapi_alias(
+            "TimerPayload: TypeAlias = _openapi.OpenAPITimerPayload\n", "TimerPayload"
+        ),
+        True,
+    )
 
     # Regression: json:"-" was captured as a field named "-", so any wire type
     # carrying a server-side-only field demanded a "-" field in both mirrors.
@@ -665,6 +790,11 @@ def self_test() -> int:
         ["  X.ts: extra fields not present in Go: b"],
     )
     check("diff_field_sets clean", list(diff_field_sets("X", "ts", {"a"}, {"a"})), [])
+    check(
+        "diff_enum_values missing",
+        list(diff_enum_values("Mode", {"one", "two"}, {"one"})),
+        ["  Mode.OpenAPI enum: missing values present in Go: two"],
+    )
 
     # A fetch failure must reach the handlers that map to exit 2 (tooling),
     # not fall through as an unhandled traceback that exits 1 and reads as
@@ -866,6 +996,20 @@ def main() -> int:
     ts_types = parse_ts_types(sources["ts"])
     py_types = parse_py_types(sources["python"])
 
+    openapi_schemas: dict[str, dict] = {}
+    openapi_protocol_schemas: set[str] = set()
+    protocol_type_overrides: dict[str, str] = {}
+    if args.monorepo:
+        try:
+            openapi_document = json.loads(MONOREPO_OPENAPI_PATH.read_text(encoding="utf-8"))
+            openapi_schemas = openapi_document["components"]["schemas"]
+            openapi_protocol_schemas, protocol_type_overrides = generator_go_protocol_ownership(
+                MONOREPO_GENERATOR_PATH.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"check_drift: could not load monorepo OpenAPI ownership: {exc}", file=sys.stderr)
+            return 2
+
     failures: list[str] = []
     if args.monorepo:
         failures.extend(check_go_sdk(MONOREPO_ROOT / "go", sources["go"]))
@@ -880,7 +1024,50 @@ def main() -> int:
                 f"last declaration is compared, so the others drift unchecked"
             )
 
-    for name in TRACKED_TYPES:
+    if args.monorepo:
+        go_enum_values = parse_go_enum_values(sources["go"])
+        for name in sorted(openapi_protocol_schemas):
+            schema = openapi_schemas.get(name)
+            if schema is None:
+                failures.append(
+                    f"  {name}: generator marks the type as protocol-owned, but the OpenAPI schema is missing"
+                )
+                continue
+            protocol_name = protocol_type_overrides.get(name, name)
+            go_fields = go_types.get(protocol_name)
+            if go_fields is not None:
+                schema_fields = openapi_field_names(schema, openapi_schemas, {name})
+                failures.extend(diff_field_sets(name, "OpenAPI", go_fields, schema_fields))
+            elif schema.get("enum"):
+                got_values = go_enum_values.get(protocol_name)
+                if got_values is None:
+                    failures.append(
+                        f"  {name}: protocol type {protocol_name} has no parsed string enum constants"
+                    )
+                else:
+                    failures.extend(diff_enum_values(name, got_values, set(schema["enum"])))
+            else:
+                failures.append(
+                    f"  {name}: protocol type {protocol_name} is neither a parsed struct nor a string enum"
+                )
+
+            # Compatibility aliases are required only for the historical
+            # public models. Generated-only models are exported directly from
+            # each language's generated module.
+            if name in TRACKED_TYPES:
+                if not has_typescript_openapi_alias(sources["ts"], name):
+                    failures.append(
+                        f"  {name}: TypeScript public type is not backed by OpenAPIComponents['{name}']"
+                    )
+                if not has_python_openapi_alias(sources["python"], name):
+                    failures.append(
+                        f"  {name}: Python public type is not backed by _openapi.OpenAPI{name}"
+                    )
+
+    runtime_tracked_types = [
+        name for name in TRACKED_TYPES if name not in openapi_protocol_schemas
+    ]
+    for name in runtime_tracked_types:
         go_fields = go_types.get(name)
         if go_fields is None:
             failures.append(f"  {name}: not found in types.go (TRACKED_TYPES out of date?)")
@@ -902,15 +1089,17 @@ def main() -> int:
             print(line, file=sys.stderr)
         print(file=sys.stderr)
         print(
-            "Resolve by either updating the missing language to mirror Go "
-            "(if the Go change is the source of truth) or rolling back the "
-            "Go change. Update tools/check_drift.py:TRACKED_TYPES if a type "
-            "was renamed.",
+            "Resolve OpenAPI-owned models in openapi.json and regenerate the "
+            "SDKs. Resolve runtime-only models in each language mirror. Update "
+            "tools/check_drift.py:TRACKED_TYPES if a type was renamed.",
             file=sys.stderr,
         )
         return 1
 
-    print(f"Drift check OK ({len(TRACKED_TYPES)} types verified across go / ts / python).")
+    print(
+        f"Drift check OK ({len(openapi_protocol_schemas)} protocol-backed OpenAPI and "
+        f"{len(runtime_tracked_types)} runtime-only types verified)."
+    )
     return 0
 
 

@@ -3,14 +3,16 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal, NotRequired, TypeAlias, TypedDict
 
-TaskState: TypeAlias = Literal["queued", "leased", "blocked", "succeeded", "failed"]
-TaskEventKind: TypeAlias = Literal["leased", "started", "heartbeat", "milestone", "progress", "stdout", "stderr", "completed", "failed"]
-ScheduleState: TypeAlias = Literal["active", "paused", "deleted"]
-ScheduleOverlapPolicy: TypeAlias = Literal["skip", "allow_all"]
-ScheduleMissedRunPolicy: TypeAlias = Literal["catch_up", "skip"]
+from . import openapi as _openapi
+
+TaskState: TypeAlias = _openapi.OpenAPITaskState
+TaskEventKind: TypeAlias = _openapi.OpenAPITaskEventKind
+ScheduleState: TypeAlias = _openapi.OpenAPIScheduleState
+ScheduleOverlapPolicy: TypeAlias = _openapi.OpenAPIScheduleOverlapPolicy
+ScheduleMissedRunPolicy: TypeAlias = _openapi.OpenAPIScheduleMissedRunPolicy
 CancellationType: TypeAlias = Literal["try_cancel", "wait_cancellation_completed", "abandon"]
 CancellationScopeType: TypeAlias = Literal["cancellable", "non_cancellable"]
-WorkflowIdReusePolicy: TypeAlias = Literal["allow_duplicate", "allow_duplicate_failed_only", "reject_duplicate"]
+WorkflowIdReusePolicy: TypeAlias = _openapi.OpenAPIWorkflowIdReusePolicy
 # Isolation tiers a workflow.runtime workload can require. A requested tier is
 # a floor: container work may run in a stronger tier, microvm work must never
 # run in a weaker one, and an unrecognized value satisfies nothing.
@@ -20,82 +22,44 @@ ActivityFunction: TypeAlias = Callable[..., Awaitable[Any] | Any]
 WorkflowRegistry: TypeAlias = dict[str, WorkflowFunction]
 ActivityRegistry: TypeAlias = dict[str, ActivityFunction]
 
-
-class FailureInfo(TypedDict, total=False):
-    message: str
-    type: str
-    non_retryable: bool
-    details: list[Any]
-
-
-class ContinueAsNewResult(TypedDict):
-    workflow_id: str
-    workflow_type: str
-    task_queue: str
-    task_id: str
-
-
-class TaskResult(TypedDict, total=False):
-    exit_code: int
-    stdout: str
-    stderr: str
-    message: str
-    value: Any
-    failure: FailureInfo
-    continue_as_new: ContinueAsNewResult
-    started_at: str
-    finished_at: str
+# OpenAPI component models without legacy handwritten counterparts.
+JsonValue: TypeAlias = _openapi.OpenAPIJsonValue
+HealthResponse: TypeAlias = _openapi.OpenAPIHealthResponse
+ReadyResponse: TypeAlias = _openapi.OpenAPIReadyResponse
+AgentPollDirectiveType: TypeAlias = _openapi.OpenAPIAgentPollDirectiveType
+AgentPollDirectiveSubject: TypeAlias = _openapi.OpenAPIAgentPollDirectiveSubject
+WorkflowState: TypeAlias = _openapi.OpenAPIWorkflowState
+CreateNamespaceRequest: TypeAlias = _openapi.OpenAPICreateNamespaceRequest
+CompactRequest: TypeAlias = _openapi.OpenAPICompactRequest
+HeartbeatTaskRequest: TypeAlias = _openapi.OpenAPIHeartbeatTaskRequest
+AppendTaskEventRequest: TypeAlias = _openapi.OpenAPIAppendTaskEventRequest
+CompleteTaskRequest: TypeAlias = _openapi.OpenAPICompleteTaskRequest
+BlockTaskRequest: TypeAlias = _openapi.OpenAPIBlockTaskRequest
+FailTaskRequest: TypeAlias = _openapi.OpenAPIFailTaskRequest
+RefreshAgentSessionRequest: TypeAlias = _openapi.OpenAPIRefreshAgentSessionRequest
+AgentSessionResponse: TypeAlias = _openapi.OpenAPIAgentSessionResponse
+ErrorResponse: TypeAlias = _openapi.OpenAPIErrorResponse
 
 
-class Task(TypedDict, total=False):
-    id: str
-    tenantId: str
-    namespace: str
-    queue: str
-    type: str
-    payload: Any
-    state: TaskState
-    attempt: int
-    agent_id: str
-    lease_timeout_seconds: int
-    not_before: str
-    leased_until: str
-    created_at: str
-    updated_at: str
-    result: TaskResult
-    error: str
+FailureInfo: TypeAlias = _openapi.OpenAPIFailureInfo
 
 
-class TaskEvent(TypedDict, total=False):
-    id: str
-    tenantId: str
-    task_id: str
-    agent_id: str
-    kind: TaskEventKind
-    stage: str
-    message: str
-    stream: str
-    data: str
-    details: dict[str, Any]
-    created_at: str
+ContinueAsNewResult: TypeAlias = _openapi.OpenAPIContinueAsNewResult
 
 
-class TaskEventInput(TypedDict, total=False):
-    kind: TaskEventKind
-    stage: str
-    message: str
-    stream: str
-    data: str
-    details: dict[str, Any]
+TaskResult: TypeAlias = _openapi.OpenAPITaskResult
 
 
-class EnqueueTaskRequest(TypedDict, total=False):
-    tenantId: str
-    namespace: str
-    queue: str
-    type: str
-    payload: Any
-    lease_timeout_seconds: int
+Task: TypeAlias = _openapi.OpenAPITask
+
+
+TaskEvent: TypeAlias = _openapi.OpenAPITaskEvent
+
+
+TaskEventInput: TypeAlias = _openapi.OpenAPITaskEventInput
+
+
+EnqueueTaskRequest: TypeAlias = _openapi.OpenAPIEnqueueTaskRequest
 
 
 class ActivityTaskPayload(TypedDict, total=False):
@@ -109,114 +73,49 @@ class ActivityTaskPayload(TypedDict, total=False):
     retry: "RetryPolicy"
 
 
-class RetryPolicy(TypedDict, total=False):
-    maximumAttempts: int
-    initialIntervalMs: int
-    backoffCoefficient: float
-    maximumIntervalMs: int
-    expirationIntervalMs: int
-    nonRetryableErrorTypes: list[str]
+RetryPolicy: TypeAlias = _openapi.OpenAPIRetryPolicy
 
 
-class ScheduleCalendarSpec(TypedDict, total=False):
-    minute: list[int]
-    hour: list[int]
-    day_of_month: list[int]
-    month: list[int]
-    day_of_week: list[int]
+ScheduleCalendarSpec: TypeAlias = _openapi.OpenAPIScheduleCalendarSpec
 
 
-class ScheduleSpec(TypedDict, total=False):
-    interval_seconds: int
-    cron: str
-    calendar: ScheduleCalendarSpec
-    timezone: str
-    jitter_seconds: int
-    catch_up_window_seconds: int
-    missed_run_policy: ScheduleMissedRunPolicy
-    start_at: str
+ScheduleSpec: TypeAlias = _openapi.OpenAPIScheduleSpec
 
 
-class ScheduleAction(TypedDict, total=False):
-    namespace: str
-    queue: str
-    workflowType: str
-    workflowId: str
-    workflowIdReusePolicy: WorkflowIdReusePolicy
-    runTimeoutMs: int
-    retry: RetryPolicy
-    memo: dict[str, Any]
-    searchAttributes: dict[str, Any]
-    args: list[Any]
+ScheduleAction: TypeAlias = _openapi.OpenAPIScheduleAction
 
 
-class Schedule(TypedDict, total=False):
-    id: str
-    tenantId: str
-    namespace: str
-    state: ScheduleState
-    overlap_policy: ScheduleOverlapPolicy
-    spec: ScheduleSpec
-    action: ScheduleAction
-    last_run_at: str
-    next_run_at: str
-    created_at: str
-    updated_at: str
+Schedule: TypeAlias = _openapi.OpenAPISchedule
 
 
-class CreateScheduleRequest(TypedDict):
-    spec: ScheduleSpec
-    action: ScheduleAction
-    id: NotRequired[str]
-    namespace: NotRequired[str]
-    overlap_policy: NotRequired[ScheduleOverlapPolicy]
+CreateScheduleRequest: TypeAlias = _openapi.OpenAPICreateScheduleRequest
 
 
-class UpdateScheduleRequest(TypedDict, total=False):
-    overlap_policy: ScheduleOverlapPolicy
-    spec: ScheduleSpec
-    action: ScheduleAction
+UpdateScheduleRequest: TypeAlias = _openapi.OpenAPIUpdateScheduleRequest
 
 
-class PauseScheduleRequest(TypedDict, total=False):
-    reason: str
+PauseScheduleRequest: TypeAlias = _openapi.OpenAPIPauseScheduleRequest
 
 
-class UnpauseScheduleRequest(TypedDict, total=False):
-    reason: str
+UnpauseScheduleRequest: TypeAlias = _openapi.OpenAPIUnpauseScheduleRequest
 
 
-class TriggerScheduleRequest(TypedDict, total=False):
-    reason: str
+TriggerScheduleRequest: TypeAlias = _openapi.OpenAPITriggerScheduleRequest
 
 
-class TriggerScheduleResponse(TypedDict):
-    schedule: Schedule
-    task: Task
+TriggerScheduleResponse: TypeAlias = _openapi.OpenAPITriggerScheduleResponse
 
 
-class BackfillScheduleRequest(TypedDict):
-    start_at: str
-    end_at: str
+BackfillScheduleRequest: TypeAlias = _openapi.OpenAPIBackfillScheduleRequest
 
 
-class BackfillScheduleResponse(TypedDict):
-    schedule: Schedule
-    tasks: list[Task]
+BackfillScheduleResponse: TypeAlias = _openapi.OpenAPIBackfillScheduleResponse
 
 
-class PollTaskResponse(TypedDict, total=False):
-    task: Task
-    directive: AgentPollDirective
+PollTaskResponse: TypeAlias = _openapi.OpenAPIPollTaskResponse
 
 
-class AgentPollDirective(TypedDict, total=False):
-    type: Literal["upgrade", "shutdown", "log_level", "poll_now", "attest"]
-    image: str
-    expectedVersion: int
-    force: bool
-    logLevel: str
-    subject: Literal["agent", "agent_helper"]
+AgentPollDirective: TypeAlias = _openapi.OpenAPIAgentPollDirective
 
 
 class AgentUpgradeRequest(TypedDict, total=False):
@@ -322,50 +221,19 @@ class WorkflowExecutionDescription(TypedDict, total=False):
     updatedAt: str
 
 
-class WorkflowExecution(TypedDict, total=False):
-    id: str
-    tenantId: str
-    run_id: str
-    namespace: str
-    type: str
-    queue: str
-    task_id: str
-    agent_id: str
-    state: Literal["running", "succeeded", "failed", "continued_as_new"]
-    attempt: int
-    run_timeout_ms: int
-    retry: RetryPolicy
-    memo: dict[str, Any]
-    search_attributes: dict[str, Any]
-    result: TaskResult
-    error: str
-    created_at: str
-    updated_at: str
+WorkflowExecution: TypeAlias = _openapi.OpenAPIWorkflowExecution
 
 
-class WorkflowHistoryEvent(TypedDict, total=False):
-    id: str
-    workflow_id: str
-    tenantId: str
-    task_id: str
-    type: str
-    attributes: dict[str, Any]
-    created_at: str
+WorkflowHistoryEvent: TypeAlias = _openapi.OpenAPIWorkflowHistoryEvent
 
 
-class WorkflowCountResponse(TypedDict):
-    count: int
+WorkflowCountResponse: TypeAlias = _openapi.OpenAPIWorkflowCountResponse
 
 
-class Namespace(TypedDict):
-    name: str
-    created_at: str
-    updated_at: str
+Namespace: TypeAlias = _openapi.OpenAPINamespace
 
 
-class CompactResponse(TypedDict):
-    removed_tasks: int
-    removed_workflows: int
+CompactResponse: TypeAlias = _openapi.OpenAPICompactResponse
 
 
 class WorkflowSignalDefinition(TypedDict):
@@ -388,38 +256,19 @@ class WorkflowUpdateDefinition(TypedDict):
     result: Any
 
 
-class SignalWorkflowRequest(TypedDict, total=False):
-    name: str
-    args: list[Any]
+SignalWorkflowRequest: TypeAlias = _openapi.OpenAPISignalWorkflowRequest
 
 
-class SignalWithStartWorkflowRequest(TypedDict, total=False):
-    namespace: str
-    queue: str
-    workflowType: str
-    workflowId: str
-    workflowIdReusePolicy: WorkflowIdReusePolicy
-    lease_timeout_seconds: int
-    runTimeoutMs: int
-    retry: RetryPolicy
-    memo: dict[str, Any]
-    searchAttributes: dict[str, Any]
-    args: list[Any]
-    signal: SignalWorkflowRequest
+SignalWithStartWorkflowRequest: TypeAlias = _openapi.OpenAPISignalWithStartWorkflowRequest
 
 
-class SignalWithStartWorkflowResponse(TypedDict):
-    workflow: WorkflowExecution
-    task: Task
-    signal: WorkflowHistoryEvent
+SignalWithStartWorkflowResponse: TypeAlias = _openapi.OpenAPISignalWithStartWorkflowResponse
 
 
-class CancelWorkflowRequest(TypedDict, total=False):
-    reason: str
+CancelWorkflowRequest: TypeAlias = _openapi.OpenAPICancelWorkflowRequest
 
 
-class TerminateWorkflowRequest(TypedDict, total=False):
-    reason: str
+TerminateWorkflowRequest: TypeAlias = _openapi.OpenAPITerminateWorkflowRequest
 
 
 class WorkflowQueryPayload(TypedDict):
@@ -507,157 +356,41 @@ class ActivityOptions(TypedDict, total=False):
 # Mirrors agent-sdk-protocol/sandbox.go. Timestamps are RFC3339 strings, as
 # everywhere else in this module.
 
-SandboxBackend: TypeAlias = Literal["auto", "docker", "podman", "firecracker"]
-SandboxDesiredState: TypeAlias = Literal["running", "stopped", "deleted"]
+SandboxBackend: TypeAlias = _openapi.OpenAPISandboxBackend
+SandboxDesiredState: TypeAlias = _openapi.OpenAPISandboxDesiredState
 # Only "running", "stopped", "deleted" and "failed" are reported by agents
 # today, and "scheduling" is written by the control plane at placement. The
 # rest exist for forward compatibility — treat an unexpected value as
 # in-flight rather than as an error.
-SandboxObservedState: TypeAlias = Literal[
-    "requested",
-    "scheduling",
-    "provisioning",
-    "setting_up",
-    "running",
-    "stopping",
-    "stopped",
-    "starting",
-    "deleting",
-    "deleted",
-    "failed",
-]
-SandboxSessionKind: TypeAlias = Literal["pty", "exec"]
+SandboxObservedState: TypeAlias = _openapi.OpenAPISandboxObservedState
+SandboxSessionKind: TypeAlias = _openapi.OpenAPISandboxSessionKind
 
 
-class SandboxResourceLimits(TypedDict, total=False):
-    cpus: float
-    memoryBytes: int
-    diskBytes: int
+SandboxResourceLimits: TypeAlias = _openapi.OpenAPISandboxResourceLimits
 
 
-class SandboxPortMapping(TypedDict, total=False):
-    hostPort: int
-    guestPort: int
-    protocol: str
+SandboxPortMapping: TypeAlias = _openapi.OpenAPISandboxPortMapping
 
 
-class SandboxNetworkPolicy(TypedDict, total=False):
-    """``internetEgress`` with ``denyHostAccess`` or ``allowCidrs`` is a 400."""
-
-    internetEgress: bool
-    allowCidrs: list[str]
-    denyHostAccess: bool
-    ports: list[SandboxPortMapping]
+SandboxNetworkPolicy: TypeAlias = _openapi.OpenAPISandboxNetworkPolicy
 
 
-class Sandbox(TypedDict, total=False):
-    tenantId: str
-    id: str
-    name: str
-    createdBy: str
-    agentId: str
-    desiredState: SandboxDesiredState
-    observedState: SandboxObservedState
-    generation: int
-    observedGeneration: int
-    backend: SandboxBackend
-    isolationClass: str
-    image: str
-    architecture: str
-    workspaceId: str
-    repositoryName: str
-    setupCommand: list[str]
-    credentialRefs: list[str]
-    resourceLimits: SandboxResourceLimits
-    networkPolicy: SandboxNetworkPolicy
-    labels: dict[str, str]
-    runtimeInstanceId: str
-    failureCode: str
-    failureMessage: str
-    # The lifecycle timestamps are `*time.Time` on the wire, so an unset one
-    # arrives as JSON null, not as an absent key. total=False covers only the
-    # absent case, which left a typed consumer unable to represent a response
-    # the server genuinely sends.
-    expiresAt: str | None
-    lastActivityAt: str | None
-    createdAt: str
-    updatedAt: str
-    stoppedAt: str | None
-    deletedAt: str | None
+Sandbox: TypeAlias = _openapi.OpenAPISandbox
 
 
-class SandboxCreateRequest(TypedDict):
-    """Body of ``POST /api/v1/sandboxes``.
-
-    ``name`` must match ``^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$`` and is unique per
-    tenant among live sandboxes, so a duplicate is a 409. ``credentialRefs`` is
-    reserved — any non-empty value is rejected with 400 today.
-
-    ``name`` and ``image`` are required keys, following this module's
-    ``NotRequired`` convention rather than ``total=False``: under total=False a
-    type checker accepted ``{}`` as a valid request, so the one thing this
-    mirror could have caught before the round trip — a create the server
-    answers with 400 — went through as well-typed.
-    """
-
-    name: str
-    image: str
-    backend: NotRequired[SandboxBackend]
-    architecture: NotRequired[str]
-    workspaceId: NotRequired[str]
-    repositoryName: NotRequired[str]
-    setupCommand: NotRequired[list[str]]
-    credentialRefs: NotRequired[list[str]]
-    resourceLimits: NotRequired[SandboxResourceLimits]
-    networkPolicy: NotRequired[SandboxNetworkPolicy]
-    labels: NotRequired[dict[str, str]]
-    expiresAt: NotRequired[str]
+SandboxCreateRequest: TypeAlias = _openapi.OpenAPISandboxCreateRequest
 
 
-class SandboxListResponse(TypedDict):
-    """The list endpoint returns this envelope, not a bare array.
-
-    Required, not ``total=False``: the envelope is always present and an empty
-    result is an empty list, so allowing a missing key would have described a
-    response the endpoint never sends.
-    """
-
-    sandboxes: list[Sandbox]
+SandboxListResponse: TypeAlias = _openapi.OpenAPISandboxListResponse
 
 
-class SandboxWorkspace(TypedDict, total=False):
-    """``id`` is not the digest: uploading identical bytes returns the
-    pre-existing record, so do not assume a fresh id per upload."""
-
-    tenantId: str
-    id: str
-    sha256: str
-    sizeBytes: int
-    repositoryName: str
-    revision: str
-    createdBy: str
-    createdAt: str
-    expiresAt: str
+SandboxWorkspace: TypeAlias = _openapi.OpenAPISandboxWorkspace
 
 
-class CreateSandboxSessionRequest(TypedDict, total=False):
-    """``rows``/``columns`` default to 24x80 and are fixed for the session's
-    life — there is no resize channel. ``kind`` defaults to ``pty``; ``exec``
-    requires ``command``. The sandbox must be observed running and assigned to
-    an agent, else the server returns a retryable 400."""
-
-    rows: int
-    columns: int
-    kind: SandboxSessionKind
-    command: list[str]
+CreateSandboxSessionRequest: TypeAlias = _openapi.OpenAPICreateSandboxSessionRequest
 
 
-class CreateSandboxSessionResponse(TypedDict, total=False):
-    """The ticket is returned exactly once and is short-lived."""
-
-    id: str
-    ticket: str
-    expiresAt: str
+CreateSandboxSessionResponse: TypeAlias = _openapi.OpenAPICreateSandboxSessionResponse
 
 
 # Computed last, deliberately. It used to sit above the sandbox section, and a

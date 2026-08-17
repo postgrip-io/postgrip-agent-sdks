@@ -262,8 +262,8 @@ func sandboxRelayURL(address, sessionID, ticket string) (string, error) {
 	}
 	operation, err := resolveOpenAPIOperation(
 		openAPIConnectSandboxSession,
-		map[string]string{"sessionId": sessionID},
-		url.Values{"ticket": []string{ticket}},
+		map[string]string{OpenAPIConnectSandboxSessionPathSessionId: sessionID},
+		url.Values{OpenAPIConnectSandboxSessionQueryTicket: []string{ticket}},
 	)
 	if err != nil {
 		return "", &failure.SDKError{Message: "resolve sandbox relay OpenAPI operation", Cause: err}

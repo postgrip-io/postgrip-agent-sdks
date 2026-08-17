@@ -14,7 +14,14 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from .client import has_authorization_header
-from .generated.openapi import OperationId, resolve_openapi_operation
+from .openapi import (
+    CONNECT_SANDBOX_SESSION_PATH_SESSION_ID,
+    CONNECT_SANDBOX_SESSION_QUERY_TICKET,
+    OperationId,
+    UPLOAD_WORKSPACE_HEADER_X_POST_GRIP_REPOSITORY,
+    UPLOAD_WORKSPACE_HEADER_X_POST_GRIP_REVISION,
+    resolve_openapi_operation,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only matters for typing
     from .client import Connection
@@ -63,8 +70,8 @@ def sandbox_relay_url(base_url: str, session_id: str, ticket: str) -> str:
         raise ValueError(f"postgrip-agent: sandbox relay base must be http(s) or ws(s): {base_url}")
     operation = resolve_openapi_operation(
         OperationId.CONNECT_SANDBOX_SESSION,
-        {"sessionId": session_id},
-        {"ticket": ticket},
+        {CONNECT_SANDBOX_SESSION_PATH_SESSION_ID: session_id},
+        {CONNECT_SANDBOX_SESSION_QUERY_TICKET: ticket},
     )
     return origin + operation.path
 
@@ -93,7 +100,7 @@ class SandboxClient:
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
         """Provision a sandbox. Returns once the record exists — the sandbox is
         not yet running, so follow with :meth:`wait_until_running`."""
-        return self.connection._request_openapi(OperationId.CREATE_SANDBOX, request)
+        return self.connection.openapi.create_sandbox(request)
 
     def list(self) -> list[dict[str, Any]]:
         """List live sandboxes.
@@ -101,32 +108,24 @@ class SandboxClient:
         The endpoint returns an envelope, not a bare array; decoding it as an
         array would silently yield nothing.
         """
-        response = self.connection._request_openapi(OperationId.LIST_SANDBOXES) or {}
+        response = self.connection.openapi.list_sandboxes() or {}
         return response.get("sandboxes") or []
 
     def get(self, sandbox_id: str) -> dict[str, Any]:
         _require_sandbox_id(sandbox_id)
-        return self.connection._request_openapi(
-            OperationId.GET_SANDBOX, path_parameters={"sandboxId": sandbox_id}
-        )
+        return self.connection.openapi.get_sandbox(sandbox_id)
 
     def start(self, sandbox_id: str) -> dict[str, Any]:
         _require_sandbox_id(sandbox_id)
-        return self.connection._request_openapi(
-            OperationId.START_SANDBOX, path_parameters={"sandboxId": sandbox_id}
-        )
+        return self.connection.openapi.start_sandbox(sandbox_id)
 
     def stop(self, sandbox_id: str) -> dict[str, Any]:
         _require_sandbox_id(sandbox_id)
-        return self.connection._request_openapi(
-            OperationId.STOP_SANDBOX, path_parameters={"sandboxId": sandbox_id}
-        )
+        return self.connection.openapi.stop_sandbox(sandbox_id)
 
     def delete(self, sandbox_id: str) -> dict[str, Any]:
         _require_sandbox_id(sandbox_id)
-        return self.connection._request_openapi(
-            OperationId.DELETE_SANDBOX, path_parameters={"sandboxId": sandbox_id}
-        )
+        return self.connection.openapi.delete_sandbox(sandbox_id)
 
     def create_session(
         self,
@@ -154,11 +153,7 @@ class SandboxClient:
         if columns is not None:
             body["columns"] = columns
         _require_sandbox_id(sandbox_id)
-        return self.connection._request_openapi(
-            OperationId.CREATE_SANDBOX_SESSION,
-            body,
-            path_parameters={"sandboxId": sandbox_id},
-        )
+        return self.connection.openapi.create_sandbox_session(sandbox_id, body)
 
     def upload_workspace(
         self,
@@ -180,9 +175,9 @@ class SandboxClient:
         if self.connection.auth_token and not has_authorization_header(headers):
             headers["Authorization"] = f"Bearer {self.connection.auth_token}"
         if repository_name:
-            headers["X-PostGrip-Repository"] = repository_name
+            headers[UPLOAD_WORKSPACE_HEADER_X_POST_GRIP_REPOSITORY] = repository_name
         if revision:
-            headers["X-PostGrip-Revision"] = revision
+            headers[UPLOAD_WORKSPACE_HEADER_X_POST_GRIP_REVISION] = revision
 
         operation = resolve_openapi_operation(OperationId.UPLOAD_WORKSPACE)
         if not operation.streaming_request:

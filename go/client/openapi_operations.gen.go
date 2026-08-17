@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-const openAPISpecSHA256 = "d6b5a4159ca3d726a1483741d90473ddd9aaa13655a9ad7e973c49aeeba30f8c"
+const (
+	OpenAPISpecSHA256     = "1e297793b59ae69b88f5df3082fad26bdc392215a4b2d17582c1d418de3655e8"
+	OpenAPIOperationCount = 42
+)
 
 type openAPIOperationID string
 
@@ -57,6 +60,14 @@ const (
 	openAPIUploadWorkspace         openAPIOperationID = "uploadWorkspace"
 )
 
+// Parameter names are generated for streaming and WebSocket custom transports.
+const (
+	OpenAPIConnectSandboxSessionPathSessionId       = "sessionId"
+	OpenAPIConnectSandboxSessionQueryTicket         = "ticket"
+	OpenAPIUploadWorkspaceHeaderXPostGripRepository = "X-PostGrip-Repository"
+	OpenAPIUploadWorkspaceHeaderXPostGripRevision   = "X-PostGrip-Revision"
+)
+
 type openAPIOperation struct {
 	Method           string
 	Path             string
@@ -64,52 +75,54 @@ type openAPIOperation struct {
 	Signing          string
 	StreamingRequest bool
 	WebSocket        bool
+	RequestSchema    string
+	ResponseSchema   string
 	PathParameters   []string
 }
 
 var openAPIOperationTable = map[openAPIOperationID]openAPIOperation{
-	openAPIAppendAgentTaskEvent:    {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/events", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, PathParameters: []string{"taskId"}},
-	openAPIBackfillSchedule:        {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/backfill", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"scheduleId"}},
-	openAPIBlockAgentTask:          {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/block", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, PathParameters: []string{"taskId"}},
-	openAPICancelWorkflow:          {Method: "POST", Path: "/api/v1/workflows/{workflowId}/cancel", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"workflowId"}},
-	openAPICompact:                 {Method: "POST", Path: "/api/v1/admin/compact", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPICompleteAgentTask:       {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/complete", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, PathParameters: []string{"taskId"}},
-	openAPIConnectSandboxSession:   {Method: "GET", Path: "/api/v1/sandbox-sessions/{sessionId}/connect", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: true, PathParameters: []string{"sessionId"}},
-	openAPICountWorkflows:          {Method: "GET", Path: "/api/v1/workflows/count", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPICreateNamespace:         {Method: "POST", Path: "/api/v1/namespaces", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPICreateSandbox:           {Method: "POST", Path: "/api/v1/sandboxes", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPICreateSandboxSession:    {Method: "POST", Path: "/api/v1/sandboxes/{sandboxId}/sessions", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"sandboxId"}},
-	openAPICreateSchedule:          {Method: "POST", Path: "/api/v1/schedules", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIDeleteSandbox:           {Method: "DELETE", Path: "/api/v1/sandboxes/{sandboxId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"sandboxId"}},
-	openAPIDeleteSchedule:          {Method: "DELETE", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"scheduleId"}},
-	openAPIEnqueueTask:             {Method: "POST", Path: "/api/v1/tasks", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIFailAgentTask:           {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/fail", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, PathParameters: []string{"taskId"}},
-	openAPIGetSandbox:              {Method: "GET", Path: "/api/v1/sandboxes/{sandboxId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"sandboxId"}},
-	openAPIGetSchedule:             {Method: "GET", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"scheduleId"}},
-	openAPIGetTask:                 {Method: "GET", Path: "/api/v1/tasks/{taskId}", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"taskId"}},
-	openAPIGetWorkflow:             {Method: "GET", Path: "/api/v1/workflows/{workflowId}", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"workflowId"}},
-	openAPIHealth:                  {Method: "GET", Path: "/healthz", AuthLane: "public", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIHeartbeatAgentTask:      {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/heartbeat", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, PathParameters: []string{"taskId"}},
-	openAPIListNamespaces:          {Method: "GET", Path: "/api/v1/namespaces", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIListSandboxes:           {Method: "GET", Path: "/api/v1/sandboxes", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIListSchedules:           {Method: "GET", Path: "/api/v1/schedules", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIListTaskEvents:          {Method: "GET", Path: "/api/v1/tasks/{taskId}/events", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"taskId"}},
-	openAPIListTasks:               {Method: "GET", Path: "/api/v1/tasks", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIListWorkflowHistory:     {Method: "GET", Path: "/api/v1/workflows/{workflowId}/history", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"workflowId"}},
-	openAPIListWorkflows:           {Method: "GET", Path: "/api/v1/workflows", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIPauseSchedule:           {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/pause", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"scheduleId"}},
-	openAPIPollAgentTask:           {Method: "GET", Path: "/api/v1/agent/poll", AuthLane: "agent", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIReady:                   {Method: "GET", Path: "/readyz", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPIRefreshAgentSession:     {Method: "POST", Path: "/api/v1/agent/session/refresh", AuthLane: "public", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{}},
-	openAPISignalWithStartWorkflow: {Method: "POST", Path: "/api/v1/workflows/{workflowId}/signal-with-start", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"workflowId"}},
-	openAPISignalWorkflow:          {Method: "POST", Path: "/api/v1/workflows/{workflowId}/signal", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"workflowId"}},
-	openAPIStartSandbox:            {Method: "POST", Path: "/api/v1/sandboxes/{sandboxId}/start", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"sandboxId"}},
-	openAPIStopSandbox:             {Method: "POST", Path: "/api/v1/sandboxes/{sandboxId}/stop", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"sandboxId"}},
-	openAPITerminateWorkflow:       {Method: "POST", Path: "/api/v1/workflows/{workflowId}/terminate", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"workflowId"}},
-	openAPITriggerSchedule:         {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/trigger", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"scheduleId"}},
-	openAPIUnpauseSchedule:         {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/unpause", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"scheduleId"}},
-	openAPIUpdateSchedule:          {Method: "PATCH", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, PathParameters: []string{"scheduleId"}},
-	openAPIUploadWorkspace:         {Method: "POST", Path: "/api/v1/workspaces", AuthLane: "management", Signing: "", StreamingRequest: true, WebSocket: false, PathParameters: []string{}},
+	openAPIAppendAgentTaskEvent:    {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/events", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, RequestSchema: "AppendTaskEventRequest", ResponseSchema: "TaskEvent", PathParameters: []string{"taskId"}},
+	openAPIBackfillSchedule:        {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/backfill", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "BackfillScheduleRequest", ResponseSchema: "BackfillScheduleResponse", PathParameters: []string{"scheduleId"}},
+	openAPIBlockAgentTask:          {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/block", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, RequestSchema: "BlockTaskRequest", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
+	openAPICancelWorkflow:          {Method: "POST", Path: "/api/v1/workflows/{workflowId}/cancel", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "CancelWorkflowRequest", ResponseSchema: "WorkflowHistoryEvent", PathParameters: []string{"workflowId"}},
+	openAPICompact:                 {Method: "POST", Path: "/api/v1/admin/compact", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "CompactRequest", ResponseSchema: "CompactResponse", PathParameters: []string{}},
+	openAPICompleteAgentTask:       {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/complete", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, RequestSchema: "CompleteTaskRequest", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
+	openAPIConnectSandboxSession:   {Method: "GET", Path: "/api/v1/sandbox-sessions/{sessionId}/connect", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: true, RequestSchema: "", ResponseSchema: "", PathParameters: []string{"sessionId"}},
+	openAPICountWorkflows:          {Method: "GET", Path: "/api/v1/workflows/count", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "WorkflowCountResponse", PathParameters: []string{}},
+	openAPICreateNamespace:         {Method: "POST", Path: "/api/v1/namespaces", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "CreateNamespaceRequest", ResponseSchema: "Namespace", PathParameters: []string{}},
+	openAPICreateSandbox:           {Method: "POST", Path: "/api/v1/sandboxes", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "SandboxCreateRequest", ResponseSchema: "Sandbox", PathParameters: []string{}},
+	openAPICreateSandboxSession:    {Method: "POST", Path: "/api/v1/sandboxes/{sandboxId}/sessions", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "CreateSandboxSessionRequest", ResponseSchema: "CreateSandboxSessionResponse", PathParameters: []string{"sandboxId"}},
+	openAPICreateSchedule:          {Method: "POST", Path: "/api/v1/schedules", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "CreateScheduleRequest", ResponseSchema: "Schedule", PathParameters: []string{}},
+	openAPIDeleteSandbox:           {Method: "DELETE", Path: "/api/v1/sandboxes/{sandboxId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Sandbox", PathParameters: []string{"sandboxId"}},
+	openAPIDeleteSchedule:          {Method: "DELETE", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
+	openAPIEnqueueTask:             {Method: "POST", Path: "/api/v1/tasks", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "EnqueueTaskRequest", ResponseSchema: "Task", PathParameters: []string{}},
+	openAPIFailAgentTask:           {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/fail", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, RequestSchema: "FailTaskRequest", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
+	openAPIGetSandbox:              {Method: "GET", Path: "/api/v1/sandboxes/{sandboxId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Sandbox", PathParameters: []string{"sandboxId"}},
+	openAPIGetSchedule:             {Method: "GET", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
+	openAPIGetTask:                 {Method: "GET", Path: "/api/v1/tasks/{taskId}", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
+	openAPIGetWorkflow:             {Method: "GET", Path: "/api/v1/workflows/{workflowId}", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "WorkflowExecution", PathParameters: []string{"workflowId"}},
+	openAPIHealth:                  {Method: "GET", Path: "/healthz", AuthLane: "public", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "HealthResponse", PathParameters: []string{}},
+	openAPIHeartbeatAgentTask:      {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/heartbeat", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, RequestSchema: "HeartbeatTaskRequest", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
+	openAPIListNamespaces:          {Method: "GET", Path: "/api/v1/namespaces", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{}},
+	openAPIListSandboxes:           {Method: "GET", Path: "/api/v1/sandboxes", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "SandboxListResponse", PathParameters: []string{}},
+	openAPIListSchedules:           {Method: "GET", Path: "/api/v1/schedules", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{}},
+	openAPIListTaskEvents:          {Method: "GET", Path: "/api/v1/tasks/{taskId}/events", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{"taskId"}},
+	openAPIListTasks:               {Method: "GET", Path: "/api/v1/tasks", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{}},
+	openAPIListWorkflowHistory:     {Method: "GET", Path: "/api/v1/workflows/{workflowId}/history", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{"workflowId"}},
+	openAPIListWorkflows:           {Method: "GET", Path: "/api/v1/workflows", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{}},
+	openAPIPauseSchedule:           {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/pause", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "PauseScheduleRequest", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
+	openAPIPollAgentTask:           {Method: "GET", Path: "/api/v1/agent/poll", AuthLane: "agent", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "PollTaskResponse", PathParameters: []string{}},
+	openAPIReady:                   {Method: "GET", Path: "/readyz", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "ReadyResponse", PathParameters: []string{}},
+	openAPIRefreshAgentSession:     {Method: "POST", Path: "/api/v1/agent/session/refresh", AuthLane: "public", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "RefreshAgentSessionRequest", ResponseSchema: "AgentSessionResponse", PathParameters: []string{}},
+	openAPISignalWithStartWorkflow: {Method: "POST", Path: "/api/v1/workflows/{workflowId}/signal-with-start", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "SignalWithStartWorkflowRequest", ResponseSchema: "SignalWithStartWorkflowResponse", PathParameters: []string{"workflowId"}},
+	openAPISignalWorkflow:          {Method: "POST", Path: "/api/v1/workflows/{workflowId}/signal", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "SignalWorkflowRequest", ResponseSchema: "WorkflowHistoryEvent", PathParameters: []string{"workflowId"}},
+	openAPIStartSandbox:            {Method: "POST", Path: "/api/v1/sandboxes/{sandboxId}/start", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Sandbox", PathParameters: []string{"sandboxId"}},
+	openAPIStopSandbox:             {Method: "POST", Path: "/api/v1/sandboxes/{sandboxId}/stop", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Sandbox", PathParameters: []string{"sandboxId"}},
+	openAPITerminateWorkflow:       {Method: "POST", Path: "/api/v1/workflows/{workflowId}/terminate", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "TerminateWorkflowRequest", ResponseSchema: "WorkflowHistoryEvent", PathParameters: []string{"workflowId"}},
+	openAPITriggerSchedule:         {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/trigger", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "TriggerScheduleRequest", ResponseSchema: "TriggerScheduleResponse", PathParameters: []string{"scheduleId"}},
+	openAPIUnpauseSchedule:         {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/unpause", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "UnpauseScheduleRequest", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
+	openAPIUpdateSchedule:          {Method: "PATCH", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "UpdateScheduleRequest", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
+	openAPIUploadWorkspace:         {Method: "POST", Path: "/api/v1/workspaces", AuthLane: "management", Signing: "", StreamingRequest: true, WebSocket: false, RequestSchema: "inline", ResponseSchema: "SandboxWorkspace", PathParameters: []string{}},
 }
 
 func resolveOpenAPIOperation(id openAPIOperationID, pathParameters map[string]string, query url.Values) (openAPIOperation, error) {
