@@ -1,0 +1,50 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Publishing uses npm's trusted-publisher OIDC flow — no NPM_TOKEN stored
+# in this repo. The "npm" environment must be configured on npmjs.com under
+# the package's Settings → Publishing tab, with this workflow file path
+# registered. See CLAUDE.md for the one-time setup details.
+#
+# `npm publish --provenance` requires `id-token: write` so the workflow can
+# request an OIDC token bound to the run; npm verifies the token and emits
+# SLSA build provenance on the published artifact.
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@postgrip/agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (Bun, frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      # Use Node + npm for the publish step so the OIDC handshake goes
+      # through the official npm CLI. Bun is the dev runtime; npm is the
+      # publish path.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public

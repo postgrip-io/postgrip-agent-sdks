@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: install
+        run: bun install --frozen-lockfile
+      - name: typecheck
+        run: bun run typecheck
+      - name: build
+        run: bun run build
+      - name: test
+        run: bun run test
+
+  # Pull the cross-language drift check from the protocol repo so a
+  # TypeScript-side type change that diverges from Go fails CI here, not
+  # only over in agent-sdk-protocol's CI when somebody bumps Go next.
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: fetch drift check from agent-sdk-protocol
+        run: |
+          mkdir -p tools
+          ref="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
+          curl -fsSL "https://raw.githubusercontent.com/postgrip-io/agent-sdk-protocol/${ref}/tools/check_drift.py" -o tools/check_drift.py \
+            || curl -fsSL https://raw.githubusercontent.com/postgrip-io/agent-sdk-protocol/main/tools/check_drift.py -o tools/check_drift.py
+      - name: check drift against agent-sdk-protocol and agent-sdk-python
+        run: python3 tools/check_drift.py --local ts --from-github --github-ref "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
