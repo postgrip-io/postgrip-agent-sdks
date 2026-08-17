@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out=$(gofmt -l . | grep -v '^tools/' || true)
+          if [ -n "$out" ]; then
+            echo "gofmt-dirty:" >&2
+            echo "$out" >&2
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+
+  # The protocol package is the source of truth for the wire contract; the
+  # drift check guarantees agent-sdk-typescript and agent-sdk-python keep
+  # type definitions whose field names match the Go structs here. A failing
+  # diff means either this PR is missing TS/Python mirror updates or this
+  # PR shouldn't change the wire shape at all. See tools/check_drift.py for
+  # what's checked and how to extend it.
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Run the detectors against synthetic sources first. A green drift check
+      # only proves the current type files agree; it never proves the checker
+      # still detects disagreement, and a regex that quietly stops matching
+      # turns this job into a rubber stamp.
+      - name: self-test the drift checker
+        run: python3 tools/check_drift.py --self-test
+      - name: check drift against agent-sdk-typescript and agent-sdk-python
+        run: python3 tools/check_drift.py --local go --from-github --github-ref "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
