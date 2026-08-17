@@ -51,12 +51,24 @@ import argparse
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+class FetchError(RuntimeError):
+    """A peer type file could not be retrieved.
+
+    Distinct from drift on purpose. A GitHub incident used to surface as an
+    unhandled HTTPError traceback and exit 1 — the same exit code as real
+    drift — so an outage was indistinguishable from a genuine finding. This
+    maps to exit 2, tooling failure.
+    """
+
 
 # Wire types we actively contract on. Keep this list narrow on purpose —
 # every type added here is a commitment that TS / Python will mirror it.
@@ -409,12 +421,31 @@ def parse_py_types(source: str) -> dict[str, set[str]]:
     return out
 
 
+# Statuses worth retrying rather than reporting. raw.githubusercontent
+# rate-limits (429) and sheds load (5xx) during GitHub incidents, and a fetch
+# that fails for those reasons says nothing about the type files.
+RETRYABLE_HTTP_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+FETCH_ATTEMPTS = 3
+
+
 def load(path_or_url: str | Path, *, from_github: bool) -> str:
-    if from_github:
-        with urllib.request.urlopen(path_or_url, timeout=30) as resp:
-            return resp.read().decode("utf-8")
-    with open(path_or_url, encoding="utf-8") as fh:
-        return fh.read()
+    if not from_github:
+        with open(path_or_url, encoding="utf-8") as fh:
+            return fh.read()
+    last_err: Exception | None = None
+    for attempt in range(FETCH_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(path_or_url, timeout=30) as resp:
+                return resp.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 or exc.code not in RETRYABLE_HTTP_STATUSES:
+                raise
+            last_err = exc
+        except urllib.error.URLError as exc:
+            last_err = exc
+        if attempt < FETCH_ATTEMPTS - 1:
+            time.sleep(0.5 * 2**attempt)
+    raise FetchError(f"fetching {path_or_url}: {last_err}") from last_err
 
 
 def github_raw_urls(lang: str, ref: str) -> list[str]:
@@ -446,10 +477,13 @@ def load_from_github(lang: str, refs: list[str]) -> str:
         try:
             return load_all(github_raw_urls(lang, ref), from_github=True)
         except urllib.error.HTTPError as exc:
+            # Only a 404 means "this ref doesn't have the file" and should fall
+            # through to the next candidate ref. Anything else already
+            # exhausted its retries in load().
             if exc.code != 404:
-                raise
+                raise FetchError(f"fetching {lang} at ref {ref}: {exc}") from exc
             last_err = exc
-    raise RuntimeError(
+    raise FetchError(
         f"could not fetch {lang} type files from GitHub refs {', '.join(refs)}"
     ) from last_err
 
@@ -588,6 +622,14 @@ def self_test() -> int:
         ["  X.ts: extra fields not present in Go: b"],
     )
     check("diff_field_sets clean", list(diff_field_sets("X", "ts", {"a"}, {"a"})), [])
+
+    # A fetch failure must reach the handlers that map to exit 2 (tooling),
+    # not fall through as an unhandled traceback that exits 1 and reads as
+    # drift. Both call sites catch RuntimeError, so the subclassing is the
+    # contract — a GitHub 429 during an incident used to look like a finding.
+    check("FetchError is caught as a tooling failure", issubclass(FetchError, RuntimeError), True)
+    check("retryable statuses include rate limiting", 429 in RETRYABLE_HTTP_STATUSES, True)
+    check("404 is not retried", 404 in RETRYABLE_HTTP_STATUSES, False)
 
     check("repeated finds duplicates", repeated(["a", "b", "a"]), {"a"})
     check("repeated on unique input", repeated(["a", "b"]), set())
