@@ -1,4 +1,4 @@
-import { SandboxClient } from './sandbox';
+import { SandboxClient } from './sandbox.js';
 import { Connection } from './connection.js';
 import { TaskFailedError, TimeoutFailure } from './errors.js';
 import type {

@@ -1,4 +1,4 @@
-import type { Connection } from './connection';
+import type { Connection } from './connection.js';
 import type {
   CreateSandboxSessionRequest,
   CreateSandboxSessionResponse,
@@ -6,7 +6,7 @@ import type {
   SandboxCreateRequest,
   SandboxSessionKind,
   SandboxWorkspace,
-} from './types';
+} from './types.js';
 
 /**
  * Bound on a single frame through the session relay, in either direction. A
