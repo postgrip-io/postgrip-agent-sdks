@@ -35,6 +35,10 @@ class OpenAPIOperationTests(unittest.TestCase):
         poll = resolve_openapi_operation(OperationId.POLL_AGENT_TASK)
         self.assertEqual(poll.auth_lane, "agent")
         self.assertEqual(poll.signing, "")
+        self.assertEqual(
+            resolve_openapi_operation(OperationId.COMPACT).auth_lane,
+            "global-admin",
+        )
 
     def test_rejects_missing_path_parameter(self) -> None:
         with self.assertRaisesRegex(ValueError, "taskId"):
@@ -95,6 +99,33 @@ class OpenAPIOperationTests(unittest.TestCase):
                 (OperationId.LIST_WORKFLOWS, {"agent_id": "agent-1"}),
                 (OperationId.COUNT_WORKFLOWS, {"agent_id": "agent-1"}),
             ],
+        )
+
+    def test_preserves_agent_poll_control_parameters(self) -> None:
+        calls: list[dict[str, object]] = []
+
+        def transport(
+            _operation_id: OperationId,
+            _body: object = None,
+            **kwargs: object,
+        ) -> object:
+            calls.append(kwargs.get("query") or {})
+            return {}
+
+        OpenAPIClient(transport).poll_agent_task(
+            queue="default",
+            version=12,
+            log_level="info",
+            capabilities=["self_upgrade", "workflow_runtime"],
+        )
+        self.assertEqual(
+            calls,
+            [{
+                "queue": "default",
+                "version": 12,
+                "log_level": "info",
+                "capabilities": ["self_upgrade", "workflow_runtime"],
+            }],
         )
 
     def test_empty_object_request_bodies_are_required(self) -> None:

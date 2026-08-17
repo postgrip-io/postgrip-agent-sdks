@@ -22,8 +22,10 @@ const DefaultAddress = "https://agentorchestrator.postgrip.app"
 
 // ConnectionOptions configures the HTTP connection to the agent runtime
 // service. Address is the base URL (defaults to DefaultAddress).
-// AuthToken is sent as `Authorization: Bearer <token>` on management
-// endpoints. AgentID + delegated AgentAccessToken / AgentRefreshToken /
+// AuthToken is sent as `Authorization: Bearer <token>` on management and
+// global-admin endpoints. Use a dedicated connection configured with the
+// service's global admin token for global operations such as compaction.
+// AgentID + delegated AgentAccessToken / AgentRefreshToken /
 // AgentSigningPrivateKey are used only when this connection is running inside
 // a managed workflow runtime launched by a PostGrip host agent.
 type ConnectionOptions struct {

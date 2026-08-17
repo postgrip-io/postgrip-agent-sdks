@@ -264,11 +264,14 @@ func (p OpenAPIListWorkflowsQuery) values() url.Values {
 }
 
 type OpenAPIPollAgentTaskQuery struct {
-	Namespace   *string
-	Queue       string
-	AgentId     *string
-	WaitSeconds *int64
-	TaskTypes   *string
+	Namespace    *string
+	Queue        string
+	AgentId      *string
+	Version      *int64
+	LogLevel     *string
+	Capabilities []string
+	WaitSeconds  *int64
+	TaskTypes    *string
 }
 
 func (p OpenAPIPollAgentTaskQuery) values() url.Values {
@@ -279,6 +282,15 @@ func (p OpenAPIPollAgentTaskQuery) values() url.Values {
 	values.Set("queue", fmt.Sprint(p.Queue))
 	if p.AgentId != nil {
 		values.Set("agent_id", fmt.Sprint(*p.AgentId))
+	}
+	if p.Version != nil {
+		values.Set("version", fmt.Sprint(*p.Version))
+	}
+	if p.LogLevel != nil {
+		values.Set("log_level", fmt.Sprint(*p.LogLevel))
+	}
+	for _, value := range p.Capabilities {
+		values.Add("capabilities", fmt.Sprint(value))
 	}
 	if p.WaitSeconds != nil {
 		values.Set("wait_seconds", fmt.Sprint(*p.WaitSeconds))
@@ -494,4 +506,4 @@ func (c *OpenAPIClient) UpdateSchedule(ctx context.Context, scheduleId string, b
 // connection operations, which use Connection's custom adapters.
 const OpenAPIClientOperationCount = 40
 
-const openAPIClientSpecSHA256 = "b306bb05b746e43687e3a48c50a23b33e688e1dfae7e1a67a4f99c7318942834"
+const openAPIClientSpecSHA256 = "390980a3cd6e5c5e095a3345c239adcd2543eeac1cbb593d1fbd282672955b51"
