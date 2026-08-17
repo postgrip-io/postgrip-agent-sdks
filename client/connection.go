@@ -287,7 +287,16 @@ func (c *Connection) doStream(ctx context.Context, method, path string, body io.
 	if c.authHeader != "" {
 		req.Header.Set("Authorization", c.authHeader)
 	}
-	resp, err := c.httpClient.Do(req)
+	// Not c.httpClient: its Timeout is a bound on the *whole* exchange, body
+	// included, and it defaults to 30 seconds. Applied to an upload that may
+	// approach the server's 512 MiB workspace limit, that aborts every archive
+	// bigger than the link can move in 30s — so the documented maximum would be
+	// unusable at the default configuration, and every caller would have to
+	// know to raise RequestTimeout. A streaming upload is bounded by ctx, which
+	// the caller controls per call.
+	streamClient := *c.httpClient
+	streamClient.Timeout = 0
+	resp, err := streamClient.Do(req)
 	if err != nil {
 		return &failure.SDKError{Message: "http request", Cause: err}
 	}
@@ -317,3 +326,18 @@ func (c *Connection) doStream(ctx context.Context, method, path string, body io.
 // session ticket authorizes the session, but the request is still
 // authenticated normally.
 func (c *Connection) AuthHeader() string { return c.authHeader }
+
+// ConfiguredHeaders returns a copy of the headers set on the connection.
+//
+// Callers that reach the API over something other than the plain HTTP client
+// need these too. The sandbox relay dials a WebSocket, and a gateway that
+// authenticates on a header will reject that upgrade without them — while
+// every preceding sandbox request succeeds, because those go through the HTTP
+// client that does send them.
+func (c *Connection) ConfiguredHeaders() map[string]string {
+	out := make(map[string]string, len(c.headers))
+	for k, v := range c.headers {
+		out[k] = v
+	}
+	return out
+}

@@ -257,3 +257,54 @@ func TestSandboxCallsRejectABlankID(t *testing.T) {
 		t.Fatal("CreateSession accepted a blank sandbox id")
 	}
 }
+
+// A PollInterval longer than Timeout must still return at the deadline. The
+// loop checked the deadline between polls but then slept on the ticker alone,
+// so the wait ran for the interval instead — minutes, for a wait configured in
+// seconds.
+func TestWaitUntilRunningHonoursTheDeadlineBetweenPolls(t *testing.T) {
+	t.Parallel()
+	c, _ := sandboxTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"sbx_1","observedState":"provisioning","generation":1,"observedGeneration":1}`))
+	})
+	start := time.Now()
+	_, err := c.Sandbox.WaitUntilRunning(context.Background(), "sbx_1", SandboxWaitOptions{
+		Timeout:      150 * time.Millisecond,
+		PollInterval: time.Minute,
+	})
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("wait returned success despite never reaching running")
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("wait slept on the poll interval (%s) instead of the deadline", elapsed)
+	}
+}
+
+// The archive upload must not inherit the connection's whole-request timeout:
+// it defaults to 30s and the server accepts archives up to 512 MiB, so the
+// documented maximum would be unusable at the default configuration.
+func TestUploadWorkspaceIsNotBoundedByTheRequestTimeout(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Longer than the connection's request timeout below. A client-level
+		// Timeout would abort here; ctx is what should bound this call.
+		time.Sleep(300 * time.Millisecond)
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"wsp_1"}`))
+	}))
+	defer server.Close()
+
+	conn, err := NewConnection(ConnectionOptions{
+		Address:        server.URL,
+		AuthToken:      "mgmt",
+		RequestTimeout: 100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("NewConnection: %v", err)
+	}
+	if _, err := conn.UploadWorkspace(context.Background(), strings.NewReader("archive bytes"), "repo", "rev"); err != nil {
+		t.Fatalf("UploadWorkspace was cut off by the request timeout: %v", err)
+	}
+}

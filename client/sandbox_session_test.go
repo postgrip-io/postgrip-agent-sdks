@@ -287,3 +287,93 @@ func TestSandboxStreamRejectsOversizedWrites(t *testing.T) {
 		t.Fatalf("a normal write failed: %v", err)
 	}
 }
+
+// ExitCode accepts a context, so a deadline passed to it must apply. It used
+// to be ignored entirely: only the context that opened the session could
+// interrupt the read, so ExitCode(timeoutCtx) blocked for the life of the
+// session.
+func TestExitCodeHonoursItsOwnContext(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/sessions") {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"ses_1","ticket":"pgss_t"}`))
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		if err != nil {
+			return
+		}
+		// Never close: the session outlives the caller's patience, which is
+		// the case ExitCode's context exists for.
+		<-r.Context().Done()
+		_ = conn.CloseNow()
+	}))
+	defer server.Close()
+
+	conn, err := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "mgmt"})
+	if err != nil {
+		t.Fatalf("NewConnection: %v", err)
+	}
+	stream, err := New(conn).Sandbox.OpenSandboxSession(context.Background(), "sbx_1", protocol.SandboxSessionKindExec, SandboxSessionOptions{Command: []string{"sleep"}})
+	if err != nil {
+		t.Fatalf("OpenSandboxSession: %v", err)
+	}
+	defer stream.Close()
+
+	exitCtx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := stream.ExitCode(exitCtx); err == nil {
+		t.Fatal("ExitCode returned success for a session that never ended")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("ExitCode ignored its context and blocked for %s", elapsed)
+	}
+}
+
+// A gateway that authenticates on a custom header rejects the WebSocket
+// upgrade unless the relay dial carries it. Sandbox creation succeeds either
+// way, because that goes through the HTTP client, so the failure looks like
+// "sessions are broken" rather than "a header is missing".
+func TestOpenSandboxSessionForwardsConfiguredHeaders(t *testing.T) {
+	t.Parallel()
+	gotRelayHeader := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/sessions") {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"ses_1","ticket":"pgss_t"}`))
+			return
+		}
+		gotRelayHeader <- r.Header.Get("X-Gateway-Token")
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		if err != nil {
+			return
+		}
+		_ = conn.Close(websocket.StatusCode(protocol.SandboxExecCloseStatusBase), "exit:0")
+	}))
+	defer server.Close()
+
+	conn, err := NewConnection(ConnectionOptions{
+		Address:   server.URL,
+		AuthToken: "mgmt",
+		Headers:   map[string]string{"X-Gateway-Token": "gw-secret"},
+	})
+	if err != nil {
+		t.Fatalf("NewConnection: %v", err)
+	}
+	stream, err := New(conn).Sandbox.OpenSandboxSession(context.Background(), "sbx_1", protocol.SandboxSessionKindExec, SandboxSessionOptions{Command: []string{"true"}})
+	if err != nil {
+		t.Fatalf("OpenSandboxSession: %v", err)
+	}
+	defer stream.Close()
+
+	select {
+	case got := <-gotRelayHeader:
+		if got != "gw-secret" {
+			t.Fatalf("relay dial sent X-Gateway-Token = %q, want the configured value", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("relay was never dialled")
+	}
+}

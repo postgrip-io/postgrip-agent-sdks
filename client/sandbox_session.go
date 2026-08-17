@@ -3,9 +3,11 @@ package client
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/postgrip-io/agent-sdk-protocol"
@@ -38,7 +40,10 @@ type SandboxSessionOptions struct {
 // channel, so they cannot be separated client-side.
 type SandboxStream struct {
 	conn *websocket.Conn
-	rw   io.ReadWriteCloser
+	// net.Conn rather than io.ReadWriteCloser so ExitCode can unblock a pending
+	// read via SetReadDeadline when its context is cancelled. websocket.NetConn
+	// already returns one.
+	rw net.Conn
 }
 
 // Read implements io.Reader over the session's output.
@@ -77,19 +82,48 @@ func (s *SandboxStream) Close() error { return s.conn.CloseNow() }
 // command into a clean success, which is the worst possible direction for the
 // mistake to go: a caller gating on the exit code proceeds as though the
 // command ran.
+//
+// ctx bounds this call specifically. It is honoured separately from the context
+// that opened the session: a caller passing a deadline here — the common shape
+// being "the command should be done by now" — would otherwise block in Read
+// until the session itself ended, because only the opening context could
+// interrupt it.
 func (s *SandboxStream) ExitCode(ctx context.Context) (int, error) {
-	buf := make([]byte, 32<<10)
-	for {
-		_, err := s.rw.Read(buf)
-		if err == nil {
-			continue
+	type outcome struct {
+		code int
+		err  error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		buf := make([]byte, 32<<10)
+		for {
+			_, err := s.rw.Read(buf)
+			if err == nil {
+				continue
+			}
+			if code, ok := protocol.SandboxExecExitCode(int(websocket.CloseStatus(err))); ok {
+				done <- outcome{code: code}
+				return
+			}
+			done <- outcome{err: &failure.SDKError{
+				Message: "sandbox session ended without an exit status",
+				Cause:   err,
+			}}
+			return
 		}
-		if code, ok := protocol.SandboxExecExitCode(int(websocket.CloseStatus(err))); ok {
-			return code, nil
-		}
+	}()
+	select {
+	case o := <-done:
+		return o.code, o.err
+	case <-ctx.Done():
+		// Release the reader rather than leaving it parked on the connection
+		// for the life of the session: a deadline in the past makes the
+		// pending Read return at once. The stream is finished either way — the
+		// caller gave up waiting for the exit status.
+		_ = s.rw.SetReadDeadline(time.Now())
 		return 0, &failure.SDKError{
-			Message: "sandbox session ended without an exit status",
-			Cause:   err,
+			Message: "waiting for the sandbox exit status was cancelled",
+			Cause:   ctx.Err(),
 		}
 	}
 }
@@ -126,7 +160,15 @@ func (s *SandboxClient) OpenSandboxSession(ctx context.Context, sandboxID, kind 
 	if err != nil {
 		return nil, err
 	}
+	// Every header configured on the connection, not just Authorization. A
+	// gateway that authenticates on a custom header rejects the upgrade without
+	// them, which reads as "sessions are broken" even though sandbox creation
+	// and every other call worked — those go through the HTTP client, which
+	// does send them.
 	header := http.Header{}
+	for k, v := range s.conn.ConfiguredHeaders() {
+		header.Set(k, v)
+	}
 	if auth := s.conn.AuthHeader(); auth != "" {
 		header.Set("Authorization", auth)
 	}

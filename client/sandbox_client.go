@@ -106,6 +106,13 @@ func (s *SandboxClient) WaitUntilRunning(ctx context.Context, sandboxID string, 
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	// The wait deadline has to be selectable, not merely checked between polls.
+	// Waiting on the ticker alone meant a PollInterval longer than Timeout slept
+	// straight past the deadline: a wait configured for a few seconds with a
+	// one-minute interval blocked for a minute. The request context bounds the
+	// call, never the sleep that follows it.
+	deadlineTimer := time.NewTimer(time.Until(deadline))
+	defer deadlineTimer.Stop()
 	var last *Sandbox
 	for {
 		reqCtx, cancelReq := context.WithDeadline(ctx, deadline)
@@ -142,6 +149,8 @@ func (s *SandboxClient) WaitUntilRunning(ctx context.Context, sandboxID string, 
 				Message: "waiting for sandbox " + sandboxID + " was cancelled",
 				Cause:   ctx.Err(),
 			}
+		case <-deadlineTimer.C:
+			return last, sandboxWaitTimeout(sandboxID, timeout, last, nil)
 		case <-ticker.C:
 		}
 	}
