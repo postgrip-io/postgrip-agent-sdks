@@ -595,14 +595,19 @@ export interface Sandbox {
 
 /**
  * `name` must match ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$ and is unique per tenant
- * among live sandboxes, so a duplicate is a 409. `image` is required despite
- * being optional here. `credentialRefs` is reserved — any non-empty value is
- * rejected with 400 today.
+ * among live sandboxes, so a duplicate is a 409. `credentialRefs` is reserved —
+ * any non-empty value is rejected with 400 today.
+ *
+ * `image` is required here because it is required on the server. It used to be
+ * optional, which let `{ name: 'x' }` type-check even though that create is
+ * answered with a 400 unconditionally — giving up the one thing a mirrored
+ * request type can do, which is reject an invalid request before the round
+ * trip.
  */
 export interface SandboxCreateRequest {
   name: string;
+  image: string;
   backend?: SandboxBackend;
-  image?: string;
   architecture?: string;
   workspaceId?: string;
   repositoryName?: string;
