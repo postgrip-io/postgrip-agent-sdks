@@ -11,6 +11,10 @@ ScheduleMissedRunPolicy: TypeAlias = Literal["catch_up", "skip"]
 CancellationType: TypeAlias = Literal["try_cancel", "wait_cancellation_completed", "abandon"]
 CancellationScopeType: TypeAlias = Literal["cancellable", "non_cancellable"]
 WorkflowIdReusePolicy: TypeAlias = Literal["allow_duplicate", "allow_duplicate_failed_only", "reject_duplicate"]
+# Isolation tiers a workflow.runtime workload can require. A requested tier is
+# a floor: container work may run in a stronger tier, microvm work must never
+# run in a weaker one, and an unrecognized value satisfies nothing.
+IsolationTier: TypeAlias = Literal["container", "microvm"]
 WorkflowFunction: TypeAlias = Callable[..., Awaitable[Any] | Any]
 ActivityFunction: TypeAlias = Callable[..., Awaitable[Any] | Any]
 WorkflowRegistry: TypeAlias = dict[str, WorkflowFunction]
@@ -474,6 +478,11 @@ class WorkflowRuntimePayload(TypedDict, total=False):
     queue: str
     pull_policy: str
     timeout_seconds: int
+    # Isolation floor this workload requires; absent means the container
+    # default. Requires ``image`` — a command-only runtime executes directly
+    # on the agent host, which honors no isolation floor, and the
+    # orchestrator rejects that combination at enqueue.
+    isolation: IsolationTier
 
 
 class TimerPayload(TypedDict):

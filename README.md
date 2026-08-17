@@ -117,6 +117,24 @@ async def submit_runtime() -> None:
 asyncio.run(submit_runtime())
 ```
 
+To run the runtime from an image instead of a host command, pass `image` — and
+optionally an `isolation` floor of `"container"` (the default) or `"microvm"`:
+
+```python
+client.task.workflow_runtime(
+    queue="default",
+    image="ghcr.io/example/workflow-runtime:1.4.0",
+    isolation="microvm",
+    runtime_queue="default",
+)
+```
+
+`isolation` is a floor, not an exact match: `"container"` work may be scheduled
+onto a stronger tier, but `"microvm"` work is never downgraded — it only leases
+to agents advertising that tier. It requires `image`; a command-only runtime
+executes directly on the agent host, which honors no isolation floor, and the
+orchestrator rejects that combination at enqueue.
+
 This SDK targets the PostGrip Agent runtime API, not a Temporal server. It follows the familiar Temporal Python shape for client, agent, workflow, and activity code while using PostGrip Agent task queues and workflow history underneath.
 
 Implemented workflow APIs include durable activity scheduling/replay, durable timers via `workflow.sleep()`, query/signal/update handler replay, child workflow scheduling/replay, continue-as-new, cancellation scopes, and command-order determinism checks for activities, timers, and children.
