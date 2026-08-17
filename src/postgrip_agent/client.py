@@ -32,6 +32,7 @@ class Connection:
         *,
         timeout: float = 30,
         headers: dict[str, str] | None = None,
+        auth_token: str | None = None,
         agent_id: str | None = None,
         worker_id: str | None = None,
         agent_name: str | None = None,
@@ -50,6 +51,11 @@ class Connection:
         self.address = address.rstrip("/")
         self.timeout = timeout
         self.headers = dict(headers or {})
+        # Management token, sent on every management-lane request. Required for
+        # the sandbox APIs, which reject agent tokens. Opaque: the console
+        # issues a bare hex string with no prefix, so there is nothing to
+        # validate.
+        self.auth_token = (auth_token or os.environ.get("POSTGRIP_TOKEN") or "").strip() or None
         self._agent_id = agent_id or worker_id or os.environ.get("POSTGRIP_AGENT_ID")
         self._agent_name = agent_name
         self._agent_host = agent_host
@@ -121,6 +127,10 @@ class Connection:
         headers.setdefault("User-Agent", "postgrip-agent-python")
         if use_agent_auth and self._agent_access_token:
             headers["Authorization"] = f"Bearer {self._agent_access_token}"
+        elif not use_agent_auth and self.auth_token and "Authorization" not in headers:
+            # An explicitly supplied header wins, so existing callers that
+            # hand-build one keep working.
+            headers["Authorization"] = f"Bearer {self.auth_token}"
         if body is not None:
             headers["Content-Type"] = "application/json"
         if use_agent_auth and self._agent_sign_priv is not None:
@@ -334,6 +344,11 @@ class Client:
         self.workflow = WorkflowClient(self.connection)
         self.task = TaskClient(self.connection)
         self.schedule = ScheduleClient(self.connection)
+        # Imported here rather than at module scope: sandbox.py imports
+        # Connection for typing only, and a top-level import would cycle.
+        from .sandbox import SandboxClient
+
+        self.sandbox = SandboxClient(self.connection)
 
     @classmethod
     async def connect(cls, address: str | None = None, **options: Any) -> "Client":
