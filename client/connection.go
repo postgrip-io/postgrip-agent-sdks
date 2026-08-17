@@ -265,3 +265,49 @@ func agentTaskPath(taskID, action, agentID string) string {
 		url.QueryEscape(agentID),
 	)
 }
+
+// doStream sends a raw request body rather than JSON-encoding a value, for
+// endpoints whose payload is a byte stream — today only the workspace archive
+// upload, which takes the gzipped tar directly rather than as multipart.
+//
+// Always management-authenticated: no streaming endpoint is on the agent lane,
+// and the agent request signature covers the body, which would mean buffering
+// an archive that can reach 512 MiB just to sign it.
+func (c *Connection) doStream(ctx context.Context, method, path string, body io.Reader, headers map[string]string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, method, c.address+path, body)
+	if err != nil {
+		return &failure.SDKError{Message: "build request", Cause: err}
+	}
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	if c.authHeader != "" {
+		req.Header.Set("Authorization", c.authHeader)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return &failure.SDKError{Message: "http request", Cause: err}
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &failure.SDKError{Message: "read response body", Cause: err}
+	}
+	if resp.StatusCode >= 400 {
+		msg := strings.TrimSpace(string(raw))
+		if msg == "" {
+			msg = resp.Status
+		}
+		return &failure.SDKError{Message: fmt.Sprintf("%s %s -> %d %s", method, path, resp.StatusCode, msg)}
+	}
+	if out == nil || len(raw) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		return &failure.SDKError{Message: fmt.Sprintf("decode response from %s %s", method, path), Cause: err}
+	}
+	return nil
+}
