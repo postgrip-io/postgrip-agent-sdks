@@ -3,8 +3,6 @@ package client
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -16,7 +14,7 @@ func (c *Connection) EnqueueTask(ctx context.Context, req EnqueueTaskRequest) (*
 		return nil, errors.New("postgrip-agent: workflow tasks can only be enqueued from a managed runtime; submit workflow.runtime to an agent pool")
 	}
 	var out Task
-	if err := c.do(ctx, http.MethodPost, "/api/v1/tasks", req, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIEnqueueTask, nil, nil, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -35,12 +33,8 @@ func runtimeOnlyTaskType(taskType string) bool {
 
 // ListTasks returns tasks matching the optional filters.
 func (c *Connection) ListTasks(ctx context.Context, params map[string]string) ([]Task, error) {
-	path := "/api/v1/tasks"
-	if len(params) > 0 {
-		path += "?" + encodeQuery(params)
-	}
 	var out []Task
-	if err := c.do(ctx, http.MethodGet, path, nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIListTasks, nil, queryValues(params), nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -49,8 +43,7 @@ func (c *Connection) ListTasks(ctx context.Context, params map[string]string) ([
 // GetTask fetches a single task by id.
 func (c *Connection) GetTask(ctx context.Context, taskID string) (*Task, error) {
 	var out Task
-	path := "/api/v1/tasks/" + url.PathEscape(taskID)
-	if err := c.do(ctx, http.MethodGet, path, nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIGetTask, map[string]string{"taskId": taskID}, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -59,8 +52,7 @@ func (c *Connection) GetTask(ctx context.Context, taskID string) (*Task, error) 
 // GetTaskEvents returns the full event log for a task.
 func (c *Connection) GetTaskEvents(ctx context.Context, taskID string) ([]TaskEvent, error) {
 	var out []TaskEvent
-	path := "/api/v1/tasks/" + url.PathEscape(taskID) + "/events"
-	if err := c.do(ctx, http.MethodGet, path, nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIListTaskEvents, map[string]string{"taskId": taskID}, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -73,18 +65,14 @@ func (c *Connection) PollTask(ctx context.Context, namespace, queue, agentID str
 	if err := c.ensureAgentSession(ctx, agentID, namespace, queue); err != nil {
 		return nil, err
 	}
-	path := "/api/v1/agent/poll"
-	q := encodeQuery(map[string]string{
+	query := queryValues(map[string]string{
 		"namespace":  namespace,
 		"queue":      queue,
 		"agent_id":   agentID,
 		"task_types": TaskTypePrefixWorkflow + "," + TaskTypePrefixActivity + "," + TaskTypePrefixQuery + "," + TaskTypePrefixUpdate,
 	})
-	if q != "" {
-		path += "?" + q
-	}
 	var out PollTaskResponse
-	if err := c.do(ctx, http.MethodGet, path, nil, &out, true); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIPollAgentTask, nil, query, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -96,12 +84,11 @@ func (c *Connection) HeartbeatTask(ctx context.Context, taskID, agentID string, 
 	if err := c.ensureAgentSession(ctx, agentID, "", ""); err != nil {
 		return err
 	}
-	path := agentTaskPath(taskID, "heartbeat", agentID)
 	body := map[string]any{}
 	if ev != nil {
 		body["event"] = ev
 	}
-	return c.do(ctx, http.MethodPost, path, body, nil, true)
+	return c.doOpenAPI(ctx, openAPIHeartbeatAgentTask, map[string]string{"taskId": taskID}, queryValues(map[string]string{"agent_id": agentID}), body, nil)
 }
 
 // EmitTaskEvent appends an arbitrary task event (progress/stdout/stderr/
@@ -111,8 +98,7 @@ func (c *Connection) EmitTaskEvent(ctx context.Context, taskID, agentID string, 
 	if err := c.ensureAgentSession(ctx, agentID, "", ""); err != nil {
 		return err
 	}
-	path := agentTaskPath(taskID, "events", agentID)
-	return c.do(ctx, http.MethodPost, path, map[string]any{"event": ev}, nil, true)
+	return c.doOpenAPI(ctx, openAPIAppendAgentTaskEvent, map[string]string{"taskId": taskID}, queryValues(map[string]string{"agent_id": agentID}), map[string]any{"event": ev}, nil)
 }
 
 // CompleteTask marks a leased task succeeded with the given result.
@@ -120,9 +106,8 @@ func (c *Connection) CompleteTask(ctx context.Context, taskID, agentID string, r
 	if err := c.ensureAgentSession(ctx, agentID, "", ""); err != nil {
 		return nil, err
 	}
-	path := agentTaskPath(taskID, "complete", agentID)
 	var out Task
-	if err := c.do(ctx, http.MethodPost, path, map[string]any{"result": result}, &out, true); err != nil {
+	if err := c.doOpenAPI(ctx, openAPICompleteAgentTask, map[string]string{"taskId": taskID}, queryValues(map[string]string{"agent_id": agentID}), map[string]any{"result": result}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -133,13 +118,12 @@ func (c *Connection) FailTask(ctx context.Context, taskID, agentID, reason strin
 	if err := c.ensureAgentSession(ctx, agentID, "", ""); err != nil {
 		return nil, err
 	}
-	path := agentTaskPath(taskID, "fail", agentID)
 	body := map[string]any{"error": reason}
 	if result != nil {
 		body["result"] = result
 	}
 	var out Task
-	if err := c.do(ctx, http.MethodPost, path, body, &out, true); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIFailAgentTask, map[string]string{"taskId": taskID}, queryValues(map[string]string{"agent_id": agentID}), body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -151,13 +135,12 @@ func (c *Connection) BlockTask(ctx context.Context, taskID, agentID, reason stri
 	if err := c.ensureAgentSession(ctx, agentID, "", ""); err != nil {
 		return nil, err
 	}
-	path := agentTaskPath(taskID, "block", agentID)
 	body := map[string]any{}
 	if reason != "" {
 		body["reason"] = reason
 	}
 	var out Task
-	if err := c.do(ctx, http.MethodPost, path, body, &out, true); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIBlockAgentTask, map[string]string{"taskId": taskID}, queryValues(map[string]string{"agent_id": agentID}), body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

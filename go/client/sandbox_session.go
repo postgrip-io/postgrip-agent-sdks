@@ -260,6 +260,13 @@ func sandboxRelayURL(address, sessionID, ticket string) (string, error) {
 	default:
 		return "", &failure.SDKError{Message: "sandbox relay address must be http(s) or ws(s): " + address}
 	}
-	return base + "/api/v1/sandbox-sessions/" + url.PathEscape(sessionID) +
-		"/connect?ticket=" + url.QueryEscape(ticket), nil
+	operation, err := resolveOpenAPIOperation(
+		openAPIConnectSandboxSession,
+		map[string]string{"sessionId": sessionID},
+		url.Values{"ticket": []string{ticket}},
+	)
+	if err != nil {
+		return "", &failure.SDKError{Message: "resolve sandbox relay OpenAPI operation", Cause: err}
+	}
+	return base + operation.Path, nil
 }

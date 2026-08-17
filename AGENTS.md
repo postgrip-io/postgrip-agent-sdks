@@ -21,6 +21,8 @@ Follow native conventions: `gofmt` and idiomatic exported comments for Go, two-s
 
 Treat JSON names, optionality, timestamp formats, and signing bytes as public API. Update the protocol and both hand-maintained mirrors atomically. The Go SDK must alias protocol-owned types rather than redeclare them. Do not alter the `agent-task-v1` canonical signing format without adding a new version.
 
+The server-owned Agent HTTP contract is synchronized into `openapi.json`. After changing it, run `python3 scripts/generate_openapi.py`; CI runs the same command with `--check`. Never hand-edit generated operation files. Keep session refresh, signing, long polling, archive streaming, and WebSocket framing in the SDK adapters.
+
 ## Commits and Pull Requests
 
 Use concise Conventional Commit subjects such as `feat: add sandbox sessions`, `fix: preserve request context`, or `docs: clarify releases`. Keep commits scoped to one coherent cross-language change. PRs should identify affected packages, explain compatibility, link issues, and report the relevant tests plus the monorepo drift check. Package releases remain independent; use the package-prefixed tags documented in [MIGRATION.md](MIGRATION.md).

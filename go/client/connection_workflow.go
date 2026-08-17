@@ -3,14 +3,11 @@ package client
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/url"
 )
 
 // SignalWorkflow appends a signal to a workflow execution.
 func (c *Connection) SignalWorkflow(ctx context.Context, workflowID string, req SignalWorkflowRequest) error {
-	path := "/api/v1/workflows/" + url.PathEscape(workflowID) + "/signal"
-	return c.do(ctx, http.MethodPost, path, req, nil, false)
+	return c.doOpenAPI(ctx, openAPISignalWorkflow, map[string]string{"workflowId": workflowID}, nil, req, nil)
 }
 
 // SignalWithStartWorkflow starts a workflow if it does not exist, otherwise
@@ -26,9 +23,8 @@ func (c *Connection) SignalWithStartWorkflow(ctx context.Context, workflowID str
 	if !c.hasAgentRuntimeCredentials() {
 		return nil, errors.New("postgrip-agent: signal-with-start can only run from a managed runtime; submit workflow.runtime to an agent pool")
 	}
-	path := "/api/v1/workflows/" + url.PathEscape(workflowID) + "/signal-with-start"
 	var out SignalWithStartWorkflowResponse
-	if err := c.do(ctx, http.MethodPost, path, req, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPISignalWithStartWorkflow, map[string]string{"workflowId": workflowID}, nil, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -36,29 +32,26 @@ func (c *Connection) SignalWithStartWorkflow(ctx context.Context, workflowID str
 
 // CancelWorkflow requests cancellation of a running workflow.
 func (c *Connection) CancelWorkflow(ctx context.Context, workflowID, reason string) error {
-	path := "/api/v1/workflows/" + url.PathEscape(workflowID) + "/cancel"
 	body := map[string]any{}
 	if reason != "" {
 		body["reason"] = reason
 	}
-	return c.do(ctx, http.MethodPost, path, body, nil, false)
+	return c.doOpenAPI(ctx, openAPICancelWorkflow, map[string]string{"workflowId": workflowID}, nil, body, nil)
 }
 
 // TerminateWorkflow forcibly fails a running workflow with the given reason.
 func (c *Connection) TerminateWorkflow(ctx context.Context, workflowID, reason string) error {
-	path := "/api/v1/workflows/" + url.PathEscape(workflowID) + "/terminate"
 	body := map[string]any{}
 	if reason != "" {
 		body["reason"] = reason
 	}
-	return c.do(ctx, http.MethodPost, path, body, nil, false)
+	return c.doOpenAPI(ctx, openAPITerminateWorkflow, map[string]string{"workflowId": workflowID}, nil, body, nil)
 }
 
 // GetWorkflowExecution returns the durable workflow execution row.
 func (c *Connection) GetWorkflowExecution(ctx context.Context, workflowID string) (*WorkflowExecution, error) {
-	path := "/api/v1/workflows/" + url.PathEscape(workflowID)
 	var out WorkflowExecution
-	if err := c.do(ctx, http.MethodGet, path, nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIGetWorkflow, map[string]string{"workflowId": workflowID}, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -66,9 +59,8 @@ func (c *Connection) GetWorkflowExecution(ctx context.Context, workflowID string
 
 // GetWorkflowHistory returns the ordered durable history for a workflow.
 func (c *Connection) GetWorkflowHistory(ctx context.Context, workflowID string) ([]WorkflowHistoryEvent, error) {
-	path := "/api/v1/workflows/" + url.PathEscape(workflowID) + "/history"
 	var out []WorkflowHistoryEvent
-	if err := c.do(ctx, http.MethodGet, path, nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIListWorkflowHistory, map[string]string{"workflowId": workflowID}, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
