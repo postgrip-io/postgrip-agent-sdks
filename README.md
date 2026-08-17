@@ -6,7 +6,7 @@ plus the shared Go wire-protocol package.
 | Directory | Package | Purpose |
 | --- | --- | --- |
 | [`protocol/`](protocol/) | `github.com/postgrip-io/postgrip-agent-sdks/protocol` | Wire types and request signing |
-| [`go/`](go/) | `go.postgrip.io/sdk` | Go client and worker SDK |
+| [`go/`](go/) | `github.com/postgrip-io/postgrip-agent-sdks/go` | Go client and worker SDK |
 | [`typescript/`](typescript/) | `@postgrip/agent` | TypeScript client and agent SDK |
 | [`python/`](python/) | `postgrip-agent` | Python client and agent SDK |
 

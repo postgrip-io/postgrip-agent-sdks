@@ -15,7 +15,7 @@ bun add @postgrip/agent
 To pin a specific version:
 
 ```sh
-npm install @postgrip/agent@0.11.0
+npm install @postgrip/agent@0.12.0
 ```
 
 ## Requirements
@@ -79,8 +79,8 @@ import type { WorkflowFunction, ActivityRegistry, RetryPolicy } from '@postgrip/
 ## Local development from a clone
 
 ```sh
-git clone https://github.com/postgrip-io/agent-sdk-typescript
-cd agent-sdk-typescript
+git clone https://github.com/postgrip-io/postgrip-agent-sdks.git
+cd postgrip-agent-sdks/typescript
 bun install --frozen-lockfile
 bun run typecheck
 bun run build

@@ -1,16 +1,16 @@
 # PostGrip Agent TypeScript SDK
 
-[![Docs](https://img.shields.io/badge/docs-site-2563EB?logo=readthedocs&logoColor=white)](https://postgrip-io.github.io/agent-sdk-typescript/)
+[![Docs](https://img.shields.io/badge/docs-site-2563EB?logo=readthedocs&logoColor=white)](https://postgrip-io.github.io/postgrip-agent-sdks/typescript/)
 [![npm](https://img.shields.io/npm/v/%40postgrip%2Fagent.svg)](https://www.npmjs.com/package/@postgrip/agent)
 [![TypeScript](https://img.shields.io/badge/types-TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.npmjs.com/package/@postgrip/agent)
-[![CI](https://github.com/postgrip-io/agent-sdk-typescript/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/agent-sdk-typescript/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/postgrip-io/agent-sdk-typescript.svg)](LICENSE)
+[![CI](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/postgrip-io/postgrip-agent-sdks.svg)](LICENSE)
 
-This package provides a Temporal-style TypeScript API for defining, submitting, and executing PostGrip workflows. In production, SDK workflow runtimes are supervised by an existing PostGrip agent: the host agent launches the runtime, injects delegated credentials, and keeps generic operational tasks separate from workflow/activity task polling. Client-side SDK code submits `workflow.runtime` tasks to an existing agent pool; it does not enroll or spawn standalone PostGrip agents. Public distribution mirrors remain at [`agent-sdk-go`](https://github.com/postgrip-io/agent-sdk-go), [`agent-sdk-python`](https://github.com/postgrip-io/agent-sdk-python), and [`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol).
+This package provides a Temporal-style TypeScript API for defining, submitting, and executing PostGrip workflows. In production, SDK workflow runtimes are supervised by an existing PostGrip agent: the host agent launches the runtime, injects delegated credentials, and keeps generic operational tasks separate from workflow/activity task polling. Client-side SDK code submits `workflow.runtime` tasks to an existing agent pool; it does not enroll or spawn standalone PostGrip agents. The Go, Python, and shared protocol packages live alongside it in this monorepo.
 
-**Docs:** [postgrip-io.github.io/agent-sdk-typescript](https://postgrip-io.github.io/agent-sdk-typescript/) — quick start, workflow runtime, API guide.
+**Docs:** [postgrip-io.github.io/postgrip-agent-sdks/typescript](https://postgrip-io.github.io/postgrip-agent-sdks/typescript/) — quick start, workflow runtime, API guide.
 
-**Current release:** `0.11.0`
+**Current release:** `0.12.0`
 
 ## Layout
 
@@ -18,7 +18,7 @@ This package provides a Temporal-style TypeScript API for defining, submitting, 
 src/                  # TypeScript sources — Connection / Client / workflow runtime
 test/                 # reserved for future vitest unit / integration tests
 doc/                  # reserved for longer-form prose docs
-.github/workflows/    # CI and package release automation in the public mirror
+.github/workflows/    # CI and package release automation at the repository root
 ```
 
 

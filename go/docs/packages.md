@@ -9,7 +9,7 @@ nav_order: 4
 The SDK ships as five focused public sub-packages plus two internal ones. Each public package owns a clear slice of the surface; the directory tree itself documents the shape.
 
 ```
-go.postgrip.io/sdk/
+github.com/postgrip-io/postgrip-agent-sdks/go/
 ├─ client/             Connection + Client + Task/Workflow/Schedule sub-clients
 ├─ worker/             Worker polling loop + workflow.Context implementation
 ├─ workflow/           Context interface, options, Func, SignalChannel

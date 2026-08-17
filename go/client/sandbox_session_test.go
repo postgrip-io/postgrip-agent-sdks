@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/postgrip-io/agent-sdk-protocol"
+	"github.com/postgrip-io/postgrip-agent-sdks/protocol"
 )
 
 func TestSandboxRelayURL(t *testing.T) {

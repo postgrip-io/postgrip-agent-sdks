@@ -676,7 +676,7 @@ class TimerPayload(TypedDict, total=False):
 SELF_TEST_SDK_GOOD = '''
 package client
 
-import "github.com/postgrip-io/agent-sdk-protocol"
+import "github.com/postgrip-io/postgrip-agent-sdks/protocol"
 
 type (
 	TimerPayload = protocol.TimerPayload

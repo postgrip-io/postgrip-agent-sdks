@@ -6,16 +6,16 @@ nav_order: 2
 
 # Installation
 
-The SDK lives at `go.postgrip.io/sdk`. Its public source mirror is at [`postgrip-io/agent-sdk-go`](https://github.com/postgrip-io/agent-sdk-go).
+The SDK lives at `github.com/postgrip-io/postgrip-agent-sdks/go`; its source is the [`go/`](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/go) directory of the SDK monorepo.
 
 ```sh
-go get go.postgrip.io/sdk@latest
+go get github.com/postgrip-io/postgrip-agent-sdks/go@latest
 ```
 
 To pin a specific version:
 
 ```sh
-go get go.postgrip.io/sdk@v0.11.0
+go get github.com/postgrip-io/postgrip-agent-sdks/go@v0.12.0
 ```
 
 ## Requirements
@@ -29,11 +29,11 @@ The module declares one top-level Go package per sub-directory. You import only 
 
 ```go
 import (
-    "go.postgrip.io/sdk/client"   // Connection + Client + sub-clients
-    "go.postgrip.io/sdk/worker"   // Worker (only if you run one)
-    "go.postgrip.io/sdk/workflow" // workflow.Context (only if you write workflows)
-    "go.postgrip.io/sdk/activity" // activity helpers (only if you write activities)
-    "go.postgrip.io/sdk/failure"  // structured failure types
+    "github.com/postgrip-io/postgrip-agent-sdks/go/client"   // Connection + Client + sub-clients
+    "github.com/postgrip-io/postgrip-agent-sdks/go/worker"   // Worker (only if you run one)
+    "github.com/postgrip-io/postgrip-agent-sdks/go/workflow" // workflow.Context (only if you write workflows)
+    "github.com/postgrip-io/postgrip-agent-sdks/go/activity" // activity helpers (only if you write activities)
+    "github.com/postgrip-io/postgrip-agent-sdks/go/failure"  // structured failure types
 )
 ```
 
@@ -41,7 +41,7 @@ A program that submits a managed `workflow.runtime` task — no workflow code, n
 runtime worker — needs only `client`.
 
 {: .note }
-> Always install through `go.postgrip.io/sdk`; it is the stable public module path regardless of where the source repository is hosted.
+> The legacy `go.postgrip.io/sdk` module path is retired. Use the GitHub monorepo path shown above.
 
 ## Running against a local agent
 

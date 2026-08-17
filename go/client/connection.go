@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-protocol"
-	"go.postgrip.io/sdk/failure"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/failure"
+	"github.com/postgrip-io/postgrip-agent-sdks/protocol"
 )
 
 const DefaultAddress = "https://agentorchestrator.postgrip.app"

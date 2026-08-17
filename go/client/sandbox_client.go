@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"go.postgrip.io/sdk/failure"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/failure"
 )
 
 // SandboxClient is the ergonomic surface over the sandbox endpoints: create a

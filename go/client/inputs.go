@@ -3,7 +3,7 @@ package client
 import (
 	"time"
 
-	"go.postgrip.io/sdk/workflow"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/workflow"
 )
 
 // EnqueueInput is the SDK-side input to TaskClient.Enqueue. Payload may be

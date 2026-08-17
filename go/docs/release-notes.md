@@ -6,6 +6,15 @@ nav_order: 7
 
 # Release notes
 
+## v0.12.0
+
+This release completes the hard cutover to the public SDK monorepo.
+
+- Changes the module path to `github.com/postgrip-io/postgrip-agent-sdks/go`.
+- Pins the consolidated protocol module at `protocol/v0.3.0`.
+- Moves source, releases, CI, and documentation to the monorepo.
+- Removes the retired `go.postgrip.io/sdk` vanity-module dependency.
+
 ## v0.11.0
 
 This release documents and tags the current managed workflow runtime model for the Go SDK.

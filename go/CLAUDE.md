@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Go SDK for the PostGrip Agent runtime service. Mirrors `../typescript` and `../python`; wire shapes come from the local `../protocol` module through the repository's `go.work`. The root package (`package sdk`) holds only `doc.go` — customers import the sub-packages they need (`client`, `worker`, `workflow`, `activity`, `failure`).
 
-The module path remains `go.postgrip.io/sdk`. Its vanity metadata still points at the legacy `agent-sdk-go` distribution repository; see `../MIGRATION.md` before changing or archiving that repository.
+The module path is `github.com/postgrip-io/postgrip-agent-sdks/go`. Release it from this monorepo with `go/v*` tags; the former `go.postgrip.io/sdk` vanity path is retired.
 
 ## Commands
 
@@ -31,7 +31,7 @@ internal/replay ──────┘
 internal/jsonenv ──→ client, worker
 ```
 
-`failure`, `workflow`, `activity`, `internal/replay`, `internal/jsonenv` are leaves (depend only on `agent-sdk-protocol`). `client` adds `failure` and `workflow`. `worker` depends on all of them. Adding an import that creates a cycle (e.g., `workflow` reaching for `client`) is a sign you've put logic in the wrong package — see "Sentinel translation" below.
+`failure`, `workflow`, `activity`, `internal/replay`, `internal/jsonenv` are leaves (depend only on the shared `protocol` module). `client` adds `failure` and `workflow`. `worker` depends on all of them. Adding an import that creates a cycle (e.g., `workflow` reaching for `client`) is a sign you've put logic in the wrong package — see "Sentinel translation" below.
 
 ### Interface in `/workflow`, implementation in `/worker`
 
@@ -82,4 +82,4 @@ Activity helpers (`activity.GetInfo`, `Heartbeat`, `Milestone`) read from a `*ac
 
 ### Wire-shape re-exports
 
-`client/aliases.go` re-exports the protocol's wire types (`Task`, `WorkflowExecution`, `Schedule`, etc.) so customer code doesn't have to import `agent-sdk-protocol` directly. When the protocol adds a new wire type that customer code needs to reference, add the alias here. Don't shadow the protocol type with an SDK-side struct unless you're deliberately diverging the shape — that's almost always wrong (loses the polyglot contract with the TS and Python SDKs).
+`client/aliases.go` re-exports the protocol's wire types (`Task`, `WorkflowExecution`, `Schedule`, etc.) so customer code doesn't have to import the protocol module directly. When the protocol adds a new wire type that customer code needs to reference, add the alias here. Don't shadow the protocol type with an SDK-side struct unless you're deliberately diverging the shape — that's almost always wrong (loses the polyglot contract with the TS and Python SDKs).

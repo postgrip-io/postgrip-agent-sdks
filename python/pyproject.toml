@@ -1,11 +1,11 @@
 [project]
 name = "postgrip-agent"
-version = "0.11.0"
+version = "0.12.0"
 description = "Python SDK for PostGrip Agent workflows"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "PostGrip" }]
-license = { text = "MIT" }
+license = "MIT"
 keywords = ["postgrip", "agent", "workflow", "temporal"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -18,6 +18,11 @@ classifiers = [
 dependencies = [
   "cryptography>=42",
 ]
+
+[project.urls]
+Repository = "https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/python"
+Documentation = "https://postgrip-io.github.io/postgrip-agent-sdks/python/"
+Issues = "https://github.com/postgrip-io/postgrip-agent-sdks/issues"
 
 # Sandbox sessions (interactive pty / exec) speak WebSocket. Kept optional so
 # the base install stays dependency-light for callers who only use the

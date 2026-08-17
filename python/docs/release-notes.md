@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.12.0
+
+This release completes the hard cutover to the public SDK monorepo.
+
+- Moves source, release automation, CI, and documentation to the monorepo.
+- Regenerates the OpenAPI-owned models and typed client from the canonical contract.
+- Retains the existing `postgrip-agent` PyPI package name and public API.
+
 ## 0.11.0
 
 This release documents and packages the current managed workflow runtime model for the Python SDK.

@@ -1,6 +1,6 @@
 {
   "name": "@postgrip/agent",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Temporal-style TypeScript SDK for PostGrip Agent",
   "repository": {
     "type": "git",

@@ -16,7 +16,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/postgrip-io/agent-sdk-protocol"
+	"github.com/postgrip-io/postgrip-agent-sdks/protocol"
 )
 
 // RetryPolicy is re-exported from protocol so customer code doesn't have to

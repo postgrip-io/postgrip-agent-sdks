@@ -10,11 +10,11 @@ nav_order: 1
 Run shell commands, container workloads, and durable workflows on the PostGrip Agent runtime service from your Go code.
 {: .fs-6 .fw-300 }
 
-**Current release:** `v0.11.0`
+**Current release:** `v0.12.0`
 
 [Quick start →]({{ "/quickstart" | relative_url }}){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
-[GitHub](https://github.com/postgrip-io/agent-sdk-go){: .btn .fs-5 .mb-4 .mb-md-0 }
-[pkg.go.dev](https://pkg.go.dev/go.postgrip.io/sdk){: .btn .fs-5 .mb-4 .mb-md-0 }
+[GitHub](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/go){: .btn .fs-5 .mb-4 .mb-md-0 }
+[pkg.go.dev](https://pkg.go.dev/github.com/postgrip-io/postgrip-agent-sdks/go){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---
 
@@ -22,7 +22,7 @@ Run shell commands, container workloads, and durable workflows on the PostGrip A
 
 A Go library that lets you talk to the PostGrip Agent runtime service. You enqueue tasks (shell commands, containers, workflows, schedules), or you run a worker that picks up tasks and executes your registered workflow / activity functions.
 
-The SDK ships as five focused sub-packages under `go.postgrip.io/sdk`. You only import what you need — most apps that just enqueue tasks need only `client`; only worker processes need `worker` + `workflow` + `activity`.
+The SDK ships as five focused sub-packages under `github.com/postgrip-io/postgrip-agent-sdks/go`. You only import what you need — most apps that just enqueue tasks need only `client`; only worker processes need `worker` + `workflow` + `activity`.
 
 | Package    | What's in it                                                                        |
 |:-----------|:------------------------------------------------------------------------------------|
@@ -36,9 +36,9 @@ The SDK ships as five focused sub-packages under `go.postgrip.io/sdk`. You only 
 
 This SDK is one of three. The TypeScript and Python siblings implement the same model against the same wire protocol, so a workflow started by a Python client can be picked up by a Go worker and vice versa.
 
-- [agent-sdk-typescript](https://github.com/postgrip-io/agent-sdk-typescript)
-- [agent-sdk-python](https://github.com/postgrip-io/agent-sdk-python)
-- [agent-sdk-protocol](https://github.com/postgrip-io/agent-sdk-protocol) — the shared wire shapes
+- [agent-sdk-typescript](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/typescript)
+- [agent-sdk-python](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/python)
+- [agent-sdk-protocol](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/protocol) — the shared wire shapes
 
 ## Where to next
 
