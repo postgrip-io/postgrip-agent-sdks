@@ -114,15 +114,11 @@ TRACKED_TYPES = [
     "CreateSandboxSessionResponse",
 ]
 
-# Where to fetch type files. The "go" url points at agent-sdk-protocol so the
-# script can be run from any of the four repos and pull whichever languages
-# aren't on disk. --from-github uses these for everything; otherwise we look
-# for sibling working dirs at agent-sdk-{language}/.
+# Where to fetch type files from the consolidated repository. --from-github
+# uses these for every language; normal CI uses MONOREPO_PATHS below.
 #
-# Note the asymmetry: Go package files live at module root (idiomatic Go
-# layout means consumer imports are
-# `github.com/postgrip-io/agent-sdk-protocol`, not `…/src`). TS and Python
-# keep `src/` per their idiomatic layouts.
+# Go package files live under protocol/. TS and Python retain their idiomatic
+# src/ layouts inside their package directories.
 #
 # Each language maps to a LIST of files, concatenated before parsing. The
 # protocol package is a Go package, not a single file, and pretending
@@ -130,9 +126,9 @@ TRACKED_TYPES = [
 # every type in it report "not found in types.go" while the mirrors sat
 # unchecked. A language's declarations may live in as many files as it likes.
 GITHUB_SOURCES = {
-    "go":     ("postgrip-io", "agent-sdk-protocol", ["types.go", "sandbox.go"]),
-    "ts":     ("postgrip-io", "agent-sdk-typescript", ["src/types.ts"]),
-    "python": ("postgrip-io", "agent-sdk-python", ["src/postgrip_agent/types.py"]),
+    "go":     ("postgrip-io", "postgrip-agent-sdks", ["protocol/types.go", "protocol/sandbox.go"]),
+    "ts":     ("postgrip-io", "postgrip-agent-sdks", ["typescript/src/types.ts"]),
+    "python": ("postgrip-io", "postgrip-agent-sdks", ["python/src/postgrip_agent/types.py"]),
 }
 # Repo-local paths, keyed by --local: the language whose types live in this
 # checkout (CI in that repo will set --local to it so a PR's changes are
@@ -905,8 +901,8 @@ def self_test() -> int:
     fetched: list[str] = []
 
     def fake_load(url, *, from_github):
-        fetched.append(url.rsplit("/agent-sdk-protocol/", 1)[-1])
-        if url.endswith("/branch/types.go"):
+        fetched.append(url.rsplit("/postgrip-agent-sdks/", 1)[-1])
+        if url.endswith("/branch/protocol/types.go"):
             raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
         return f"// {url}\n"
 
@@ -919,10 +915,10 @@ def self_test() -> int:
     check(
         "load_from_github resolves the ref per path",
         fetched,
-        ["branch/types.go", "main/types.go", "branch/sandbox.go"],
+        ["branch/protocol/types.go", "main/protocol/types.go", "branch/protocol/sandbox.go"],
     )
     # And the branch's own file is what lands in the parsed text, not main's.
-    check("load_from_github keeps the branch file", "branch/sandbox.go" in joined, True)
+    check("load_from_github keeps the branch file", "branch/protocol/sandbox.go" in joined, True)
 
     if failures:
         print("check_drift self-test FAILED:", file=sys.stderr)

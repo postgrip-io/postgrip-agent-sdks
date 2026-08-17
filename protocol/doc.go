@@ -1,12 +1,12 @@
 // Package protocol carries the wire-format types and Ed25519 task-result
 // signing logic for the PostGrip Agent runtime service. It is the single
 // source of truth shared by the postgrip-web runtime, the customer-facing
-// agent-sdk-go, and (via hand-mirrored type definitions) agent-sdk-typescript
-// and agent-sdk-python.
+// Go SDK, and (via generated or mirrored type definitions) the TypeScript and
+// Python SDKs in this monorepo.
 //
 // # Import
 //
-//	import "github.com/postgrip-io/agent-sdk-protocol"
+//	import "github.com/postgrip-io/postgrip-agent-sdks/protocol"
 //
 // # Stability
 //
@@ -18,9 +18,6 @@
 //
 // # Layout
 //
-// Go package files live at the module root (idiomatic Go layout) so a
-// default `go get` + `import` works without surprises. The TypeScript
-// and Python SDK repos keep their sources under src/ per each language's
-// own conventions; only the test/, doc/, and .github/ siblings are
-// uniformly placed across all four repos.
+// Go package files live at this module root. The TypeScript and Python SDKs
+// keep their sources under their language directories in the same repository.
 package protocol
