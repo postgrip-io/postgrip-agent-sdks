@@ -51,12 +51,24 @@ import argparse
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+class FetchError(RuntimeError):
+    """A peer type file could not be retrieved.
+
+    Distinct from drift on purpose. A GitHub incident used to surface as an
+    unhandled HTTPError traceback and exit 1 — the same exit code as real
+    drift — so an outage was indistinguishable from a genuine finding. This
+    maps to exit 2, tooling failure.
+    """
+
 
 # Wire types we actively contract on. Keep this list narrow on purpose —
 # every type added here is a commitment that TS / Python will mirror it.
@@ -85,6 +97,20 @@ TRACKED_TYPES = [
     "ScheduleAction",
     "ScheduleCalendarSpec",
     "RetryPolicy",
+    # Sandbox platform, client-facing shapes only. The agent-plane sandbox
+    # types (SandboxObservation, SandboxReconcile*, SandboxSessionAssignment,
+    # SandboxEvent) are deliberately absent: they never cross a client SDK, and
+    # tracking them would force TS/Python to mirror types nothing there uses —
+    # the same reason EnrollAgentRequest and PollTaskResponse aren't listed.
+    "Sandbox",
+    "SandboxCreateRequest",
+    "SandboxListResponse",
+    "SandboxResourceLimits",
+    "SandboxNetworkPolicy",
+    "SandboxPortMapping",
+    "SandboxWorkspace",
+    "CreateSandboxSessionRequest",
+    "CreateSandboxSessionResponse",
 ]
 
 # Where to fetch type files. The "go" url points at agent-sdk-protocol so the
@@ -96,28 +122,46 @@ TRACKED_TYPES = [
 # layout means consumer imports are
 # `github.com/postgrip-io/agent-sdk-protocol`, not `…/src`). TS and Python
 # keep `src/` per their idiomatic layouts.
+#
+# Each language maps to a LIST of files, concatenated before parsing. The
+# protocol package is a Go package, not a single file, and pretending
+# otherwise silently drops whatever isn't in types.go: adding sandbox.go made
+# every type in it report "not found in types.go" while the mirrors sat
+# unchecked. A language's declarations may live in as many files as it likes.
 GITHUB_SOURCES = {
-    "go":     ("postgrip-io", "agent-sdk-protocol", "types.go"),
-    "ts":     ("postgrip-io", "agent-sdk-typescript", "src/types.ts"),
-    "python": ("postgrip-io", "agent-sdk-python", "src/postgrip_agent/types.py"),
+    "go":     ("postgrip-io", "agent-sdk-protocol", ["types.go", "sandbox.go"]),
+    "ts":     ("postgrip-io", "agent-sdk-typescript", ["src/types.ts"]),
+    "python": ("postgrip-io", "agent-sdk-python", ["src/postgrip_agent/types.py"]),
 }
 # Repo-local paths, keyed by --local: the language whose types live in this
 # checkout (CI in that repo will set --local to it so a PR's changes are
 # checked against the OTHER two languages fetched from github main).
 LOCAL_PATHS = {
-    "go":     Path("types.go"),
-    "ts":     Path("src/types.ts"),
-    "python": Path("src/postgrip_agent/types.py"),
+    "go":     [Path("types.go"), Path("sandbox.go")],
+    "ts":     [Path("src/types.ts")],
+    "python": [Path("src/postgrip_agent/types.py")],
 }
 # Sibling working-dir layout for local development across all four repos.
 SIBLING_PATHS = {
-    "go":     REPO_ROOT.parent / "agent-sdk-protocol" / "types.go",
-    "ts":     REPO_ROOT.parent / "agent-sdk-typescript" / "src" / "types.ts",
-    "python": REPO_ROOT.parent / "agent-sdk-python" / "src" / "postgrip_agent" / "types.py",
+    "go":     [REPO_ROOT.parent / "agent-sdk-protocol" / "types.go",
+               REPO_ROOT.parent / "agent-sdk-protocol" / "sandbox.go"],
+    "ts":     [REPO_ROOT.parent / "agent-sdk-typescript" / "src" / "types.ts"],
+    "python": [REPO_ROOT.parent / "agent-sdk-python" / "src" / "postgrip_agent" / "types.py"],
 }
 
 # json:"..." -> field name (strip ",omitempty" etc.)
 JSON_TAG_RE = re.compile(r'json:"([^",]+)')
+
+
+def go_json_field_names(body: str) -> set[str]:
+    """JSON field names declared in a Go struct body.
+
+    `json:"-"` is excluded: the tag means the field never crosses the wire, so
+    there is nothing for TS or Python to mirror. Without this the checker
+    demands a field literally named "-" in every mirror — which is how a
+    server-side-only field on a wire type became impossible to express.
+    """
+    return {name for name in JSON_TAG_RE.findall(body) if name != "-"}
 
 # Go: type X struct { ... }
 GO_STRUCT_RE = re.compile(r'^type\s+(\w+)\s+struct\s*\{', re.MULTILINE)
@@ -176,8 +220,7 @@ def parse_go_types(source: str) -> dict[str, set[str]]:
                 depth -= 1
             i += 1
         body = source[m.end() : i - 1]
-        fields = set(JSON_TAG_RE.findall(body))
-        structs[name] = fields
+        structs[name] = go_json_field_names(body)
         pos = i
 
     # Resolve aliases by copying the target's field set under the alias name.
@@ -388,17 +431,46 @@ def parse_py_types(source: str) -> dict[str, set[str]]:
     return out
 
 
+# Statuses worth retrying rather than reporting. raw.githubusercontent
+# rate-limits (429) and sheds load (5xx) during GitHub incidents, and a fetch
+# that fails for those reasons says nothing about the type files.
+RETRYABLE_HTTP_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+FETCH_ATTEMPTS = 3
+
+
 def load(path_or_url: str | Path, *, from_github: bool) -> str:
-    if from_github:
-        with urllib.request.urlopen(path_or_url, timeout=30) as resp:
-            return resp.read().decode("utf-8")
-    with open(path_or_url, encoding="utf-8") as fh:
-        return fh.read()
+    if not from_github:
+        with open(path_or_url, encoding="utf-8") as fh:
+            return fh.read()
+    last_err: Exception | None = None
+    for attempt in range(FETCH_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(path_or_url, timeout=30) as resp:
+                return resp.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 or exc.code not in RETRYABLE_HTTP_STATUSES:
+                raise
+            last_err = exc
+        except urllib.error.URLError as exc:
+            last_err = exc
+        if attempt < FETCH_ATTEMPTS - 1:
+            time.sleep(0.5 * 2**attempt)
+    raise FetchError(f"fetching {path_or_url}: {last_err}") from last_err
 
 
-def github_raw_url(lang: str, ref: str) -> str:
-    owner, repo, path = GITHUB_SOURCES[lang]
+def github_raw_url(lang: str, ref: str, path: str) -> str:
+    owner, repo, _ = GITHUB_SOURCES[lang]
     return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+
+
+def load_all(paths, *, from_github: bool) -> str:
+    """Concatenate every declaration file for one language.
+
+    Parsing the joined text is safe because every parser here is anchored to
+    line starts, and it keeps a language free to split its declarations across
+    files without the checker quietly ignoring the ones it wasn't told about.
+    """
+    return "\n".join(load(p, from_github=from_github) for p in paths)
 
 
 def github_ref_candidates(preferred_ref: str) -> list[str]:
@@ -409,18 +481,36 @@ def github_ref_candidates(preferred_ref: str) -> list[str]:
     return refs
 
 
-def load_from_github(lang: str, refs: list[str]) -> str:
+def load_one_from_github(lang: str, path: str, refs: list[str]) -> str:
+    """Fetch one declaration file, resolving the ref candidates for it alone.
+
+    The fallback is deliberately per path rather than per language. Resolving it
+    for the whole bundle meant that a PR branch adding sandbox.go while leaving
+    types.go untouched 404'd on the second URL and dropped *back to main for
+    both* — so the branch's real types.go was silently replaced by main's, and
+    the cross-repo drift job could pass without ever reading the wire change it
+    was triggered for. A missing file on a branch means that one file is
+    unchanged there, never that the branch should be abandoned.
+    """
     last_err: Exception | None = None
     for ref in refs:
         try:
-            return load(github_raw_url(lang, ref), from_github=True)
+            return load(github_raw_url(lang, ref, path), from_github=True)
         except urllib.error.HTTPError as exc:
+            # Only a 404 means "this ref doesn't have the file" and should fall
+            # through to the next candidate ref. Anything else already
+            # exhausted its retries in load().
             if exc.code != 404:
-                raise
+                raise FetchError(f"fetching {lang} {path} at ref {ref}: {exc}") from exc
             last_err = exc
-    raise RuntimeError(
-        f"could not fetch {lang} type file from GitHub refs {', '.join(refs)}"
+    raise FetchError(
+        f"could not fetch {lang} file {path} from GitHub refs {', '.join(refs)}"
     ) from last_err
+
+
+def load_from_github(lang: str, refs: list[str]) -> str:
+    _, _, paths = GITHUB_SOURCES[lang]
+    return "\n".join(load_one_from_github(lang, p, refs) for p in paths)
 
 
 def diff_field_sets(
@@ -529,6 +619,13 @@ def self_test() -> int:
     check("parse_ts_types fields", parse_ts_types(SELF_TEST_TS).get("TimerPayload"), {"timerId", "durationMs"})
     check("parse_py_types fields", parse_py_types(SELF_TEST_PY).get("TimerPayload"), {"timerId", "durationMs"})
 
+    # Regression: json:"-" was captured as a field named "-", so any wire type
+    # carrying a server-side-only field demanded a "-" field in both mirrors.
+    check(
+        "parse_go_types skips json:\"-\" fields",
+        parse_go_types('type X struct {\n\tA string `json:"a"`\n\tB string `json:"-"`\n}').get("X"),
+        {"a"},
+    )
     check("go_struct_names", go_struct_names(SELF_TEST_GO), {"TimerPayload"})
     check("go_literal_const_names", go_literal_const_names(SELF_TEST_GO), {"TaskTypeNoop", "TaskTypeTimer"})
     # The correct re-export form must NOT register as a literal const.
@@ -557,6 +654,14 @@ def self_test() -> int:
         ["  X.ts: extra fields not present in Go: b"],
     )
     check("diff_field_sets clean", list(diff_field_sets("X", "ts", {"a"}, {"a"})), [])
+
+    # A fetch failure must reach the handlers that map to exit 2 (tooling),
+    # not fall through as an unhandled traceback that exits 1 and reads as
+    # drift. Both call sites catch RuntimeError, so the subclassing is the
+    # contract — a GitHub 429 during an incident used to look like a finding.
+    check("FetchError is caught as a tooling failure", issubclass(FetchError, RuntimeError), True)
+    check("retryable statuses include rate limiting", 429 in RETRYABLE_HTTP_STATUSES, True)
+    check("404 is not retried", 404 in RETRYABLE_HTTP_STATUSES, False)
 
     check("repeated finds duplicates", repeated(["a", "b", "a"]), {"a"})
     check("repeated on unique input", repeated(["a", "b"]), set())
@@ -608,6 +713,33 @@ def self_test() -> int:
         if not any("PollTaskResponse" in f for f in wide):
             failures.append(f"  check_go_sdk ownership beyond TRACKED_TYPES: got {wide}")
 
+    # Regression: the preferred/main fallback was resolved once for the whole
+    # language bundle. A PR branch that changed sandbox.go but not types.go
+    # 404'd on types.go and dropped back to main for *both* files, so the job
+    # checked main's sandbox.go — never the wire change it was triggered for,
+    # and reported success. Each path must resolve its own ref.
+    fetched: list[str] = []
+
+    def fake_load(url, *, from_github):
+        fetched.append(url.rsplit("/agent-sdk-protocol/", 1)[-1])
+        if url.endswith("/branch/types.go"):
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        return f"// {url}\n"
+
+    real_load = globals()["load"]
+    globals()["load"] = fake_load
+    try:
+        joined = load_from_github("go", ["branch", "main"])
+    finally:
+        globals()["load"] = real_load
+    check(
+        "load_from_github resolves the ref per path",
+        fetched,
+        ["branch/types.go", "main/types.go", "branch/sandbox.go"],
+    )
+    # And the branch's own file is what lands in the parsed text, not main's.
+    check("load_from_github keeps the branch file", "branch/sandbox.go" in joined, True)
+
     if failures:
         print("check_drift self-test FAILED:", file=sys.stderr)
         for line in failures:
@@ -657,7 +789,7 @@ def main() -> int:
             if args.from_github:
                 protocol_source = load_from_github("go", github_refs)
             else:
-                protocol_source = load(SIBLING_PATHS["go"], from_github=False)
+                protocol_source = load_all(SIBLING_PATHS["go"], from_github=False)
         except (RuntimeError, FileNotFoundError) as e:
             print(f"check_drift: {e}", file=sys.stderr)
             return 2
@@ -680,7 +812,7 @@ def main() -> int:
     for lang in ("go", "ts", "python"):
         if args.local == lang:
             try:
-                sources[lang] = load(REPO_ROOT / LOCAL_PATHS[lang], from_github=False)
+                sources[lang] = load_all([REPO_ROOT / p for p in LOCAL_PATHS[lang]], from_github=False)
             except FileNotFoundError as e:
                 print(f"check_drift: --local={lang} but {e}", file=sys.stderr)
                 return 2
@@ -692,11 +824,11 @@ def main() -> int:
                 return 2
         else:
             try:
-                sources[lang] = load(SIBLING_PATHS[lang], from_github=False)
+                sources[lang] = load_all(SIBLING_PATHS[lang], from_github=False)
             except FileNotFoundError:
                 print(
                     f"check_drift: sibling working dir for {lang} not found at "
-                    f"{SIBLING_PATHS[lang]}; retry with --from-github or --local={lang}",
+                    f"{', '.join(str(p) for p in SIBLING_PATHS[lang])}; retry with --from-github or --local={lang}",
                     file=sys.stderr,
                 )
                 return 2
