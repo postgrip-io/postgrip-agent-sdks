@@ -510,3 +510,152 @@ export interface ActivityOptions {
   cancellationScope?: CancellationScopeType;
   retry?: RetryPolicy;
 }
+
+// --- sandbox platform ------------------------------------------------------
+//
+// Mirrors agent-sdk-protocol/sandbox.go. Timestamps are RFC3339 strings, as
+// everywhere else in this file.
+
+export type SandboxBackend = 'auto' | 'docker' | 'podman' | 'firecracker';
+
+export type SandboxDesiredState = 'running' | 'stopped' | 'deleted';
+
+/**
+ * Only `running`, `stopped`, `deleted` and `failed` are reported by agents
+ * today, and `scheduling` is written by the control plane at placement. The
+ * rest exist for forward compatibility — treat an unexpected value as
+ * in-flight rather than as an error.
+ */
+export type SandboxObservedState =
+  | 'requested'
+  | 'scheduling'
+  | 'provisioning'
+  | 'setting_up'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'starting'
+  | 'deleting'
+  | 'deleted'
+  | 'failed';
+
+export type SandboxSessionKind = 'pty' | 'exec';
+
+export interface SandboxResourceLimits {
+  cpus?: number;
+  memoryBytes?: number;
+  diskBytes?: number;
+}
+
+export interface SandboxPortMapping {
+  hostPort: number;
+  guestPort: number;
+  protocol?: string;
+}
+
+/** `internetEgress` combined with `denyHostAccess` or `allowCidrs` is a 400. */
+export interface SandboxNetworkPolicy {
+  internetEgress: boolean;
+  allowCidrs?: string[];
+  denyHostAccess: boolean;
+  ports?: SandboxPortMapping[];
+}
+
+export interface Sandbox {
+  tenantId: string;
+  id: string;
+  name: string;
+  createdBy: string;
+  agentId?: string;
+  desiredState: SandboxDesiredState;
+  observedState: SandboxObservedState;
+  generation: number;
+  observedGeneration: number;
+  backend: SandboxBackend;
+  isolationClass: string;
+  image: string;
+  architecture?: string;
+  workspaceId?: string;
+  repositoryName?: string;
+  setupCommand?: string[];
+  credentialRefs?: string[];
+  resourceLimits: SandboxResourceLimits;
+  networkPolicy: SandboxNetworkPolicy;
+  labels?: Record<string, string>;
+  runtimeInstanceId?: string;
+  failureCode?: string;
+  failureMessage?: string;
+  expiresAt?: string;
+  lastActivityAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  stoppedAt?: string;
+  deletedAt?: string;
+}
+
+/**
+ * `name` must match ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$ and is unique per tenant
+ * among live sandboxes, so a duplicate is a 409. `credentialRefs` is reserved —
+ * any non-empty value is rejected with 400 today.
+ *
+ * `image` is required here because it is required on the server. It used to be
+ * optional, which let `{ name: 'x' }` type-check even though that create is
+ * answered with a 400 unconditionally — giving up the one thing a mirrored
+ * request type can do, which is reject an invalid request before the round
+ * trip.
+ */
+export interface SandboxCreateRequest {
+  name: string;
+  image: string;
+  backend?: SandboxBackend;
+  architecture?: string;
+  workspaceId?: string;
+  repositoryName?: string;
+  setupCommand?: string[];
+  credentialRefs?: string[];
+  resourceLimits?: SandboxResourceLimits;
+  networkPolicy?: SandboxNetworkPolicy;
+  labels?: Record<string, string>;
+  expiresAt?: string;
+}
+
+/** The list endpoint returns this envelope, not a bare array. */
+export interface SandboxListResponse {
+  sandboxes: Sandbox[];
+}
+
+/**
+ * `id` is not the digest: uploading identical bytes returns the pre-existing
+ * record, so don't assume a fresh id per upload.
+ */
+export interface SandboxWorkspace {
+  tenantId: string;
+  id: string;
+  sha256: string;
+  sizeBytes: number;
+  repositoryName: string;
+  revision?: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/**
+ * `rows`/`columns` default to 24x80 and are fixed for the session's life —
+ * there is no resize channel. `kind` defaults to `pty`; `exec` requires
+ * `command`. The sandbox must be observed running and assigned to an agent,
+ * else the server returns a retryable 400.
+ */
+export interface CreateSandboxSessionRequest {
+  rows?: number;
+  columns?: number;
+  kind?: SandboxSessionKind;
+  command?: string[];
+}
+
+/** The ticket is returned exactly once and is short-lived. */
+export interface CreateSandboxSessionResponse {
+  id: string;
+  ticket: string;
+  expiresAt: string;
+}
