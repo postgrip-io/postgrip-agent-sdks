@@ -97,6 +97,69 @@ agents advertising that tier. It requires `Image`; a command-only runtime
 executes directly on the agent host, which honors no isolation floor, and the
 orchestrator rejects that combination at enqueue.
 
+## Sandboxes
+
+Sandboxes are persistent development environments assigned to one of your
+agents. `client.Sandbox` covers the full lifecycle plus interactive and
+non-interactive execution.
+
+Sandbox endpoints use a **management token**, not an agent token — set
+`AuthToken` on the connection.
+
+```go
+conn, err := client.NewConnection(client.ConnectionOptions{
+    Address:   "https://agents.example.com",
+    AuthToken: os.Getenv("POSTGRIP_TOKEN"), // opaque; no prefix to check
+})
+c := client.New(conn)
+
+// Ship the working tree, then build a sandbox from it.
+ws, err := c.Sandbox.UploadWorkspace(ctx, archive, "my-repo", revision)
+box, err := c.Sandbox.Create(ctx, client.SandboxCreateRequest{
+    Name:        "task-1",
+    Image:       "postgrip/sandbox:1",
+    WorkspaceID: ws.ID,
+    SetupCommand: []string{"/bin/sh", "setup.sh"},
+})
+
+// Create returns as soon as the record exists; the sandbox is not up yet.
+box, err = c.Sandbox.WaitUntilRunning(ctx, box.ID, client.SandboxWaitOptions{})
+
+code, err := c.Sandbox.Exec(ctx, box.ID, []string{"go", "test", "./..."}, nil, os.Stdout)
+
+_, err = c.Sandbox.Delete(ctx, box.ID)
+```
+
+`WaitUntilRunning` treats readiness as `observedState == running` **and**
+`observedGeneration >= generation`. A "running" reading can predate a start or
+stop the assigned agent hasn't observed yet, so state alone can hand back a
+sandbox that is about to stop. It also returns immediately if the sandbox
+reaches `failed`, carrying the sandbox's own failure message.
+
+### Interactive sessions
+
+```go
+stream, err := c.Sandbox.OpenSandboxSession(ctx, box.ID, client.SandboxSessionKindPTY,
+    client.SandboxSessionOptions{Rows: 40, Columns: 120})
+defer stream.Close()
+
+go io.Copy(stream, os.Stdin)
+io.Copy(os.Stdout, stream)
+```
+
+Three properties of the relay worth knowing, because they are not obvious:
+
+- **stdout and stderr are interleaved.** The relay carries one byte stream; a
+  client cannot separate them.
+- **There is no resize channel.** `Rows`/`Columns` are fixed when the session
+  is created, so a terminal resize mid-session cannot reach the sandbox.
+- **Exit codes arrive as the WebSocket close status** (`4000+code`), not in the
+  stream. `Exec` decodes this; a close outside that range is a transport
+  failure and surfaces as an error rather than as an exit code.
+
+Single writes must stay at or below `client.SandboxRelayMaxFrameBytes` (1 MiB);
+larger frames are refused locally rather than silently closing the session.
+
 ## Workflows and activities
 
 ```go

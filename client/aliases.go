@@ -47,6 +47,18 @@ type (
 	SignalWithStartWorkflowResponse = protocol.SignalWithStartWorkflowResponse
 	AgentPollDirective              = protocol.AgentPollDirective
 	PollTaskResponse                = protocol.PollTaskResponse
+	Sandbox                         = protocol.Sandbox
+	SandboxBackend                  = protocol.SandboxBackend
+	SandboxCreateRequest            = protocol.SandboxCreateRequest
+	SandboxDesiredState             = protocol.SandboxDesiredState
+	SandboxListResponse             = protocol.SandboxListResponse
+	SandboxNetworkPolicy            = protocol.SandboxNetworkPolicy
+	SandboxObservedState            = protocol.SandboxObservedState
+	SandboxPortMapping              = protocol.SandboxPortMapping
+	SandboxResourceLimits           = protocol.SandboxResourceLimits
+	SandboxWorkspace                = protocol.SandboxWorkspace
+	CreateSandboxSessionRequest     = protocol.CreateSandboxSessionRequest
+	CreateSandboxSessionResponse    = protocol.CreateSandboxSessionResponse
 	AgentMaintenanceWindow          = protocol.AgentMaintenanceWindow
 	AgentMaintenanceWindowRequest   = protocol.AgentMaintenanceWindowRequest
 	UpdateAgentRequest              = protocol.UpdateAgentRequest
@@ -88,6 +100,25 @@ const (
 
 	DefaultNamespace = protocol.DefaultNamespace
 	DefaultQueue     = protocol.DefaultQueue
+
+	SandboxBackendAuto        = protocol.SandboxBackendAuto
+	SandboxBackendDocker      = protocol.SandboxBackendDocker
+	SandboxBackendPodman      = protocol.SandboxBackendPodman
+	SandboxBackendFirecracker = protocol.SandboxBackendFirecracker
+
+	SandboxDesiredRunning = protocol.SandboxDesiredRunning
+	SandboxDesiredStopped = protocol.SandboxDesiredStopped
+	SandboxDesiredDeleted = protocol.SandboxDesiredDeleted
+
+	SandboxObservedRunning = protocol.SandboxObservedRunning
+	SandboxObservedStopped = protocol.SandboxObservedStopped
+	SandboxObservedDeleted = protocol.SandboxObservedDeleted
+	SandboxObservedFailed  = protocol.SandboxObservedFailed
+
+	SandboxSessionKindPTY  = protocol.SandboxSessionKindPTY
+	SandboxSessionKindExec = protocol.SandboxSessionKindExec
+
+	SandboxRelayMaxFrameBytes = protocol.SandboxRelayMaxFrameBytes
 
 	IsolationTierContainer = protocol.IsolationTierContainer
 	IsolationTierMicroVM   = protocol.IsolationTierMicroVM
