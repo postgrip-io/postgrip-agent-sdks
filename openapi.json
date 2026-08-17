@@ -1075,7 +1075,7 @@
           "subject": { "$ref": "#/components/schemas/AgentPollDirectiveSubject" }
         }
       },
-      "PollTaskResponse": { "type": "object", "additionalProperties": false, "properties": { "task": { "$ref": "#/components/schemas/Task" }, "directive": { "$ref": "#/components/schemas/AgentPollDirective" } } },
+      "PollTaskResponse": { "type": "object", "additionalProperties": false, "properties": { "task": { "anyOf": [{ "$ref": "#/components/schemas/Task" }, { "type": "null" }] }, "directive": { "$ref": "#/components/schemas/AgentPollDirective" } } },
       "HeartbeatTaskRequest": { "type": "object", "additionalProperties": false, "properties": { "lease_timeout_seconds": { "type": "integer", "minimum": 0 }, "event": { "$ref": "#/components/schemas/TaskEventInput" } } },
       "AppendTaskEventRequest": { "type": "object", "additionalProperties": false, "required": ["event"], "properties": { "event": { "$ref": "#/components/schemas/TaskEventInput" } } },
       "CompleteTaskRequest": { "type": "object", "additionalProperties": false, "required": ["result"], "properties": { "result": { "$ref": "#/components/schemas/TaskResult" } } },
@@ -1149,12 +1149,12 @@
           "runtimeInstanceId": { "type": "string" },
           "failureCode": { "type": "string" },
           "failureMessage": { "type": "string" },
-          "expiresAt": { "type": "string", "format": "date-time" },
-          "lastActivityAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+          "lastActivityAt": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" },
-          "stoppedAt": { "type": "string", "format": "date-time" },
-          "deletedAt": { "type": "string", "format": "date-time" }
+          "stoppedAt": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+          "deletedAt": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] }
         }
       },
       "SandboxCreateRequest": {
