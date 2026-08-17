@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"go.postgrip.io/sdk/failure"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/failure"
 )
 
 // Sandbox endpoints authenticate on the *management* lane, not the agent

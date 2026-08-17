@@ -1,29 +1,25 @@
 # PostGrip Agent — Go SDK
 
-[![Docs](https://img.shields.io/badge/docs-postgrip--io.github.io-2563EB?logo=github&logoColor=white)](https://postgrip-io.github.io/agent-sdk-go/)
-[![Go Reference](https://pkg.go.dev/badge/go.postgrip.io/sdk.svg)](https://pkg.go.dev/go.postgrip.io/sdk)
-[![CI](https://github.com/postgrip-io/agent-sdk-go/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/agent-sdk-go/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/postgrip-io/agent-sdk-go?label=release&color=2563EB)](https://github.com/postgrip-io/agent-sdk-go/releases)
-[![License](https://img.shields.io/github/license/postgrip-io/agent-sdk-go?color=2563EB)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-postgrip--io.github.io-2563EB?logo=github&logoColor=white)](https://postgrip-io.github.io/postgrip-agent-sdks/go/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/postgrip-io/postgrip-agent-sdks/go.svg)](https://pkg.go.dev/github.com/postgrip-io/postgrip-agent-sdks/go)
+[![CI](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/postgrip-io/postgrip-agent-sdks?filter=go%2Fv*&label=release&color=2563EB)](https://github.com/postgrip-io/postgrip-agent-sdks/releases?q=go%2Fv)
+[![License](https://img.shields.io/github/license/postgrip-io/postgrip-agent-sdks?color=2563EB)](LICENSE)
 
 Go SDK for defining, submitting, and executing PostGrip workflows. In production,
 SDK workflow runtimes are supervised by an existing PostGrip agent: the host
 agent launches the runtime, injects delegated credentials, and keeps generic
-operational tasks separate from workflow/activity polling. Mirrors
-[`agent-sdk-typescript`](https://github.com/postgrip-io/agent-sdk-typescript)
-and [`agent-sdk-python`](https://github.com/postgrip-io/agent-sdk-python) so
-polyglot deployments can pick whichever language fits each task fleet. Wire
-shapes come from
-[`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) so
-all four packages agree on the runtime contract.
+operational tasks separate from workflow/activity polling. The TypeScript,
+Python, and shared protocol packages live alongside it in this monorepo so
+polyglot deployments share one runtime contract.
 
-**Docs:** [postgrip-io.github.io/agent-sdk-go](https://postgrip-io.github.io/agent-sdk-go/) — quick start, package guide, workflow runtime model.
-**API:** [pkg.go.dev/go.postgrip.io/sdk](https://pkg.go.dev/go.postgrip.io/sdk) — auto-generated godoc.
+**Docs:** [postgrip-io.github.io/postgrip-agent-sdks/go](https://postgrip-io.github.io/postgrip-agent-sdks/go/) — quick start, package guide, workflow runtime model.
+**API:** [pkg.go.dev/github.com/postgrip-io/postgrip-agent-sdks/go](https://pkg.go.dev/github.com/postgrip-io/postgrip-agent-sdks/go) — auto-generated godoc.
 
-**Current release:** `v0.11.0`
+**Current release:** `v0.12.0`
 
 ```sh
-go get go.postgrip.io/sdk
+go get github.com/postgrip-io/postgrip-agent-sdks/go
 ```
 
 The SDK is split into focused sub-packages — pick the ones your code needs:
@@ -50,7 +46,7 @@ import (
     "log"
     "os"
 
-    "go.postgrip.io/sdk/client"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/client"
 )
 
 func main() {
@@ -166,10 +162,10 @@ larger frames are refused locally rather than silently closing the session.
 import (
     "context"
 
-    "go.postgrip.io/sdk/activity"
-    "go.postgrip.io/sdk/client"
-    "go.postgrip.io/sdk/worker"
-    "go.postgrip.io/sdk/workflow"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/activity"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/client"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/worker"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/workflow"
 )
 
 // This process is launched by a PostGrip host agent from a workflow.runtime task.
@@ -235,7 +231,7 @@ import (
     "context"
     "os"
 
-    "go.postgrip.io/sdk/client"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/client"
 )
 
 func submitRuntime(ctx context.Context) error {

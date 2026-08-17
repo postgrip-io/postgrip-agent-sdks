@@ -7,7 +7,7 @@ pip install postgrip-agent
 To pin a specific version:
 
 ```sh
-pip install postgrip-agent==0.11.0
+pip install postgrip-agent==0.12.0
 ```
 
 ## Requirements
@@ -29,8 +29,8 @@ The package re-exports its public surface from `postgrip_agent.__init__`, so mos
 ## Local development from a clone
 
 ```sh
-git clone https://github.com/postgrip-io/agent-sdk-python
-cd agent-sdk-python
+git clone https://github.com/postgrip-io/postgrip-agent-sdks.git
+cd postgrip-agent-sdks/python
 pip install -e .
 PYTHONPATH=src python -m unittest discover -s test
 ```

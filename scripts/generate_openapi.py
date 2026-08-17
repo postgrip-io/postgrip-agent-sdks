@@ -289,7 +289,7 @@ def go_types_source(spec: dict[str, Any], rows: list[dict[str, Any]], digest: st
         declarations.append(f"type OpenAPI{operation_name}RequestBody = {request_type}")
         declarations.append(f"type OpenAPI{operation_name}ResponseBody = {response_type}")
     declarations_source = chr(10).join(declarations)
-    imports = ['protocol "github.com/postgrip-io/agent-sdk-protocol"']
+    imports = ['protocol "github.com/postgrip-io/postgrip-agent-sdks/protocol"']
     if "time.Time" in declarations_source:
         imports.append('"time"')
     import_source = "\n".join(f"\t{value}" for value in imports)

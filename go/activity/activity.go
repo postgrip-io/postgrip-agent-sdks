@@ -14,7 +14,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/postgrip-io/agent-sdk-protocol"
+	"github.com/postgrip-io/postgrip-agent-sdks/protocol"
 )
 
 // EventInput is re-exported from protocol so customer code doesn't have to

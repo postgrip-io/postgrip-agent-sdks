@@ -24,7 +24,7 @@ import (
     "log"
     "os"
 
-    "go.postgrip.io/sdk/client"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/client"
 )
 
 func main() {
@@ -68,10 +68,10 @@ import (
     "context"
     "log"
 
-    "go.postgrip.io/sdk/activity"
-    "go.postgrip.io/sdk/client"
-    "go.postgrip.io/sdk/worker"
-    "go.postgrip.io/sdk/workflow"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/activity"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/client"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/worker"
+    "github.com/postgrip-io/postgrip-agent-sdks/go/workflow"
 )
 
 // Activities are plain Go functions. The first arg is a regular

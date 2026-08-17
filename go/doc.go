@@ -13,15 +13,15 @@
 //   - [failure] — structured failure types (Application, Cancelled, Timeout,
 //     TaskFailed) and the FromInfo / ToInfo wire converters.
 //
-// Mirrors the TS [agent-sdk-typescript] and Python [agent-sdk-python] SDKs;
-// wire shapes come from [agent-sdk-protocol] so all four SDKs agree on the
+// Mirrors the [TypeScript SDK] and [Python SDK]; wire shapes come from the
+// shared [protocol package] so all four packages agree on the
 // runtime contract.
 //
 // Quick start — submit a workflow runtime:
 //
 //	import (
 //	    "context"
-//	    "go.postgrip.io/sdk/client"
+//	    "github.com/postgrip-io/postgrip-agent-sdks/go/client"
 //	)
 //
 //	conn, _ := client.NewConnection(client.ConnectionOptions{Address: "http://127.0.0.1:4100", AuthToken: token})
@@ -34,8 +34,8 @@
 //
 //	import (
 //	    "context"
-//	    "go.postgrip.io/sdk/activity"
-//	    "go.postgrip.io/sdk/worker"
+//	    "github.com/postgrip-io/postgrip-agent-sdks/go/activity"
+//	    "github.com/postgrip-io/postgrip-agent-sdks/go/worker"
 //	)
 //
 //	w, _ := worker.New(worker.Options{
@@ -49,7 +49,7 @@
 //	})
 //	_ = w.Run(ctx)
 //
-// [agent-sdk-typescript]: https://github.com/postgrip-io/agent-sdk-typescript
-// [agent-sdk-python]: https://github.com/postgrip-io/agent-sdk-python
-// [agent-sdk-protocol]: https://github.com/postgrip-io/agent-sdk-protocol
+// [TypeScript SDK]: https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/typescript
+// [Python SDK]: https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/python
+// [protocol package]: https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/protocol
 package sdk

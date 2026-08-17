@@ -33,7 +33,7 @@ DEFAULT_RUNTIME_COMMAND = "sh"
 DEFAULT_RUNTIME_REF = "da9cb81c9dc6f05efaf5e856248224d2ae06d173"
 DEFAULT_RUNTIME_ARGS = [
     "-lc",
-    "python -m pip install cryptography >/dev/null && python -c \"import os,urllib.request,zipfile,io; ref=os.environ.get('SDK_EXAMPLE_RUNTIME_REF','da9cb81c9dc6f05efaf5e856248224d2ae06d173'); data=urllib.request.urlopen(f'https://github.com/postgrip-io/agent-sdk-python/archive/{ref}.zip').read(); zipfile.ZipFile(io.BytesIO(data)).extractall('/tmp')\" && cd /tmp/agent-sdk-python-* && PYTHONPATH=src python -m example.greeting",
+    "python -m pip install cryptography >/dev/null && python -c \"import os,urllib.request,zipfile,io; ref=os.environ.get('SDK_EXAMPLE_RUNTIME_REF','main'); data=urllib.request.urlopen(f'https://github.com/postgrip-io/postgrip-agent-sdks/archive/{ref}.zip').read(); zipfile.ZipFile(io.BytesIO(data)).extractall('/tmp')\" && cd /tmp/postgrip-agent-sdks-*/python && PYTHONPATH=src python -m example.greeting",
 ]
 
 

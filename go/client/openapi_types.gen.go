@@ -3,7 +3,7 @@
 package client
 
 import (
-	protocol "github.com/postgrip-io/agent-sdk-protocol"
+	protocol "github.com/postgrip-io/postgrip-agent-sdks/protocol"
 )
 
 // These public models provide a complete, generated low-level wire surface.

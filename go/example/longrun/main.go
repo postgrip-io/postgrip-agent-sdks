@@ -25,10 +25,10 @@ import (
 	"syscall"
 	"time"
 
-	"go.postgrip.io/sdk/activity"
-	"go.postgrip.io/sdk/client"
-	"go.postgrip.io/sdk/worker"
-	"go.postgrip.io/sdk/workflow"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/activity"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/client"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/worker"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/workflow"
 )
 
 const (
@@ -43,7 +43,7 @@ const (
 
 var defaultRuntimeArgs = []string{
 	"-lc",
-	`git init /tmp/agent-sdk-go && cd /tmp/agent-sdk-go && git remote add origin https://github.com/postgrip-io/agent-sdk-go && git fetch --depth 1 origin "${SDK_EXAMPLE_RUNTIME_REF:-8b4e5df94c646350b51c0162d7030b1d38830f73}" && git checkout --detach FETCH_HEAD && PATH=/usr/local/go/bin:$PATH go run ./example/longrun`,
+	`git init /tmp/postgrip-agent-sdks && cd /tmp/postgrip-agent-sdks && git remote add origin https://github.com/postgrip-io/postgrip-agent-sdks.git && git fetch --depth 1 origin "${SDK_EXAMPLE_RUNTIME_REF:-main}" && git checkout --detach FETCH_HEAD && cd go && PATH=/usr/local/go/bin:$PATH go run ./example/longrun`,
 }
 
 func main() {

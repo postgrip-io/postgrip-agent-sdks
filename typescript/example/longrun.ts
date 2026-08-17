@@ -37,7 +37,7 @@ const DEFAULT_RUNTIME_IMAGE = 'oven/bun:1';
 const DEFAULT_RUNTIME_COMMAND = 'sh';
 const DEFAULT_RUNTIME_ARGS = [
   '-lc',
-  'apt-get update >/dev/null && apt-get install -y git >/dev/null && git clone --depth 1 https://github.com/postgrip-io/agent-sdk-typescript /tmp/agent-sdk-typescript && cd /tmp/agent-sdk-typescript && bun install --frozen-lockfile && bun run build && bun run example/longrun.ts',
+  'apt-get update >/dev/null && apt-get install -y git >/dev/null && git clone --depth 1 https://github.com/postgrip-io/postgrip-agent-sdks.git /tmp/postgrip-agent-sdks && cd /tmp/postgrip-agent-sdks/typescript && bun install --frozen-lockfile && bun run build && bun run example/longrun.ts',
 ];
 
 const activities = {

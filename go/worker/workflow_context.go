@@ -9,10 +9,10 @@ import (
 	"log/slog"
 	"time"
 
-	"go.postgrip.io/sdk/client"
-	"go.postgrip.io/sdk/failure"
-	"go.postgrip.io/sdk/internal/replay"
-	"go.postgrip.io/sdk/workflow"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/client"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/failure"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/internal/replay"
+	"github.com/postgrip-io/postgrip-agent-sdks/go/workflow"
 )
 
 // workflowContext is the live workflow.Context implementation. The Worker

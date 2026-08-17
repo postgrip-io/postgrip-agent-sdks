@@ -49,7 +49,7 @@ src/
 │                    `activityMilestone` from index.ts to avoid clash with workflow.milestone).
 ├─ errors.ts         ApplicationFailure, CancelledFailure, TimeoutFailure, TaskFailedError,
 │                    PostGripAgentError.
-└─ types.ts          Wire-format types mirroring agent-sdk-protocol/types.go.
+└─ types.ts          Wire-format types mirroring ../protocol/types.go.
 ```
 
 `index.ts` is the customer-facing import surface. Re-export new public names through `index.ts` explicitly; the `exports` field in `package.json` exposes only `./dist/index.js` so anything not re-exported from there is effectively private.
@@ -132,8 +132,7 @@ The npm package is `@postgrip/agent`. Releases are gated on a `typescript/v*` ta
 - Environment: `npm`
 
 The workflow uses `npm publish --access public` with `id-token: write` for
-trusted publishing. The monorepo is currently private, so npm provenance is
-not available; do not add `--provenance` until the repository is public.
+trusted publishing from the public monorepo.
 
 To cut a release:
 
@@ -141,14 +140,12 @@ To cut a release:
 # Bump version in package.json to match the tag, then:
 git tag -a typescript/v0.X.Y -m "TypeScript v0.X.Y"
 git push origin typescript/v0.X.Y
-gh release create typescript/v0.X.Y --title "TypeScript v0.X.Y" --notes "..."
 ```
 
-The `version` in `package.json` must match the tag suffix.
+The `version` in `package.json` must match the tag suffix. The workflow creates
+the GitHub release after npm publishing succeeds.
 
 ## Docs
 
 The customer-facing docs site is built with MkDocs Material from `docs/` and
-`mkdocs.yml`. It remains published from the public `agent-sdk-typescript`
-repository while this monorepo is private. Mirror documentation changes there
-until the Pages cutover described in `../MIGRATION.md` is complete.
+`mkdocs.yml`, then published under the monorepo's GitHub Pages site.

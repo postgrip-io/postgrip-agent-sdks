@@ -1,9 +1,9 @@
 site_name: PostGrip Agent — TypeScript SDK
 site_description: TypeScript SDK for the PostGrip Agent runtime service. Tasks, workflows, schedules, and a polling agent.
-site_url: https://postgrip-io.github.io/agent-sdk-typescript/
-repo_url: https://github.com/postgrip-io/agent-sdk-typescript
-repo_name: postgrip-io/agent-sdk-typescript
-edit_uri: edit/main/docs/
+site_url: https://postgrip-io.github.io/postgrip-agent-sdks/typescript/
+repo_url: https://github.com/postgrip-io/postgrip-agent-sdks
+repo_name: postgrip-io/postgrip-agent-sdks
+edit_uri: edit/main/typescript/docs/
 
 theme:
   name: material
@@ -35,7 +35,7 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/postgrip-io/agent-sdk-typescript
+      link: https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/typescript
     - icon: fontawesome/brands/npm
       link: https://www.npmjs.com/package/@postgrip/agent
   generator: false

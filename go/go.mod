@@ -1,7 +1,7 @@
-module go.postgrip.io/sdk
+module github.com/postgrip-io/postgrip-agent-sdks/go
 
 go 1.25.0
 
-require github.com/postgrip-io/agent-sdk-protocol v0.2.1
+require github.com/postgrip-io/postgrip-agent-sdks/protocol v0.3.0
 
 require github.com/coder/websocket v1.8.14

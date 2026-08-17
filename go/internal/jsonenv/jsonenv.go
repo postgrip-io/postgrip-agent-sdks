@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/postgrip-io/agent-sdk-protocol"
+	"github.com/postgrip-io/postgrip-agent-sdks/protocol"
 )
 
 // Marshal renders v as a json.RawMessage. Panics on failure because the

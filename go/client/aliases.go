@@ -5,7 +5,7 @@
 // workflows imports this package and nothing else.
 package client
 
-import "github.com/postgrip-io/agent-sdk-protocol"
+import "github.com/postgrip-io/postgrip-agent-sdks/protocol"
 
 // Re-export the wire types so customer code can stay within the client
 // package when reading task / workflow / schedule responses.

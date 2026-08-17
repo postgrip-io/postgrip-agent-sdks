@@ -2,10 +2,10 @@
 
 Run shell commands, container workloads, and durable workflows on the PostGrip Agent runtime service from your Python code.
 
-**Current release:** `0.11.0`
+**Current release:** `0.12.0`
 
 [Quick start →](quickstart.md){ .md-button .md-button--primary }
-[GitHub](https://github.com/postgrip-io/agent-sdk-python){ .md-button }
+[GitHub](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/python){ .md-button }
 [PyPI](https://pypi.org/project/postgrip-agent/){ .md-button }
 
 ---
@@ -36,9 +36,9 @@ class SayHelloWorkflow:
 
 This SDK is one of three. The Go and TypeScript siblings implement the same model against the same wire protocol, so a workflow started by a Python client can be picked up by a Go agent and vice versa.
 
-- [agent-sdk-go](https://github.com/postgrip-io/agent-sdk-go)
-- [agent-sdk-typescript](https://github.com/postgrip-io/agent-sdk-typescript)
-- [agent-sdk-protocol](https://github.com/postgrip-io/agent-sdk-protocol) — the shared wire shapes (Go, with hand-mirrored TS / Python definitions)
+- [agent-sdk-go](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/go)
+- [agent-sdk-typescript](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/typescript)
+- [agent-sdk-protocol](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/protocol) — the shared wire shapes (Go, with hand-mirrored TS / Python definitions)
 
 ## Where to next
 

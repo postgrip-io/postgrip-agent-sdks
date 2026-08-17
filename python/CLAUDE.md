@@ -97,14 +97,12 @@ To cut a release:
 ```sh
 git tag -a python/v0.X.Y -m "Python v0.X.Y"
 git push origin python/v0.X.Y
-gh release create python/v0.X.Y --title "Python v0.X.Y" --notes "..."
 ```
 
-The version in `pyproject.toml` should match the tag suffix.
+The version in `pyproject.toml` must match the tag suffix. The workflow creates
+the GitHub release after PyPI publishing succeeds.
 
 ## Docs
 
 The customer-facing docs site is built with MkDocs Material from `docs/` and
-`mkdocs.yml`. It remains published from the public `agent-sdk-python`
-repository while this monorepo is private. Mirror documentation changes there
-until the Pages cutover described in `../MIGRATION.md` is complete.
+`mkdocs.yml`, then published under the monorepo's GitHub Pages site.
