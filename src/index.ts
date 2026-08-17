@@ -113,3 +113,14 @@ export type {
   WorkflowUpdateDefinition,
   WorkflowUpdatePayload,
 } from './types.js';
+
+export {
+  SandboxClient,
+  SandboxSession,
+  sandboxExecExitCode,
+  sandboxRelayUrl,
+  SANDBOX_RELAY_MAX_FRAME_BYTES,
+  SANDBOX_EXEC_CLOSE_STATUS_BASE,
+  SANDBOX_EXEC_CLOSE_STATUS_MAX,
+} from './sandbox';
+export type { SandboxWaitOptions, SandboxSessionOptions } from './sandbox';

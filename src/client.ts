@@ -1,3 +1,4 @@
+import { SandboxClient } from './sandbox';
 import { Connection } from './connection.js';
 import { TaskFailedError, TimeoutFailure } from './errors.js';
 import type {
@@ -72,11 +73,13 @@ export class Client {
   readonly workflow: WorkflowClient;
   readonly task: TaskClient;
   readonly schedule: ScheduleClient;
+  readonly sandbox: SandboxClient;
 
   constructor(options: ClientOptions) {
     this.workflow = new WorkflowClient(options.connection);
     this.task = new TaskClient(options.connection);
     this.schedule = new ScheduleClient(options.connection);
+    this.sandbox = new SandboxClient(options.connection);
   }
 }
 

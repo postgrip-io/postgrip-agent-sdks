@@ -2,7 +2,13 @@ import type {
   BackfillScheduleRequest,
   BackfillScheduleResponse,
   CompactResponse,
+  CreateSandboxSessionRequest,
+  CreateSandboxSessionResponse,
   CreateScheduleRequest,
+  Sandbox,
+  SandboxCreateRequest,
+  SandboxListResponse,
+  SandboxWorkspace,
   Namespace,
   EnqueueTaskRequest,
   PauseScheduleRequest,
@@ -40,6 +46,15 @@ export interface ConnectionOptions {
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: HeadersInit;
+  /**
+   * Management token, sent as `Authorization: Bearer <token>` on every
+   * management-lane request — which is all of them except the agent runtime
+   * endpoints. Required for the sandbox APIs, which reject agent tokens.
+   *
+   * Treat the value as opaque: the console issues a bare hex string with no
+   * prefix, so there is nothing to validate.
+   */
+  authToken?: string;
   agentAuth?: AgentAuthOptions;
 }
 
@@ -84,6 +99,7 @@ export class Connection {
   readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly headers: HeadersInit | undefined;
+  private readonly authToken: string | undefined;
   private agentAuth: AgentAuthOptions = {};
   private agentSessionRefresh: Promise<void> | undefined;
   // Ed25519 keypair injected by the host agent for managed workflow runtimes.
@@ -93,6 +109,7 @@ export class Connection {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.fetchImpl = options.fetch ?? fetch;
     this.headers = options.headers;
+    this.authToken = options.authToken?.trim() || undefined;
     this.configureAgentAuth(options.agentAuth ?? {});
   }
 
@@ -392,6 +409,85 @@ export class Connection {
     });
   }
 
+
+  // --- sandbox platform ---------------------------------------------------
+  //
+  // These are management-lane endpoints: an agent access token is rejected on
+  // all of them, so the connection needs `authToken`.
+
+  async createSandbox(request: SandboxCreateRequest): Promise<Sandbox> {
+    return this.request('POST', '/api/v1/sandboxes', request);
+  }
+
+  async listSandboxes(): Promise<Sandbox[]> {
+    // The endpoint returns an envelope, not a bare array.
+    const response = await this.request<SandboxListResponse>('GET', '/api/v1/sandboxes');
+    return response?.sandboxes ?? [];
+  }
+
+  async getSandbox(sandboxId: string): Promise<Sandbox> {
+    return this.request('GET', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}`);
+  }
+
+  async startSandbox(sandboxId: string): Promise<Sandbox> {
+    return this.request('POST', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}/start`);
+  }
+
+  async stopSandbox(sandboxId: string): Promise<Sandbox> {
+    return this.request('POST', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}/stop`);
+  }
+
+  async deleteSandbox(sandboxId: string): Promise<Sandbox> {
+    return this.request('DELETE', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}`);
+  }
+
+  async createSandboxSession(
+    sandboxId: string,
+    request: CreateSandboxSessionRequest = {},
+  ): Promise<CreateSandboxSessionResponse> {
+    return this.request('POST', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}/sessions`, request);
+  }
+
+  /**
+   * Uploads a gzipped tar archive and returns the workspace record whose `id`
+   * goes in `SandboxCreateRequest.workspaceId`.
+   *
+   * The body is the raw archive — not multipart. Uploading identical bytes
+   * twice returns the pre-existing record rather than creating a second one.
+   */
+  async uploadWorkspace(
+    archive: BodyInit,
+    metadata: { repositoryName?: string; revision?: string } = {},
+  ): Promise<SandboxWorkspace> {
+    const headers = new Headers(this.headers);
+    headers.set('Content-Type', 'application/gzip');
+    if (this.authToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    if (metadata.repositoryName) headers.set('X-PostGrip-Repository', metadata.repositoryName);
+    if (metadata.revision) headers.set('X-PostGrip-Revision', metadata.revision);
+
+    const response = await this.fetchImpl(`${this.baseUrl}/api/v1/workspaces`, {
+      method: 'POST',
+      headers,
+      body: archive,
+      // Node's fetch requires this for a streaming request body.
+      ...(typeof archive === 'object' && archive !== null && Symbol.asyncIterator in (archive as object)
+        ? { duplex: 'half' }
+        : {}),
+    } as RequestInit);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(typeof payload.error === 'string' ? payload.error : response.statusText);
+    }
+    return (await response.json()) as SandboxWorkspace;
+  }
+
+  /** Management Authorization header value, for the relay dial. */
+  authorizationHeader(): string | undefined {
+    return this.authToken ? `Bearer ${this.authToken}` : undefined;
+  }
+
   private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, options: { agentAuth?: boolean } = {}): Promise<T> {
     const useAgentAuth = options.agentAuth === true || this.shouldUseAgentRuntimeAuth(path);
     if (useAgentAuth) {
@@ -400,6 +496,9 @@ export class Connection {
     const headers = new Headers(this.headers);
     if (useAgentAuth && this.agentAuth.accessToken) {
       headers.set('Authorization', `Bearer ${this.agentAuth.accessToken}`);
+    } else if (!useAgentAuth && this.authToken && !headers.has('Authorization')) {
+      // An explicit header wins, so callers already passing one keep working.
+      headers.set('Authorization', `Bearer ${this.authToken}`);
     }
     if (body != null) {
       headers.set('Content-Type', 'application/json');
