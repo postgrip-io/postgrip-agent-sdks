@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The wire-shape **source of truth** for the PostGrip Agent runtime. Two files of Go (`types.go` + `signing.go`) at this package root are consumed by the runtime and Go SDK, and **mirrored by hand** in `../typescript/src/types.ts` and `../python/src/postgrip_agent/types.py`. Any wire-format change must update all mirrors in the same monorepo commit; `tools/check_drift.py --monorepo` enforces matching field names.
 
-The module path remains `github.com/postgrip-io/agent-sdk-protocol` for compatibility. Until that path is migrated, releases must be mirrored to the legacy repository as described in `../MIGRATION.md`.
+The module path is `github.com/postgrip-io/postgrip-agent-sdks/protocol`.
+Protocol releases use repository-prefixed tags such as `protocol/v0.3.0`.
 
-**This package is not customer-facing.** End-users of the SDK never write `protocol.Task` directly — the SDK aliases the wire types (in `agent-sdk-go/client/aliases.go`) so customers stay within the SDK namespace. When making changes here, skip the customer-facing ceremony: no elaborate release notes, no pkg.go.dev nudges, no docs site. A plain `git tag` is enough. The only consumer that cares about a protocol release is the SDK's `go.mod`, which can pin a tagged version when there's a meaningful reason to bump it.
+**This package is not customer-facing.** End-users of the SDK never write `protocol.Task` directly — the Go SDK aliases the wire types in `../go/client/aliases.go` so customers stay within the SDK namespace. The only consumer that normally needs a protocol release is the Go SDK or server runtime.
 
 ## Commands
 

@@ -1,3 +1,3 @@
-module github.com/postgrip-io/agent-sdk-protocol
+module github.com/postgrip-io/postgrip-agent-sdks/protocol
 
 go 1.25.0

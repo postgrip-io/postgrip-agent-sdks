@@ -5,7 +5,7 @@ plus the shared Go wire-protocol package.
 
 | Directory | Package | Purpose |
 | --- | --- | --- |
-| [`protocol/`](protocol/) | `github.com/postgrip-io/agent-sdk-protocol` | Wire types and request signing |
+| [`protocol/`](protocol/) | `github.com/postgrip-io/postgrip-agent-sdks/protocol` | Wire types and request signing |
 | [`go/`](go/) | `go.postgrip.io/sdk` | Go client and worker SDK |
 | [`typescript/`](typescript/) | `@postgrip/agent` | TypeScript client and agent SDK |
 | [`python/`](python/) | `postgrip-agent` | Python client and agent SDK |
@@ -48,5 +48,4 @@ development. HTTP wire changes belong in the canonical server contract and
 must be followed by synchronization and regeneration here. Runtime-only wire
 changes still update `protocol/` and the TypeScript/Python mirrors together.
 
-See [MIGRATION.md](MIGRATION.md) for legacy Go module compatibility and release
-cutover notes.
+See [MIGRATION.md](MIGRATION.md) for the hard-cutover status and release tags.

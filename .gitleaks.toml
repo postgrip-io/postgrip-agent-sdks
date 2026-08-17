@@ -1,0 +1,9 @@
+[allowlist]
+description = "Generated OpenAPI SHA-256 contract digests"
+condition = "AND"
+paths = [
+  '''go/client/openapi_(client|operations|types)\.gen\.go''',
+  '''python/src/postgrip_agent/(generated/)?openapi\.py''',
+  '''typescript/src/generated/openapi\.ts''',
+]
+regexes = ['''[0-9a-f]{64}''']

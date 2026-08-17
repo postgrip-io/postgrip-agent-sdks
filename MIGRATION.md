@@ -8,40 +8,24 @@ This repository is now the development source of truth for:
 - `python/` from `postgrip-io/agent-sdk-python`
 
 The imports preserve the original commit graphs through subtree merge commits.
-The legacy repositories should remain available until their compatibility and
-release responsibilities have been cut over.
+The project is performing a hard cutover because it is still single-user and
+pre-production. No legacy source mirror will remain writable.
 
-## Releases
+## Hard-Cutover Sequence
 
-TypeScript and Python publish from this repository using `typescript/vX.Y.Z`
-and `python/vX.Y.Z` tags. Before the first release, update the npm and PyPI
-trusted-publisher configuration to repository `postgrip-agent-sdks` and the
-new workflow filenames.
+1. Publish `protocol/v0.3.0` from the new protocol module path.
+2. Move the Go SDK and server runtime imports to the monorepo paths.
+3. Publish `go/v0.12.0`, `typescript/v0.12.0`, and `python/v0.12.0` here.
+4. Verify clean installs, redirect the legacy repositories, and archive them.
 
-The monorepo is currently private. npm trusted publishing therefore runs
-without provenance, and the existing public SDK repositories continue to host
-customer-facing documentation. Keep mirroring documentation changes there.
-Move Pages and public source links only after this repository is public and
-Actions-based Pages has been enabled.
+The final Go module paths are:
 
-The existing Go module paths still resolve through the legacy repositories:
+- `github.com/postgrip-io/postgrip-agent-sdks/protocol`
+- `github.com/postgrip-io/postgrip-agent-sdks/go`
 
-- `github.com/postgrip-io/agent-sdk-protocol`
-- `go.postgrip.io/sdk`, whose vanity metadata points at `agent-sdk-go`
-
-Until those paths are redirected or migrated, mirror release commits and tags
-back to the corresponding legacy repository. Do not archive either Go
-repository before `go get` succeeds through its public module path from a
-clean module cache.
-
-## Follow-up Cutover
-
-After package publishing and Go resolution are verified:
-
-1. Mark legacy repositories read-only and point their READMEs here.
-2. Update external consumers, including the runtime, to the final protocol path.
-3. Move issue templates, branch protections, environments, and repository secrets.
-4. Archive legacy repositories only after released versions remain installable.
+TypeScript and Python retain their registry names and use package-prefixed
+tags. The npm and PyPI trusted publishers must target this repository and the
+`npm` and `pypi` GitHub environments respectively.
 
 ## OpenAPI Generation Cutover
 
