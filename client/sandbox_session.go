@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -71,9 +70,13 @@ func (s *SandboxStream) Close() error { return s.conn.CloseNow() }
 // ExitCode blocks until the session ends and reports the process exit code.
 //
 // The code arrives as the WebSocket close status (4000+code), not in the byte
-// stream. A close outside that range is a transport failure and is returned as
-// an error rather than as an exit code — a caller that treated it as one would
-// read a network fault as a successful run.
+// stream. Only that close status produces a successful return. Everything else
+// is a transport failure and comes back as an error — including a plain
+// io.EOF, which is exactly what a dropped relay, a recycled proxy, or a killed
+// socket surfaces as. Reading EOF as exit 0, as this did, turns an interrupted
+// command into a clean success, which is the worst possible direction for the
+// mistake to go: a caller gating on the exit code proceeds as though the
+// command ran.
 func (s *SandboxStream) ExitCode(ctx context.Context) (int, error) {
 	buf := make([]byte, 32<<10)
 	for {
@@ -84,10 +87,10 @@ func (s *SandboxStream) ExitCode(ctx context.Context) (int, error) {
 		if code, ok := protocol.SandboxExecExitCode(int(websocket.CloseStatus(err))); ok {
 			return code, nil
 		}
-		if errors.Is(err, io.EOF) {
-			return 0, nil
+		return 0, &failure.SDKError{
+			Message: "sandbox session ended without an exit status",
+			Cause:   err,
 		}
-		return 0, err
 	}
 }
 
@@ -143,6 +146,20 @@ func (s *SandboxClient) OpenSandboxSession(ctx context.Context, sandboxID, kind 
 //
 // stdout receives stdout and stderr interleaved — the relay carries one
 // stream. Pass a nil stdin for commands that read nothing.
+//
+// # Commands that read stdin to EOF will hang
+//
+// There is no end-of-input signal on the wire. The agent hands the relay
+// connection to the process as its stdin directly, so that stdin reaches EOF
+// only when the whole session closes — which is also what carries the exit
+// status back. Draining the caller's Reader therefore tells the sandbox
+// nothing, and a command that reads until EOF (`cat`, `sort`, an archive
+// import, `go test` consuming piped input) keeps waiting while Exec keeps
+// waiting for its output, until ctx cancels.
+//
+// Pass a ctx deadline for such commands. Commands that read a bounded amount
+// and commands that read nothing are unaffected. Fixing this properly needs a
+// half-close on the wire, which is a protocol change, not an SDK one.
 func (s *SandboxClient) Exec(ctx context.Context, sandboxID string, command []string, stdin io.Reader, stdout io.Writer) (int, error) {
 	stream, err := s.OpenSandboxSession(ctx, sandboxID, protocol.SandboxSessionKindExec, SandboxSessionOptions{Command: command})
 	if err != nil {
@@ -150,22 +167,42 @@ func (s *SandboxClient) Exec(ctx context.Context, sandboxID string, command []st
 	}
 	defer stream.Close()
 
+	// Buffered so the copy never blocks on a receive that no longer happens:
+	// when the session ends first, nothing reads this channel.
+	stdinDone := make(chan error, 1)
 	if stdin != nil {
 		go func() {
-			_, _ = io.Copy(stream, stdin)
+			_, err := io.Copy(stream, stdin)
+			stdinDone <- err
 		}()
 	}
 	if stdout == nil {
 		stdout = io.Discard
 	}
 	_, copyErr := io.Copy(stdout, stream)
-	if code, ok := protocol.SandboxExecExitCode(int(websocket.CloseStatus(copyErr))); ok {
+
+	// A failed stdin copy — a network-backed Reader that disconnects, a write
+	// the relay rejects — means the sandbox saw truncated input. It can still
+	// exit 0 on the bytes it did receive, so the exit code alone would report
+	// success for a command that never got its input. Report the code (the
+	// caller may still want it) and an error saying not to trust it.
+	var stdinErr error
+	select {
+	case stdinErr = <-stdinDone:
+	default:
+	}
+
+	code, ok := protocol.SandboxExecExitCode(int(websocket.CloseStatus(copyErr)))
+	if stdinErr != nil {
+		return code, &failure.SDKError{Message: "sandbox exec stdin delivery failed; the exit status does not describe a complete run", Cause: stdinErr}
+	}
+	if ok {
 		return code, nil
 	}
-	if copyErr != nil && !errors.Is(copyErr, io.EOF) {
-		return 0, &failure.SDKError{Message: "sandbox exec stream", Cause: copyErr}
-	}
-	return 0, nil
+	// No exit status: the session ended some other way. A nil copyErr means a
+	// clean EOF, which is still the stream vanishing without the sandbox
+	// reporting how the process finished.
+	return 0, &failure.SDKError{Message: "sandbox exec ended without an exit status", Cause: copyErr}
 }
 
 // sandboxRelayURL builds the ws:// or wss:// session URL from an http(s)

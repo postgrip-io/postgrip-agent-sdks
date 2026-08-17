@@ -3,6 +3,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -123,6 +125,129 @@ func TestExecStreamsAndReportsTheExitCode(t *testing.T) {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
+
+// A relay that vanishes without sending an exit close status must not read as
+// a successful run. This is the difference between "the command failed" and
+// "the command never reported", and a caller gating on the exit code would act
+// on exit 0 as though the work had happened.
+func TestExecRejectsAStreamThatEndsWithoutAnExitStatus(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		close func(conn *websocket.Conn)
+	}{
+		// A normal WebSocket close, no exit status: the previous code read the
+		// resulting io.EOF as exit 0.
+		{"clean close", func(conn *websocket.Conn) { _ = conn.Close(websocket.StatusNormalClosure, "bye") }},
+		// An abrupt drop, which is what a killed relay or recycled proxy does.
+		{"abrupt drop", func(conn *websocket.Conn) { _ = conn.CloseNow() }},
+		// In range for a close status, but not the exec exit-code range.
+		{"unrelated status", func(conn *websocket.Conn) { _ = conn.Close(websocket.StatusInternalError, "boom") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/sessions") {
+					w.WriteHeader(http.StatusCreated)
+					_, _ = w.Write([]byte(`{"id":"ses_1","ticket":"pgss_t"}`))
+					return
+				}
+				conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+				if err != nil {
+					return
+				}
+				_ = conn.Write(r.Context(), websocket.MessageBinary, []byte("partial output"))
+				tc.close(conn)
+			}))
+			defer server.Close()
+
+			conn, err := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "mgmt"})
+			if err != nil {
+				t.Fatalf("NewConnection: %v", err)
+			}
+			var stdout bytes.Buffer
+			code, err := New(conn).Sandbox.Exec(context.Background(), "sbx_1", []string{"true"}, nil, &stdout)
+			if err == nil {
+				t.Fatalf("Exec returned (%d, nil) for a session with no exit status", code)
+			}
+			if code != 0 {
+				t.Fatalf("exit code = %d, want 0 alongside the error", code)
+			}
+		})
+	}
+}
+
+// Same rule one level down: ExitCode on a raw stream.
+func TestExitCodeRejectsEOFWithoutAnExitStatus(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/sessions") {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"ses_1","ticket":"pgss_t"}`))
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		if err != nil {
+			return
+		}
+		_ = conn.Close(websocket.StatusNormalClosure, "bye")
+	}))
+	defer server.Close()
+
+	conn, err := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "mgmt"})
+	if err != nil {
+		t.Fatalf("NewConnection: %v", err)
+	}
+	ctx := context.Background()
+	stream, err := New(conn).Sandbox.OpenSandboxSession(ctx, "sbx_1", protocol.SandboxSessionKindExec, SandboxSessionOptions{Command: []string{"true"}})
+	if err != nil {
+		t.Fatalf("OpenSandboxSession: %v", err)
+	}
+	defer stream.Close()
+	if code, err := stream.ExitCode(ctx); err == nil {
+		t.Fatalf("ExitCode returned (%d, nil) for a close with no exit status", code)
+	}
+}
+
+// A stdin reader that fails partway leaves the sandbox with truncated input.
+// The process can still exit 0 on what it did receive, so the exit code alone
+// would report success for a command that never got its data.
+func TestExecReportsAFailedStdinCopy(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/sessions") {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"ses_1","ticket":"pgss_t"}`))
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		if err != nil {
+			return
+		}
+		// Let the stdin copy fail first, then exit 0 as though all was well.
+		time.Sleep(100 * time.Millisecond)
+		_ = conn.Close(websocket.StatusCode(protocol.SandboxExecCloseStatusBase), "exit:0")
+	}))
+	defer server.Close()
+
+	conn, err := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "mgmt"})
+	if err != nil {
+		t.Fatalf("NewConnection: %v", err)
+	}
+	var stdout bytes.Buffer
+	stdin := io.MultiReader(strings.NewReader("some bytes"), &failingReader{})
+	code, err := New(conn).Sandbox.Exec(context.Background(), "sbx_1", []string{"cat"}, stdin, &stdout)
+	if err == nil {
+		t.Fatalf("Exec returned (%d, nil) despite stdin failing mid-copy", code)
+	}
+	if !strings.Contains(err.Error(), "stdin") {
+		t.Fatalf("error does not name stdin as the cause: %v", err)
+	}
+}
+
+type failingReader struct{}
+
+func (*failingReader) Read([]byte) (int, error) { return 0, errors.New("reader disconnected") }
 
 // A write past the relay's frame bound is refused locally. The relay would
 // otherwise close the session, which surfaces as an unexplained disconnect.
