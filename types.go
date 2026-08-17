@@ -654,6 +654,16 @@ type ContainerExecPayload struct {
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
 }
 
+// Isolation tiers a workflow.runtime workload can require, advertised by
+// agents through runtime capabilities and requested via
+// WorkflowRuntimePayload.Isolation. A requested tier is a floor: container
+// work may run in a stronger tier, microvm work must never run in a weaker
+// one, and an unrecognized value satisfies nothing.
+const (
+	IsolationTierContainer = "container"
+	IsolationTierMicroVM   = "microvm"
+)
+
 // WorkflowRuntimePayload starts a supervised SDK workflow runtime under an
 // already-enrolled PostGrip agent. The host agent injects delegated agent
 // credentials and limits its own polling to operational task types, while the
@@ -669,6 +679,15 @@ type WorkflowRuntimePayload struct {
 	Queue          string            `json:"queue,omitempty"`
 	PullPolicy     string            `json:"pull_policy,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+	// Isolation is the isolation floor this workload requires, one of
+	// IsolationTierContainer or IsolationTierMicroVM; empty means the
+	// container default.
+	//
+	// Setting it requires Image: a command-only runtime executes directly on
+	// the agent host, which honors no isolation floor, so the orchestrator
+	// rejects that combination at enqueue rather than running the workload
+	// below its requested tier.
+	Isolation string `json:"isolation,omitempty"`
 }
 
 type ErrorResponse struct {

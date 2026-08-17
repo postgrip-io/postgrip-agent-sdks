@@ -20,9 +20,13 @@ gofmt -l . | grep -v '^tools/'                 # CI ignores tools/ (Python lives
 
 python3 tools/check_drift.py                   # check vs local sibling working dirs
 python3 tools/check_drift.py --from-github     # check vs TS/Python main on GitHub
+python3 tools/check_drift.py --self-test       # exercise the detectors themselves
+python3 tools/check_drift.py --local go-sdk --from-github   # run from an agent-sdk-go checkout
 ```
 
 CI is `gofmt -l` + `go vet` + `go test` + the drift check (`.github/workflows/ci.yml`). The drift job fetches `agent-sdk-typescript/src/types.ts` and `agent-sdk-python/src/postgrip_agent/types.py` from `main` and compares struct/field names. **A failing drift job is a real signal**, not noise — it means either this PR is missing TS/Python mirror updates or shouldn't be touching wire shapes at all.
+
+The drift job runs `--self-test` **before** the tree scan. A clean tree only proves today's type files agree; it never proves the checker still detects disagreement. The self-test caught a live bug in its own first run — the literal-const regex captured `const` as the name on single-line declarations — which is exactly the failure mode it exists to prevent.
 
 ## Architecture
 
@@ -37,6 +41,14 @@ CI is `gofmt -l` + `go vet` + `go test` + the drift check (`.github/workflows/ci
 The contract being checked is narrow: every exported Go struct that represents a wire shape has an equivalent type with matching name in `types.ts` and `types.py`, and every JSON-tagged field on that struct appears as a same-name field on the TS interface and the Python TypedDict. **Field types are not yet checked** (e.g. int vs string drift goes undetected); same for optional-vs-required. Both are tagged `# v2` in `tools/check_drift.py` and need a cross-language type table to address.
 
 When you add or rename a field on a wire struct, write the matching change in the TS and Python repos in the same PR (or coordinated PRs landing simultaneously). When you remove a field, the drift guard will pass even with stale TS/Python definitions still carrying the field — guard against that by visually diffing the mirrors as part of the wire-shape PR review.
+
+**Use the same branch name in every repo** for a coordinated wire change. `github_ref_candidates()` tries the PR's own branch in each peer repo before falling back to `main`, so identical branch names keep all four PRs green while they're open. They still have to merge back-to-back: once a protocol change lands on `main`, the TS/Python mirrors are red until theirs land too.
+
+### agent-sdk-go is checked differently
+
+The Go SDK is not a mirror — it imports this package and re-exports the wire types as aliases, so there are no field sets to compare. Its failure mode is *redeclaration*: when its protocol pin predates a type, it grows a local copy that compiles cleanly and mirrors nothing. `--local go-sdk` scans the SDK tree and fails on any struct or string-literal constant whose name collides with something protocol owns, matched case-insensitively (an unexported `workflowRuntimePayload` forks the wire shape exactly as an exported one does). The fix is always the same: alias it, and bump the pin if the type is missing upstream.
+
+This is not hypothetical — it is how `WorkflowRuntimePayload` and `TaskTypeWorkflowRuntime` came to exist twice in `agent-sdk-go/client/`, against a pin from before this package had either.
 
 ### Custom `UnmarshalJSON` on `Task`
 
