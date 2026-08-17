@@ -46,6 +46,7 @@ type (
 	SignalWithStartWorkflowRequest  = protocol.SignalWithStartWorkflowRequest
 	SignalWithStartWorkflowResponse = protocol.SignalWithStartWorkflowResponse
 	AgentPollDirective              = protocol.AgentPollDirective
+	PollTaskResponse                = protocol.PollTaskResponse
 	AgentMaintenanceWindow          = protocol.AgentMaintenanceWindow
 	AgentMaintenanceWindowRequest   = protocol.AgentMaintenanceWindowRequest
 	UpdateAgentRequest              = protocol.UpdateAgentRequest

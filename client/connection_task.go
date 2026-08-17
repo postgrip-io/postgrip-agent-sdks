@@ -66,13 +66,6 @@ func (c *Connection) GetTaskEvents(ctx context.Context, taskID string) ([]TaskEv
 	return out, nil
 }
 
-// PollTaskResponse pairs the leased task (if any) with an optional poll
-// directive from the runtime service. Exported so /worker can consume it.
-type PollTaskResponse struct {
-	Task      *Task               `json:"task,omitempty"`
-	Directive *AgentPollDirective `json:"directive,omitempty"`
-}
-
 // PollTask leases the next task for the given namespace+queue for this
 // agent. Returns nil task when the queue is empty (HTTP 204 / empty body
 // equivalent). The agent_id is required by the runtime service.
