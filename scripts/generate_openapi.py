@@ -876,7 +876,7 @@ const operationTable = {{
 }} as const;
 
 export type OpenAPIOperationId = keyof typeof operationTable;
-export type OpenAPIAuthLane = 'agent' | 'either' | 'management' | 'public';
+export type OpenAPIAuthLane = 'agent' | 'either' | 'global-admin' | 'management' | 'public';
 export type OpenAPIRequestBody<I extends OpenAPIOperationId> = OpenAPIOperationTypes[I]['requestBody'];
 export type OpenAPIResponseBody<I extends OpenAPIOperationId> = OpenAPIOperationTypes[I]['responseBody'];
 export type OpenAPIPathParameters<I extends OpenAPIOperationId> = OpenAPIOperationTypes[I]['pathParameters'];

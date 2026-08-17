@@ -42,6 +42,13 @@ func TestResolveOpenAPIOperation(t *testing.T) {
 	if poll.AuthLane != "agent" || poll.Signing != "" {
 		t.Fatalf("unexpected poll security: %#v", poll)
 	}
+	compact, err := resolveOpenAPIOperation(openAPICompact, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compact.AuthLane != "global-admin" {
+		t.Fatalf("unexpected compact security: %#v", compact)
+	}
 }
 
 func TestGeneratedOpenAPIPayloadTypesCompile(t *testing.T) {
@@ -88,6 +95,8 @@ func TestGeneratedOpenAPIListQueryParameters(t *testing.T) {
 	orderBy := "-created_at"
 	pageToken := "20"
 	agentID := "agent-1"
+	version := int64(12)
+	logLevel := "info"
 	if got, want := (OpenAPIListTasksQuery{
 		OrderBy:   &orderBy,
 		PageToken: &pageToken,
@@ -108,6 +117,14 @@ func TestGeneratedOpenAPIListQueryParameters(t *testing.T) {
 		AgentId: &agentID,
 	}).values().Encode(), "agent_id=agent-1"; got != want {
 		t.Fatalf("workflow count query = %q, want %q", got, want)
+	}
+	if got, want := (OpenAPIPollAgentTaskQuery{
+		Queue:        "default",
+		Version:      &version,
+		LogLevel:     &logLevel,
+		Capabilities: []string{"self_upgrade", "workflow_runtime"},
+	}).values().Encode(), "capabilities=self_upgrade&capabilities=workflow_runtime&log_level=info&queue=default&version=12"; got != want {
+		t.Fatalf("poll query = %q, want %q", got, want)
 	}
 }
 

@@ -58,9 +58,9 @@ export interface ConnectionOptions {
   fetch?: typeof fetch;
   headers?: HeadersInit;
   /**
-   * Management token, sent as `Authorization: Bearer <token>` on every
-   * management-lane request — which is all of them except the agent runtime
-   * endpoints. Required for the sandbox APIs, which reject agent tokens.
+   * Bearer token sent on management and global-admin requests. Use a tenant
+   * management token for normal APIs and a dedicated connection configured
+   * with the service's global admin token for compaction.
    *
    * Treat the value as opaque: the console issues a bare hex string with no
    * prefix, so there is nothing to validate.
@@ -170,6 +170,8 @@ export class Connection {
   }
 
   async compact(options: { retentionSeconds?: number } = {}): Promise<CompactResponse> {
+    // The connection must be configured with the service's global admin token;
+    // tenant management tokens are intentionally rejected by this operation.
     return this.openapi.compact({ body: { retention_seconds: options.retentionSeconds ?? 0 } });
   }
 

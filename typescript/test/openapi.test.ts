@@ -31,6 +31,7 @@ describe('generated OpenAPI operations', () => {
     const pollOperation = resolveOpenAPIOperation('pollAgentTask');
     expect(pollOperation.authLane).toBe('agent');
     expect(pollOperation.signing).toBeUndefined();
+    expect(resolveOpenAPIOperation('compact').authLane).toBe('global-admin');
   });
 
   it('rejects missing path parameters', () => {
@@ -50,6 +51,10 @@ describe('generated OpenAPI operations', () => {
     expectTypeOf<OpenAPIQueryParameters<'listSchedules'>>().toHaveProperty('page_token');
     expectTypeOf<OpenAPIQueryParameters<'listWorkflows'>>().toHaveProperty('agent_id');
     expectTypeOf<OpenAPIQueryParameters<'countWorkflows'>>().toHaveProperty('agent_id');
+    expectTypeOf<OpenAPIQueryParameters<'pollAgentTask'>>().toHaveProperty('version');
+    expectTypeOf<OpenAPIQueryParameters<'pollAgentTask'>>().toHaveProperty('log_level');
+    expectTypeOf<OpenAPIQueryParameters<'pollAgentTask'>['capabilities']>()
+      .toEqualTypeOf<Array<string> | undefined>();
     expectTypeOf<Parameters<OpenAPIClient['pauseSchedule']>[0]>().toMatchTypeOf<{
       readonly body: OpenAPIRequestBody<'pauseSchedule'>;
     }>();

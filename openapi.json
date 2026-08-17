@@ -85,8 +85,8 @@
         "operationId": "compact",
         "tags": ["System"],
         "x-postgrip-sdk-generate": true,
-        "x-postgrip-auth-lane": "management",
-        "security": [{ "managementToken": [] }],
+        "x-postgrip-auth-lane": "global-admin",
+        "security": [{ "globalAdminToken": [] }],
         "requestBody": {
           "required": true,
           "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CompactRequest" } } }
@@ -510,6 +510,9 @@
           { "$ref": "#/components/parameters/NamespaceQuery" },
           { "$ref": "#/components/parameters/QueueQueryRequired" },
           { "$ref": "#/components/parameters/AgentIdQuery" },
+          { "name": "version", "in": "query", "schema": { "type": "integer", "minimum": 0 }, "description": "Current agent runtime version used to enforce upgrade policy." },
+          { "name": "log_level", "in": "query", "schema": { "type": "string", "enum": ["debug", "info", "warn", "warning", "error"] }, "description": "Current agent log level used to synchronize runtime configuration." },
+          { "name": "capabilities", "in": "query", "schema": { "type": "array", "items": { "type": "string" } }, "description": "Runtime and isolation capabilities advertised by the agent. The server accepts repeated or comma-separated values." },
           { "name": "wait_seconds", "in": "query", "schema": { "type": "integer", "minimum": 0, "maximum": 30, "default": 20 } },
           { "name": "task_types", "in": "query", "schema": { "type": "string" }, "description": "Comma-separated task types." }
         ],
@@ -709,6 +712,7 @@
   "components": {
     "securitySchemes": {
       "managementToken": { "type": "http", "scheme": "bearer", "description": "Management token issued by the PostGrip console." },
+      "globalAdminToken": { "type": "http", "scheme": "bearer", "description": "Service-level administration token accepted only by global administration endpoints." },
       "agentSession": { "type": "http", "scheme": "bearer", "description": "Delegated short-lived agent session. Signed operations also carry the PostGrip Ed25519 request-signing headers." }
     },
     "parameters": {

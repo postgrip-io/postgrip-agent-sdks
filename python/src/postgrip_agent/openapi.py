@@ -8,7 +8,7 @@ import re
 from typing import Any, Literal, Mapping, Protocol, Sequence, TypeAlias, TypedDict, cast
 from urllib.parse import quote, urlencode
 
-OPENAPI_SPEC_SHA256 = 'b306bb05b746e43687e3a48c50a23b33e688e1dfae7e1a67a4f99c7318942834'
+OPENAPI_SPEC_SHA256 = '390980a3cd6e5c5e095a3345c239adcd2543eeac1cbb593d1fbd282672955b51'
 OPENAPI_OPERATION_COUNT = 42
 OPENAPI_CLIENT_OPERATION_COUNT = 40
 CONNECT_SANDBOX_SESSION_PATH_SESSION_ID = 'sessionId'
@@ -789,7 +789,7 @@ _OPERATION_TABLE: dict[OperationId, OpenAPIOperation] = {
     OperationId.BACKFILL_SCHEDULE: OpenAPIOperation('POST', '/api/v1/schedules/{scheduleId}/backfill', 'management', '', False, False, 'BackfillScheduleRequest', 'BackfillScheduleResponse', ('scheduleId',)),
     OperationId.BLOCK_AGENT_TASK: OpenAPIOperation('POST', '/api/v1/agent/tasks/{taskId}/block', 'agent', 'agent-task-v1', False, False, 'BlockTaskRequest', 'Task', ('taskId',)),
     OperationId.CANCEL_WORKFLOW: OpenAPIOperation('POST', '/api/v1/workflows/{workflowId}/cancel', 'either', '', False, False, 'CancelWorkflowRequest', 'WorkflowHistoryEvent', ('workflowId',)),
-    OperationId.COMPACT: OpenAPIOperation('POST', '/api/v1/admin/compact', 'management', '', False, False, 'CompactRequest', 'CompactResponse', ()),
+    OperationId.COMPACT: OpenAPIOperation('POST', '/api/v1/admin/compact', 'global-admin', '', False, False, 'CompactRequest', 'CompactResponse', ()),
     OperationId.COMPLETE_AGENT_TASK: OpenAPIOperation('POST', '/api/v1/agent/tasks/{taskId}/complete', 'agent', 'agent-task-v1', False, False, 'CompleteTaskRequest', 'Task', ('taskId',)),
     OperationId.CONNECT_SANDBOX_SESSION: OpenAPIOperation('GET', '/api/v1/sandbox-sessions/{sessionId}/connect', 'management', '', False, True, '', '', ('sessionId',)),
     OperationId.COUNT_WORKFLOWS: OpenAPIOperation('GET', '/api/v1/workflows/count', 'either', '', False, False, '', 'WorkflowCountResponse', ()),
@@ -986,11 +986,14 @@ class OpenAPIClient:
     def pause_schedule(self, schedule_id: str, body: PauseScheduleRequestBody) -> PauseScheduleResponseBody:
         return cast(PauseScheduleResponseBody, self._transport(OperationId.PAUSE_SCHEDULE, body, path_parameters={'scheduleId': schedule_id}))
 
-    def poll_agent_task(self, *, namespace: str | None = None, queue: str, agent_id: str | None = None, wait_seconds: int | None = None, task_types: str | None = None) -> PollAgentTaskResponseBody:
+    def poll_agent_task(self, *, namespace: str | None = None, queue: str, agent_id: str | None = None, version: int | None = None, log_level: Literal['debug', 'info', 'warn', 'warning', 'error'] | None = None, capabilities: list[str] | None = None, wait_seconds: int | None = None, task_types: str | None = None) -> PollAgentTaskResponseBody:
         _query: dict[str, Any] = {}
         if namespace is not None: _query['namespace'] = namespace
         _query['queue'] = queue
         if agent_id is not None: _query['agent_id'] = agent_id
+        if version is not None: _query['version'] = version
+        if log_level is not None: _query['log_level'] = log_level
+        if capabilities is not None: _query['capabilities'] = capabilities
         if wait_seconds is not None: _query['wait_seconds'] = wait_seconds
         if task_types is not None: _query['task_types'] = task_types
         return cast(PollAgentTaskResponseBody, self._transport(OperationId.POLL_AGENT_TASK, query=_query))
