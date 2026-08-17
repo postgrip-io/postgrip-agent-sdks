@@ -25,7 +25,7 @@ Use Go's `testing` package and name tests `TestBehavior`, in a colocated `*_test
 
 ## Wire Contract Changes
 
-Changes to JSON-tagged structs must be mirrored in `agent-sdk-typescript/src/types.ts` and `agent-sdk-python/src/postgrip_agent/types.py`. Use the same branch name across repositories, push all coordinated branches before opening PRs, and treat drift failures as contract errors. Do not change the signing canonical format without introducing a new version prefix.
+Changes to JSON-tagged structs must be mirrored atomically in `../typescript/src/types.ts` and `../python/src/postgrip_agent/types.py`. Run `python3 tools/check_drift.py --monorepo` and treat failures as contract errors. Do not change the signing canonical format without introducing a new version prefix.
 
 ## Commit & Pull Request Guidelines
 

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: protocol/go.mod
+      - name: Check formatting
+        run: |
+          out=$(gofmt -l protocol)
+          if [ -n "$out" ]; then
+            echo "gofmt-dirty:" >&2
+            echo "$out" >&2
+            exit 1
+          fi
+      - run: go vet ./protocol/...
+      - run: go test ./protocol/...
+
+  go-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - name: Check formatting
+        run: |
+          out=$(gofmt -l go)
+          if [ -n "$out" ]; then
+            echo "gofmt-dirty:" >&2
+            echo "$out" >&2
+            exit 1
+          fi
+      - run: go vet ./go/...
+      - run: go test ./go/...
+
+  typescript:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run build
+      - run: bun run test
+
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip wheel --no-deps . -w /tmp/wheel
+      - run: python -m pip install /tmp/wheel/postgrip_agent-*.whl
+      - run: PYTHONPATH=src python -m unittest discover -s test
+
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 protocol/tools/check_drift.py --self-test
+      - run: python3 protocol/tools/check_drift.py --monorepo

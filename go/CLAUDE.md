@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Go SDK for the PostGrip Agent runtime service. Mirrors `agent-sdk-typescript` and `agent-sdk-python`; wire shapes come from `github.com/postgrip-io/agent-sdk-protocol`. The root package (`package sdk`) holds only `doc.go` — customers import the sub-packages they need (`client`, `worker`, `workflow`, `activity`, `failure`).
+Go SDK for the PostGrip Agent runtime service. Mirrors `../typescript` and `../python`; wire shapes come from the local `../protocol` module through the repository's `go.work`. The root package (`package sdk`) holds only `doc.go` — customers import the sub-packages they need (`client`, `worker`, `workflow`, `activity`, `failure`).
 
-The module path is `go.postgrip.io/sdk` (vanity import) but the repo lives at `github.com/postgrip-io/agent-sdk-go`. The vanity DNS + `<meta name="go-import">` page setup is documented in `doc/vanity-import.md` — that piece lives outside this repo and is required for external `go get` to resolve.
+The module path remains `go.postgrip.io/sdk`. Its vanity metadata still points at the legacy `agent-sdk-go` distribution repository; see `../MIGRATION.md` before changing or archiving that repository.
 
 ## Commands
 
@@ -17,7 +17,7 @@ go vet ./...
 gofmt -l .                                     # CI fails if non-empty
 ```
 
-CI is `gofmt -l` + `go vet ./...` + `go test ./...` (see `.github/workflows/ci.yml`). Wire-protocol updates: `go get github.com/postgrip-io/agent-sdk-protocol@<rev>`.
+Root CI runs `gofmt -l`, `go vet ./go/...`, `go test ./go/...`, and cross-language drift validation (see `../.github/workflows/ci.yml`). The workspace uses the local protocol module; keep the version in `go.mod` valid for standalone consumers.
 
 ## Architecture
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Python SDK for the PostGrip Agent runtime service. Mirrors `agent-sdk-go` and `agent-sdk-typescript`; wire-shape source of truth lives in [`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) (Go) and is hand-mirrored into `src/postgrip_agent/types.py`. The mirror is enforced by a CI drift check that fetches `agent-sdk-protocol/tools/check_drift.py` from `main` and compares struct/field names.
+Python SDK for the PostGrip Agent runtime service. Mirrors `../go` and `../typescript`; the wire-shape source of truth lives in `../protocol` and is hand-mirrored into `src/postgrip_agent/types.py`. Root CI compares the local definitions atomically.
 
 The package is `postgrip_agent` (importable name; PyPI distribution is `postgrip-agent`). API shape follows the Temporal Python SDK: `Client.connect`, `Agent`, `@workflow.defn` / `@activity.defn`, `await ctx.execute_activity(...)`.
 
@@ -25,7 +25,7 @@ PYTHONPATH=src python -m unittest test.test_python_sdk.TestX.test_specific_thing
 python -m pip wheel --no-deps . -w /tmp/wheel
 ```
 
-CI (`.github/workflows/ci.yml`) runs the wheel build + test matrix on Python 3.11 / 3.12 / 3.13, plus the cross-language drift guard. The drift job pulls `tools/check_drift.py` from `agent-sdk-protocol` and compares this repo's `types.py` against Go (and TS via `--from-github`). A drift failure means either a wire change here is missing the Go side, or this PR shouldn't be touching wire shapes.
+Root CI (`../.github/workflows/ci.yml`) runs the wheel build, tests on Python 3.11 / 3.12 / 3.13, and the cross-language drift guard. A drift failure means the same commit contains incompatible wire definitions.
 
 ## Architecture
 
@@ -79,29 +79,29 @@ Unlike `Suspended`, `ContinueAsNew` *is* a sentinel exception (`workflow.Continu
 
 ## Polyglot mirror
 
-This is one of four repos sharing the runtime contract:
+This is one of four packages sharing the runtime contract:
 
-- [`postgrip-io/agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) — wire-shape source of truth (Go).
-- [`postgrip-io/agent-sdk-go`](https://github.com/postgrip-io/agent-sdk-go) — Go SDK; imports protocol directly.
-- [`postgrip-io/agent-sdk-typescript`](https://github.com/postgrip-io/agent-sdk-typescript) — TS SDK; mirrors types in `src/types.ts`.
-- [`postgrip-io/agent-sdk-python`](https://github.com/postgrip-io/agent-sdk-python) — this repo; mirrors types in `src/postgrip_agent/types.py`.
+- `../protocol` — wire-shape source of truth (Go).
+- `../go` — Go SDK; imports protocol directly.
+- `../typescript` — TypeScript SDK; mirrors types in `src/types.ts`.
+- `python/` — this package; mirrors types in `src/postgrip_agent/types.py`.
 
-Wire-shape changes need to land in protocol + each mirror in coordinated PRs. The drift guard catches name-level disagreement; it does **not** catch type-level drift (int vs str, optional vs required) — those need human review.
+Wire-shape changes must update protocol and each mirror in one commit. The drift guard catches name-level disagreement; it does **not** catch type-level drift (int vs str, optional vs required) — those need human review.
 
 ## Distribution
 
-PyPI package is `postgrip-agent` (note the dash; the Python module name `postgrip_agent` uses an underscore per PEP 8). Releases are gated on a git tag (`v*`) which fires `.github/workflows/publish.yml` to build and upload to PyPI via [trusted publishing](https://docs.pypi.org/trusted-publishers/) — no API tokens stored in the repo. The trusted publisher must be configured **once** on PyPI under the project's Settings → Publishing tab (workflow file path: `.github/workflows/publish.yml`, environment: `pypi`).
+PyPI package is `postgrip-agent` (note the dash; the Python module name `postgrip_agent` uses an underscore per PEP 8). Releases are gated on a `python/v*` tag which fires `../.github/workflows/publish-python.yml`. Configure PyPI trusted publishing for repository `postgrip-agent-sdks`, workflow `publish-python.yml`, and environment `pypi`.
 
 To cut a release:
 
 ```sh
-git tag -a v0.X.Y -m "v0.X.Y — short summary"
-git push origin v0.X.Y
-gh release create v0.X.Y --title "v0.X.Y" --notes "..."
+git tag -a python/v0.X.Y -m "Python v0.X.Y"
+git push origin python/v0.X.Y
+gh release create python/v0.X.Y --title "Python v0.X.Y" --notes "..."
 ```
 
-The publish workflow watches for tags matching `v*` and uploads on success. The version in `pyproject.toml` should match the tag (or use a dynamic versioning plugin — currently it's hardcoded to `0.1.0`, bump together with the tag).
+The version in `pyproject.toml` should match the tag suffix.
 
 ## Docs
 
-The customer-facing docs site is built with MkDocs Material and deployed to GitHub Pages via `.github/workflows/docs.yml`. Source lives in `docs/` plus `mkdocs.yml`. Pages auto-deploy on pushes to `main` that touch those paths.
+The customer-facing docs site is built with MkDocs Material. Source lives in `docs/` plus `mkdocs.yml`; the root docs workflow publishes it below the monorepo Pages site.

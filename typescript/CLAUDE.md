@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-TypeScript SDK for the PostGrip Agent runtime service. Mirrors `agent-sdk-go` and `agent-sdk-python`; wire-shape source of truth lives in [`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) (Go) and is hand-mirrored into `src/types.ts`. The mirror is enforced by a CI drift check that fetches `agent-sdk-protocol/tools/check_drift.py` from `main` and compares struct/field names.
+TypeScript SDK for the PostGrip Agent runtime service. Mirrors `../go` and `../python`; the wire-shape source of truth lives in `../protocol` and is hand-mirrored into `src/types.ts`. Root CI compares the local definitions atomically.
 
 The npm package is `@postgrip/agent` (scoped under `@postgrip` org). API shape follows the Temporal TypeScript SDK: `Connection.connect`, `Client`, `Agent`, **plain async functions for workflows** (no class decorators — TS uses functions, unlike Python's `@workflow.defn class`), `proxyActivities<typeof activities>(...)` for typed activity stubs.
 
@@ -28,7 +28,7 @@ bun run test src/foo.test.ts
 bunx vitest run -t "specific test name"
 ```
 
-CI (`.github/workflows/ci.yml`) runs `typecheck` + `build` + `test` on Ubuntu with Bun, plus the cross-language drift guard. The drift job pulls `tools/check_drift.py` from `agent-sdk-protocol` and compares this repo's `src/types.ts` against Go (and Python via `--from-github`). A drift failure means either a wire change here is missing the Go side, or this PR shouldn't be touching wire shapes.
+Root CI (`../.github/workflows/ci.yml`) runs `typecheck`, `build`, `test`, and the cross-language drift guard. A drift failure means the same commit contains incompatible wire definitions.
 
 ## Architecture
 
@@ -112,23 +112,23 @@ export { activityInfo, heartbeat, milestone as activityMilestone } from './activ
 
 ## Polyglot mirror
 
-This is one of four repos sharing the runtime contract:
+This is one of four packages sharing the runtime contract:
 
-- [`postgrip-io/agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) — wire-shape source of truth (Go).
-- [`postgrip-io/agent-sdk-go`](https://github.com/postgrip-io/agent-sdk-go) — Go SDK; imports protocol directly.
-- [`postgrip-io/agent-sdk-python`](https://github.com/postgrip-io/agent-sdk-python) — Python SDK; mirrors types in `src/postgrip_agent/types.py`.
-- [`postgrip-io/agent-sdk-typescript`](https://github.com/postgrip-io/agent-sdk-typescript) — this repo; mirrors types in `src/types.ts`.
+- `../protocol` — wire-shape source of truth (Go).
+- `../go` — Go SDK; imports protocol directly.
+- `../python` — Python SDK; mirrors types in `src/postgrip_agent/types.py`.
+- `typescript/` — this package; mirrors types in `src/types.ts`.
 
-Wire-shape changes need to land in protocol + each mirror in coordinated PRs. The drift guard catches name-level disagreement; it does **not** catch type-level drift (number vs string, optional vs required) — those need human review.
+Wire-shape changes must update protocol and each mirror in one commit. The drift guard catches name-level disagreement; it does **not** catch type-level drift (number vs string, optional vs required) — those need human review.
 
 ## Distribution
 
-The npm package is `@postgrip/agent`. Releases are gated on a git tag (`v*`) which fires `.github/workflows/publish.yml` to build and publish via [npm trusted publishing](https://docs.npmjs.com/trusted-publishers) — no `NPM_TOKEN` stored in the repo. The trusted publisher must be configured **once** on npmjs.com under the package's Settings → Publishing tab, with this exact configuration:
+The npm package is `@postgrip/agent`. Releases are gated on a `typescript/v*` tag which fires `../.github/workflows/publish-typescript.yml` to build and publish via npm trusted publishing. The trusted publisher must be configured with:
 
 - Package name: `@postgrip/agent`
 - Repository owner: `postgrip-io`
-- Repository: `agent-sdk-typescript`
-- Workflow filename: `publish.yml`
+- Repository: `postgrip-agent-sdks`
+- Workflow filename: `publish-typescript.yml`
 - Environment: `npm`
 
 The publish step uses `npm publish --provenance --access public`, which requires the workflow's `id-token: write` permission (set at workflow level) and includes [SLSA build provenance](https://docs.npmjs.com/generating-provenance-statements) on the published artifact.
@@ -137,13 +137,13 @@ To cut a release:
 
 ```sh
 # Bump version in package.json to match the tag, then:
-git tag -a v0.X.Y -m "v0.X.Y — short summary"
-git push origin v0.X.Y
-gh release create v0.X.Y --title "v0.X.Y" --notes "..."
+git tag -a typescript/v0.X.Y -m "TypeScript v0.X.Y"
+git push origin typescript/v0.X.Y
+gh release create typescript/v0.X.Y --title "TypeScript v0.X.Y" --notes "..."
 ```
 
-The publish workflow watches for tags matching `v*` and uploads on success. The `version` in `package.json` must match the tag (or the publish step fails with a name/version mismatch).
+The `version` in `package.json` must match the tag suffix.
 
 ## Docs
 
-The customer-facing docs site is built with MkDocs Material and deployed to GitHub Pages via `.github/workflows/docs.yml`. Source lives in `docs/` plus `mkdocs.yml`. Pages auto-deploy on pushes to `main` that touch those paths. We use MkDocs (not VitePress / Docusaurus) for parity with the Python SDK's docs site — both build identically in CI with a single Python-only step.
+The customer-facing docs site is built with MkDocs Material. Source lives in `docs/` plus `mkdocs.yml`; the root docs workflow publishes it below the monorepo Pages site.

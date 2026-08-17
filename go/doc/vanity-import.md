@@ -1,10 +1,11 @@
 # Vanity import path
 
-The Go module declares its path as `go.postgrip.io/sdk` (vanity), with the
-upstream code on GitHub at `github.com/postgrip-io/agent-sdk-go`. For external
-`go get` and pkg.go.dev to resolve the vanity path, `go.postgrip.io` must
-serve a small static page with `<meta name="go-import">` and
-`<meta name="go-source">` tags.
+The Go module declares its path as `go.postgrip.io/sdk` (vanity). Development
+source lives in `postgrip-io/postgrip-agent-sdks/go`, while the vanity
+metadata still resolves releases through the legacy
+`github.com/postgrip-io/agent-sdk-go` distribution repository. For external
+`go get` and pkg.go.dev to work, `go.postgrip.io` must serve a small static
+page with `<meta name="go-import">` and `<meta name="go-source">` tags.
 
 That page lives in [`site/`](../site/) — a deployment-ready `index.html`
 served via Cloudflare Workers Assets (config in
@@ -26,4 +27,6 @@ Fetching via the GitHub URL directly (`go get github.com/postgrip-io/agent-sdk-g
 errors with "module declares its path as: go.postgrip.io/sdk; but was
 required as: github.com/postgrip-io/agent-sdk-go".
 
-The vanity page is the single piece that unblocks all of this.
+Do not repoint the vanity page directly at the monorepo without also solving
+subdirectory module resolution and validating a clean-cache `go get`. See the
+root `MIGRATION.md` for the compatibility cutover.

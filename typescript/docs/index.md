@@ -5,7 +5,7 @@ Run shell commands, container workloads, and durable workflows on the PostGrip A
 **Current release:** `0.11.0`
 
 [Quick start →](quickstart.md){ .md-button .md-button--primary }
-[GitHub](https://github.com/postgrip-io/agent-sdk-typescript){ .md-button }
+[GitHub](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/typescript){ .md-button }
 [npm](https://www.npmjs.com/package/@postgrip/agent){ .md-button }
 
 ---
@@ -39,9 +39,9 @@ export async function greetingWorkflow(name: string): Promise<string> {
 
 This SDK is one of three. The Go and Python siblings implement the same model against the same wire protocol, so a workflow started by a TypeScript client can be picked up by a Go agent and vice versa.
 
-- [agent-sdk-go](https://github.com/postgrip-io/agent-sdk-go)
-- [agent-sdk-python](https://github.com/postgrip-io/agent-sdk-python)
-- [agent-sdk-protocol](https://github.com/postgrip-io/agent-sdk-protocol) — the shared wire shapes (Go, with hand-mirrored TS / Python definitions)
+- [agent-sdk-go](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/go)
+- [agent-sdk-python](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/python)
+- [agent-sdk-protocol](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/protocol) — the shared wire shapes (Go, with hand-mirrored TS / Python definitions)
 
 ## Where to next
 

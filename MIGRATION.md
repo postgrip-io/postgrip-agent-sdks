@@ -1,0 +1,38 @@
+# Monorepo Migration
+
+This repository is now the development source of truth for:
+
+- `protocol/` from `postgrip-io/agent-sdk-protocol`
+- `go/` from `postgrip-io/agent-sdk-go`
+- `typescript/` from `postgrip-io/agent-sdk-typescript`
+- `python/` from `postgrip-io/agent-sdk-python`
+
+The imports preserve the original commit graphs through subtree merge commits.
+The legacy repositories should remain available until their compatibility and
+release responsibilities have been cut over.
+
+## Releases
+
+TypeScript and Python publish from this repository using `typescript/vX.Y.Z`
+and `python/vX.Y.Z` tags. Before the first release, update the npm and PyPI
+trusted-publisher configuration to repository `postgrip-agent-sdks` and the
+new workflow filenames.
+
+The existing Go module paths still resolve through the legacy repositories:
+
+- `github.com/postgrip-io/agent-sdk-protocol`
+- `go.postgrip.io/sdk`, whose vanity metadata points at `agent-sdk-go`
+
+Until those paths are redirected or migrated, mirror release commits and tags
+back to the corresponding legacy repository. Do not archive either Go
+repository before `go get` succeeds through its public module path from a
+clean module cache.
+
+## Follow-up Cutover
+
+After package publishing and Go resolution are verified:
+
+1. Mark legacy repositories read-only and point their READMEs here.
+2. Update external consumers, including the runtime, to the final protocol path.
+3. Move issue templates, branch protections, environments, and repository secrets.
+4. Archive legacy repositories only after released versions remain installable.

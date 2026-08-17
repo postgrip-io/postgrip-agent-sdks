@@ -1,23 +1,21 @@
 # PostGrip Agent — Go SDK
 
-[![Docs](https://img.shields.io/badge/docs-postgrip--io.github.io-2563EB?logo=github&logoColor=white)](https://postgrip-io.github.io/agent-sdk-go/)
+[![Docs](https://img.shields.io/badge/docs-postgrip--io.github.io-2563EB?logo=github&logoColor=white)](https://postgrip-io.github.io/postgrip-agent-sdks/go/)
 [![Go Reference](https://pkg.go.dev/badge/go.postgrip.io/sdk.svg)](https://pkg.go.dev/go.postgrip.io/sdk)
-[![CI](https://github.com/postgrip-io/agent-sdk-go/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/agent-sdk-go/actions/workflows/ci.yml)
+[![CI](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/postgrip-io/agent-sdk-go?label=release&color=2563EB)](https://github.com/postgrip-io/agent-sdk-go/releases)
 [![License](https://img.shields.io/github/license/postgrip-io/agent-sdk-go?color=2563EB)](LICENSE)
 
 Go SDK for defining, submitting, and executing PostGrip workflows. In production,
 SDK workflow runtimes are supervised by an existing PostGrip agent: the host
 agent launches the runtime, injects delegated credentials, and keeps generic
-operational tasks separate from workflow/activity polling. Mirrors
-[`agent-sdk-typescript`](https://github.com/postgrip-io/agent-sdk-typescript)
-and [`agent-sdk-python`](https://github.com/postgrip-io/agent-sdk-python) so
-polyglot deployments can pick whichever language fits each task fleet. Wire
-shapes come from
-[`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) so
-all four repos agree on the runtime contract.
+operational tasks separate from workflow/activity polling. It mirrors the
+[TypeScript](../typescript) and [Python](../python) packages so polyglot
+deployments can pick whichever language fits each task fleet. Wire shapes come
+from the [protocol package](../protocol), so all four packages agree on the
+runtime contract.
 
-**Docs:** [postgrip-io.github.io/agent-sdk-go](https://postgrip-io.github.io/agent-sdk-go) — quick start, package guide, workflow runtime model.
+**Docs:** [postgrip-io.github.io/postgrip-agent-sdks/go](https://postgrip-io.github.io/postgrip-agent-sdks/go/) — quick start, package guide, workflow runtime model.
 **API:** [pkg.go.dev/go.postgrip.io/sdk](https://pkg.go.dev/go.postgrip.io/sdk) — auto-generated godoc.
 
 **Current release:** `v0.11.0`

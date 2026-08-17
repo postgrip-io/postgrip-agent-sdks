@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail-loud drift check between this Go protocol package and the
-hand-mirrored TS / Python type definitions in the sibling SDK repos.
+hand-mirrored TypeScript / Python definitions in the SDK monorepo.
 
 The contract being checked: every exported wire-format struct in
 types.go has an equivalent type with matching field names in
@@ -38,7 +38,8 @@ What we *don't* check yet (room for v2):
 
 Usage:
 
-    python3 tools/check_drift.py                 # check the local checkout
+    python3 tools/check_drift.py --monorepo      # check every local package
+    python3 tools/check_drift.py                 # check legacy sibling repos
     python3 tools/check_drift.py --from-github   # fetch peers from GitHub
     python3 tools/check_drift.py --from-github --github-ref "$BRANCH"
     python3 tools/check_drift.py --local go-sdk --from-github   # from agent-sdk-go
@@ -58,6 +59,7 @@ from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+MONOREPO_ROOT = REPO_ROOT.parent
 
 
 class FetchError(RuntimeError):
@@ -147,6 +149,15 @@ SIBLING_PATHS = {
                REPO_ROOT.parent / "agent-sdk-protocol" / "sandbox.go"],
     "ts":     [REPO_ROOT.parent / "agent-sdk-typescript" / "src" / "types.ts"],
     "python": [REPO_ROOT.parent / "agent-sdk-python" / "src" / "postgrip_agent" / "types.py"],
+}
+# Consolidated repository layout. Keeping this explicit makes CI independent
+# of GitHub availability and guarantees one pull request is validated as an
+# atomic cross-language contract change.
+MONOREPO_PATHS = {
+    "go":     [MONOREPO_ROOT / "protocol" / "types.go",
+               MONOREPO_ROOT / "protocol" / "sandbox.go"],
+    "ts":     [MONOREPO_ROOT / "typescript" / "src" / "types.ts"],
+    "python": [MONOREPO_ROOT / "python" / "src" / "postgrip_agent" / "types.py"],
 }
 
 # json:"..." -> field name (strip ",omitempty" etc.)
@@ -757,6 +768,11 @@ def main() -> int:
         help="exercise the detectors against synthetic sources and exit; run this before the tree scan so a clean tree can't pass on a broken checker.",
     )
     ap.add_argument(
+        "--monorepo",
+        action="store_true",
+        help="read protocol, Go SDK, TypeScript, and Python sources from the consolidated repository and validate them together",
+    )
+    ap.add_argument(
         "--from-github",
         action="store_true",
         help="fetch all three language type files from main on github (skip sibling working dirs)",
@@ -778,6 +794,13 @@ def main() -> int:
 
     if args.self_test:
         return self_test()
+
+    if args.monorepo and (args.from_github or args.local):
+        print(
+            "check_drift: --monorepo cannot be combined with --from-github or --local",
+            file=sys.stderr,
+        )
+        return 2
 
     sources: dict[str, str] = {}
     github_refs = github_ref_candidates(args.github_ref)
@@ -810,7 +833,13 @@ def main() -> int:
         return 0
 
     for lang in ("go", "ts", "python"):
-        if args.local == lang:
+        if args.monorepo:
+            try:
+                sources[lang] = load_all(MONOREPO_PATHS[lang], from_github=False)
+            except FileNotFoundError as e:
+                print(f"check_drift: incomplete monorepo layout: {e}", file=sys.stderr)
+                return 2
+        elif args.local == lang:
             try:
                 sources[lang] = load_all([REPO_ROOT / p for p in LOCAL_PATHS[lang]], from_github=False)
             except FileNotFoundError as e:
@@ -838,6 +867,8 @@ def main() -> int:
     py_types = parse_py_types(sources["python"])
 
     failures: list[str] = []
+    if args.monorepo:
+        failures.extend(check_go_sdk(MONOREPO_ROOT / "go", sources["go"]))
     for lang, source, pattern, label in (
         ("go", sources["go"], GO_STRUCT_RE, "struct"),
         ("ts", sources["ts"], TS_INTERFACE_RE, "interface"),
@@ -856,12 +887,12 @@ def main() -> int:
             continue
         ts_fields = ts_types.get(name)
         if ts_fields is None:
-            failures.append(f"  {name}: missing TypeScript interface in agent-sdk-typescript/src/types.ts")
+            failures.append(f"  {name}: missing TypeScript interface in typescript/src/types.ts")
         else:
             failures.extend(diff_field_sets(name, "ts", go_fields, ts_fields))
         py_fields = py_types.get(name)
         if py_fields is None:
-            failures.append(f"  {name}: missing Python TypedDict in agent-sdk-python/src/postgrip_agent/types.py")
+            failures.append(f"  {name}: missing Python TypedDict in python/src/postgrip_agent/types.py")
         else:
             failures.extend(diff_field_sets(name, "py", go_fields, py_fields))
 

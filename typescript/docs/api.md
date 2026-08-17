@@ -54,7 +54,7 @@ Constructors: `new ApplicationFailure(message, { type, nonRetryable, details })`
 
 ## Wire types
 
-The package re-exports the wire-format types defined in `src/types.ts`, mirroring the Go [`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol). Common ones (`Task`, `WorkflowExecution`, `WorkflowHistoryEvent`, `RetryPolicy`, `Schedule`, `FailureInfo`) and their request/response counterparts are all `import type { ... }`-able from `@postgrip/agent`.
+The package re-exports the wire-format types defined in `src/types.ts`, mirroring the Go [`agent-sdk-protocol`](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/protocol). Common ones (`Task`, `WorkflowExecution`, `WorkflowHistoryEvent`, `RetryPolicy`, `Schedule`, `FailureInfo`) and their request/response counterparts are all `import type { ... }`-able from `@postgrip/agent`.
 
 ## TypeScript
 
@@ -64,6 +64,6 @@ The package ships with type declarations (`dist/index.d.ts`). All public functio
 
 When in doubt, the code is the documentation:
 
-- [`src/index.ts`](https://github.com/postgrip-io/agent-sdk-typescript/blob/main/src/index.ts) — full re-export list.
-- [`src/types.ts`](https://github.com/postgrip-io/agent-sdk-typescript/blob/main/src/types.ts) — wire-type definitions.
-- [`src/workflow.ts`](https://github.com/postgrip-io/agent-sdk-typescript/blob/main/src/workflow.ts), [`src/activity.ts`](https://github.com/postgrip-io/agent-sdk-typescript/blob/main/src/activity.ts) — runtime helpers.
+- [`src/index.ts`](https://github.com/postgrip-io/postgrip-agent-sdks/blob/main/typescript/src/index.ts) — full re-export list.
+- [`src/types.ts`](https://github.com/postgrip-io/postgrip-agent-sdks/blob/main/typescript/src/types.ts) — wire-type definitions.
+- [`src/workflow.ts`](https://github.com/postgrip-io/postgrip-agent-sdks/blob/main/typescript/src/workflow.ts), [`src/activity.ts`](https://github.com/postgrip-io/postgrip-agent-sdks/blob/main/typescript/src/activity.ts) — runtime helpers.

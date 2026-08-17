@@ -61,12 +61,12 @@ Constructors / predicates: `ApplicationFailure(message, type=, non_retryable=, d
 
 ## Wire types
 
-The `postgrip_agent.types` module mirrors the Go [`agent-sdk-protocol`](https://github.com/postgrip-io/agent-sdk-protocol) wire shapes as Python dataclasses / TypedDicts. Common ones (`Task`, `WorkflowExecution`, `WorkflowHistoryEvent`, `RetryPolicy`, `Schedule`, `FailureInfo`) are also re-exported at the top level.
+The `postgrip_agent.types` module mirrors the Go [`agent-sdk-protocol`](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/protocol) wire shapes as Python dataclasses / TypedDicts. Common ones (`Task`, `WorkflowExecution`, `WorkflowHistoryEvent`, `RetryPolicy`, `Schedule`, `FailureInfo`) are also re-exported at the top level.
 
 When in doubt, the code is the documentation:
 
-- [`src/postgrip_agent/__init__.py`](https://github.com/postgrip-io/agent-sdk-python/blob/main/src/postgrip_agent/__init__.py) — full re-export list.
-- [`src/postgrip_agent/types.py`](https://github.com/postgrip-io/agent-sdk-python/blob/main/src/postgrip_agent/types.py) — wire-type definitions.
+- [`src/postgrip_agent/__init__.py`](https://github.com/postgrip-io/postgrip-agent-sdks/blob/main/python/src/postgrip_agent/__init__.py) — full re-export list.
+- [`src/postgrip_agent/types.py`](https://github.com/postgrip-io/postgrip-agent-sdks/blob/main/python/src/postgrip_agent/types.py) — wire-type definitions.
 
 ## Type checking
 

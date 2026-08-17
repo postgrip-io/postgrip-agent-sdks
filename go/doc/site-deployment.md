@@ -6,7 +6,7 @@ for `go.postgrip.io/sdk` and a small human-visible landing.
 
 When `go get go.postgrip.io/sdk[/...]` runs, Go's module proxy fetches
 `https://go.postgrip.io/sdk?go-get=1`, parses the `<meta name="go-import">`
-tag in the response, and uses it to find the upstream git repo
+tag in the response, and uses it to find the legacy distribution repo
 (`github.com/postgrip-io/agent-sdk-go`). Without this page deployed at
 `go.postgrip.io`, `go get` fails — and pkg.go.dev never populates.
 
@@ -79,7 +79,7 @@ out of the box, and integrates cleanly with custom domains.
 
 ## Updating the page
 
-Edit `site/index.html` and merge to `main`. Cloudflare Pages auto-deploys
-on every push to the configured branch (default: `main`). The vanity meta
-tags are static and shouldn't need to change unless the upstream repo
-moves.
+The Cloudflare project remains connected to the legacy distribution repository.
+Mirror any `go/site/` change there until deployment is moved deliberately.
+The vanity meta tags must not point directly at the monorepo until subdirectory
+module resolution has been validated.
