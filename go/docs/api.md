@@ -22,7 +22,7 @@ The full, auto-generated Go API documentation lives on [pkg.go.dev](https://pkg.
 
 ## Source
 
-The source is in the [PostGrip Agent SDK monorepo](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/go). Issues, PRs, and release notes live in the parent repository.
+The public source mirror is at [`postgrip-io/agent-sdk-go`](https://github.com/postgrip-io/agent-sdk-go). Issues and release notes remain there while the consolidated monorepo is private.
 
 ## Versioning
 
@@ -34,4 +34,4 @@ go get go.postgrip.io/sdk@v0.11.0
 
 While the version stays at `v0.x.x`, the public API may evolve. Pin to a tag for stability and read release notes when upgrading.
 
-[All releases →](https://github.com/postgrip-io/postgrip-agent-sdks/releases){: .btn .fs-5 .mb-4 .mb-md-0 }
+[All releases →](https://github.com/postgrip-io/agent-sdk-go/releases){: .btn .fs-5 .mb-4 .mb-md-0 }

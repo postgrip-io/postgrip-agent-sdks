@@ -2,6 +2,11 @@
   "name": "@postgrip/agent",
   "version": "0.11.0",
   "description": "Temporal-style TypeScript SDK for PostGrip Agent",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/postgrip-io/postgrip-agent-sdks.git",
+    "directory": "typescript"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

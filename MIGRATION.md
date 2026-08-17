@@ -18,6 +18,12 @@ and `python/vX.Y.Z` tags. Before the first release, update the npm and PyPI
 trusted-publisher configuration to repository `postgrip-agent-sdks` and the
 new workflow filenames.
 
+The monorepo is currently private. npm trusted publishing therefore runs
+without provenance, and the existing public SDK repositories continue to host
+customer-facing documentation. Keep mirroring documentation changes there.
+Move Pages and public source links only after this repository is public and
+Actions-based Pages has been enabled.
+
 The existing Go module paths still resolve through the legacy repositories:
 
 - `github.com/postgrip-io/agent-sdk-protocol`
@@ -36,3 +42,9 @@ After package publishing and Go resolution are verified:
 2. Update external consumers, including the runtime, to the final protocol path.
 3. Move issue templates, branch protections, environments, and repository secrets.
 4. Archive legacy repositories only after released versions remain installable.
+
+## Landing This Migration
+
+Merge the consolidation pull request with a merge commit. Do not squash or
+rebase it: the four subtree imports preserve their original histories through
+second-parent links, which those merge strategies would discard.

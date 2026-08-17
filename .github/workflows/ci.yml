@@ -41,6 +41,11 @@ jobs:
           fi
       - run: go vet ./go/...
       - run: go test ./go/...
+      - name: Test standalone module against the pinned protocol release
+        working-directory: go
+        env:
+          GOWORK: "off"
+        run: go test ./...
 
   typescript:
     runs-on: ubuntu-latest

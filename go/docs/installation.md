@@ -6,7 +6,7 @@ nav_order: 2
 
 # Installation
 
-The SDK lives at `go.postgrip.io/sdk`. Its source is in the [PostGrip Agent SDK monorepo](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/go).
+The SDK lives at `go.postgrip.io/sdk`. Its public source mirror is at [`postgrip-io/agent-sdk-go`](https://github.com/postgrip-io/agent-sdk-go).
 
 ```sh
 go get go.postgrip.io/sdk@latest

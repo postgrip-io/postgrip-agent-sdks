@@ -79,8 +79,8 @@ import type { WorkflowFunction, ActivityRegistry, RetryPolicy } from '@postgrip/
 ## Local development from a clone
 
 ```sh
-git clone https://github.com/postgrip-io/postgrip-agent-sdks
-cd postgrip-agent-sdks/typescript
+git clone https://github.com/postgrip-io/agent-sdk-typescript
+cd agent-sdk-typescript
 bun install --frozen-lockfile
 bun run typecheck
 bun run build
