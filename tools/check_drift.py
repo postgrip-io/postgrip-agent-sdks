@@ -152,6 +152,17 @@ SIBLING_PATHS = {
 # json:"..." -> field name (strip ",omitempty" etc.)
 JSON_TAG_RE = re.compile(r'json:"([^",]+)')
 
+
+def go_json_field_names(body: str) -> set[str]:
+    """JSON field names declared in a Go struct body.
+
+    `json:"-"` is excluded: the tag means the field never crosses the wire, so
+    there is nothing for TS or Python to mirror. Without this the checker
+    demands a field literally named "-" in every mirror — which is how a
+    server-side-only field on a wire type became impossible to express.
+    """
+    return {name for name in JSON_TAG_RE.findall(body) if name != "-"}
+
 # Go: type X struct { ... }
 GO_STRUCT_RE = re.compile(r'^type\s+(\w+)\s+struct\s*\{', re.MULTILINE)
 # Go: type X = Y  (alias)
@@ -209,8 +220,7 @@ def parse_go_types(source: str) -> dict[str, set[str]]:
                 depth -= 1
             i += 1
         body = source[m.end() : i - 1]
-        fields = set(JSON_TAG_RE.findall(body))
-        structs[name] = fields
+        structs[name] = go_json_field_names(body)
         pos = i
 
     # Resolve aliases by copying the target's field set under the alias name.
@@ -594,6 +604,13 @@ def self_test() -> int:
     check("parse_ts_types fields", parse_ts_types(SELF_TEST_TS).get("TimerPayload"), {"timerId", "durationMs"})
     check("parse_py_types fields", parse_py_types(SELF_TEST_PY).get("TimerPayload"), {"timerId", "durationMs"})
 
+    # Regression: json:"-" was captured as a field named "-", so any wire type
+    # carrying a server-side-only field demanded a "-" field in both mirrors.
+    check(
+        "parse_go_types skips json:\"-\" fields",
+        parse_go_types('type X struct {\n\tA string `json:"a"`\n\tB string `json:"-"`\n}').get("X"),
+        {"a"},
+    )
     check("go_struct_names", go_struct_names(SELF_TEST_GO), {"TimerPayload"})
     check("go_literal_const_names", go_literal_const_names(SELF_TEST_GO), {"TaskTypeNoop", "TaskTypeTimer"})
     # The correct re-export form must NOT register as a literal const.

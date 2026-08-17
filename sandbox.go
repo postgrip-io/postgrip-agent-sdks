@@ -241,10 +241,16 @@ type SandboxListResponse struct {
 // ID is not the digest: identical bytes uploaded twice return the *existing*
 // record, so a client must not assume a fresh ID per upload.
 type SandboxWorkspace struct {
-	TenantID       string    `json:"tenantId"`
-	ID             string    `json:"id"`
-	SHA256         string    `json:"sha256"`
-	SizeBytes      int64     `json:"sizeBytes"`
+	TenantID  string `json:"tenantId"`
+	ID        string `json:"id"`
+	SHA256    string `json:"sha256"`
+	SizeBytes int64  `json:"sizeBytes"`
+	// StorageKey is the orchestrator's blob key, derived from SHA256. It is
+	// `json:"-"` — it never crosses the wire and means nothing to a client —
+	// but it lives here so the server does not need a parallel copy of this
+	// struct just to carry one extra field. A fork of a wire type for a
+	// non-wire field is how these shapes diverge.
+	StorageKey     string    `json:"-"`
 	RepositoryName string    `json:"repositoryName"`
 	Revision       string    `json:"revision,omitempty"`
 	CreatedBy      string    `json:"createdBy"`
