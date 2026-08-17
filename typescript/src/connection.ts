@@ -185,6 +185,8 @@ export class Connection {
     queue?: string;
     type?: string;
     state?: TaskState;
+    orderBy?: string;
+    pageToken?: string;
     limit?: number;
     offset?: number;
   } = {}): Promise<Task<P, R>[]> {
@@ -193,6 +195,8 @@ export class Connection {
     if (options.queue) query.set('queue', options.queue);
     if (options.type) query.set('type', options.type);
     if (options.state) query.set('state', options.state);
+    if (options.orderBy) query.set('order_by', options.orderBy);
+    if (options.pageToken) query.set('page_token', options.pageToken);
     if (options.limit != null) query.set('limit', String(options.limit));
     if (options.offset != null) query.set('offset', String(options.offset));
     return this.openapi.listTasks({ query }) as Promise<Array<Task<P, R>>>;
@@ -213,12 +217,14 @@ export class Connection {
   async listSchedules<Args extends unknown[] = unknown[]>(options: {
     namespace?: string;
     state?: ScheduleState;
+    pageToken?: string;
     limit?: number;
     offset?: number;
   } = {}): Promise<Array<Schedule<Args>>> {
     const query = new URLSearchParams();
     if (options.namespace) query.set('namespace', options.namespace);
     if (options.state) query.set('state', options.state);
+    if (options.pageToken) query.set('page_token', options.pageToken);
     if (options.limit != null) query.set('limit', String(options.limit));
     if (options.offset != null) query.set('offset', String(options.offset));
     return this.openapi.listSchedules({ query }) as Promise<Array<Schedule<Args>>>;
@@ -264,6 +270,7 @@ export class Connection {
     runId?: string;
     type?: string;
     queue?: string;
+    agentId?: string;
     state?: WorkflowExecution['state'];
     query?: string;
     orderBy?: string;
@@ -278,6 +285,7 @@ export class Connection {
     if (options.runId) query.set('run_id', options.runId);
     if (options.type) query.set('type', options.type);
     if (options.queue) query.set('queue', options.queue);
+    if (options.agentId) query.set('agent_id', options.agentId);
     if (options.state) query.set('state', options.state);
     if (options.query) query.set('query', options.query);
     if (options.orderBy) query.set('order_by', options.orderBy);
@@ -296,6 +304,7 @@ export class Connection {
     runId?: string;
     type?: string;
     queue?: string;
+    agentId?: string;
     state?: WorkflowExecution['state'];
     query?: string;
     searchAttributes?: Record<string, string | number | boolean>;
@@ -306,6 +315,7 @@ export class Connection {
     if (options.runId) query.set('run_id', options.runId);
     if (options.type) query.set('type', options.type);
     if (options.queue) query.set('queue', options.queue);
+    if (options.agentId) query.set('agent_id', options.agentId);
     if (options.state) query.set('state', options.state);
     if (options.query) query.set('query', options.query);
     for (const [key, value] of Object.entries(options.searchAttributes ?? {})) {

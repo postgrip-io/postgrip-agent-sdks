@@ -81,7 +81,7 @@ func (c *Connection) HeartbeatTask(ctx context.Context, taskID, agentID string, 
 		return err
 	}
 	body := OpenAPIHeartbeatAgentTaskRequestBody{Event: ev}
-	_, err := c.OpenAPI().HeartbeatAgentTask(ctx, taskID, OpenAPIHeartbeatAgentTaskQuery{AgentId: &agentID}, &body)
+	_, err := c.OpenAPI().HeartbeatAgentTask(ctx, taskID, OpenAPIHeartbeatAgentTaskQuery{AgentId: &agentID}, body)
 	return err
 }
 
@@ -137,7 +137,7 @@ func (c *Connection) BlockTask(ctx context.Context, taskID, agentID, reason stri
 	}
 	body := OpenAPIBlockAgentTaskRequestBody{Reason: reason}
 	out, err := c.OpenAPI().BlockAgentTask(
-		ctx, taskID, OpenAPIBlockAgentTaskQuery{AgentId: &agentID}, &body,
+		ctx, taskID, OpenAPIBlockAgentTaskQuery{AgentId: &agentID}, body,
 	)
 	if err != nil {
 		return nil, err

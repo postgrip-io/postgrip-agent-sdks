@@ -63,6 +63,8 @@ type OpenAPICountWorkflowsQuery struct {
 	Queue     *string
 	State     *OpenAPIWorkflowState
 	Query     *string
+	Q         *string
+	AgentId   *string
 	Search    map[string]any
 }
 
@@ -88,6 +90,12 @@ func (p OpenAPICountWorkflowsQuery) values() url.Values {
 	}
 	if p.Query != nil {
 		values.Set("query", fmt.Sprint(*p.Query))
+	}
+	if p.Q != nil {
+		values.Set("q", fmt.Sprint(*p.Q))
+	}
+	if p.AgentId != nil {
+		values.Set("agent_id", fmt.Sprint(*p.AgentId))
 	}
 	for key, value := range p.Search {
 		values.Set("search."+key, fmt.Sprint(value))
@@ -122,6 +130,7 @@ func (p OpenAPIHeartbeatAgentTaskQuery) values() url.Values {
 type OpenAPIListSchedulesQuery struct {
 	Namespace *string
 	State     *OpenAPIScheduleState
+	PageToken *string
 	Limit     *int64
 	Offset    *int64
 }
@@ -133,6 +142,9 @@ func (p OpenAPIListSchedulesQuery) values() url.Values {
 	}
 	if p.State != nil {
 		values.Set("state", fmt.Sprint(*p.State))
+	}
+	if p.PageToken != nil {
+		values.Set("page_token", fmt.Sprint(*p.PageToken))
 	}
 	if p.Limit != nil {
 		values.Set("limit", fmt.Sprint(*p.Limit))
@@ -148,6 +160,8 @@ type OpenAPIListTasksQuery struct {
 	Queue     *string
 	Type      *string
 	State     *OpenAPITaskState
+	OrderBy   *string
+	PageToken *string
 	Limit     *int64
 	Offset    *int64
 }
@@ -166,6 +180,12 @@ func (p OpenAPIListTasksQuery) values() url.Values {
 	if p.State != nil {
 		values.Set("state", fmt.Sprint(*p.State))
 	}
+	if p.OrderBy != nil {
+		values.Set("order_by", fmt.Sprint(*p.OrderBy))
+	}
+	if p.PageToken != nil {
+		values.Set("page_token", fmt.Sprint(*p.PageToken))
+	}
 	if p.Limit != nil {
 		values.Set("limit", fmt.Sprint(*p.Limit))
 	}
@@ -183,7 +203,10 @@ type OpenAPIListWorkflowsQuery struct {
 	Queue     *string
 	State     *OpenAPIWorkflowState
 	Query     *string
+	Q         *string
+	AgentId   *string
 	OrderBy   *string
+	Order     *string
 	PageToken *string
 	Search    map[string]any
 	Limit     *int64
@@ -213,8 +236,17 @@ func (p OpenAPIListWorkflowsQuery) values() url.Values {
 	if p.Query != nil {
 		values.Set("query", fmt.Sprint(*p.Query))
 	}
+	if p.Q != nil {
+		values.Set("q", fmt.Sprint(*p.Q))
+	}
+	if p.AgentId != nil {
+		values.Set("agent_id", fmt.Sprint(*p.AgentId))
+	}
 	if p.OrderBy != nil {
 		values.Set("order_by", fmt.Sprint(*p.OrderBy))
+	}
+	if p.Order != nil {
+		values.Set("order", fmt.Sprint(*p.Order))
 	}
 	if p.PageToken != nil {
 		values.Set("page_token", fmt.Sprint(*p.PageToken))
@@ -267,12 +299,12 @@ func (c *OpenAPIClient) BackfillSchedule(ctx context.Context, scheduleId string,
 	err := c.connection.doOpenAPI(ctx, openAPIBackfillSchedule, map[string]string{"scheduleId": scheduleId}, nil, body, &response)
 	return response, err
 }
-func (c *OpenAPIClient) BlockAgentTask(ctx context.Context, taskId string, query OpenAPIBlockAgentTaskQuery, body *OpenAPIBlockAgentTaskRequestBody) (OpenAPIBlockAgentTaskResponseBody, error) {
+func (c *OpenAPIClient) BlockAgentTask(ctx context.Context, taskId string, query OpenAPIBlockAgentTaskQuery, body OpenAPIBlockAgentTaskRequestBody) (OpenAPIBlockAgentTaskResponseBody, error) {
 	var response OpenAPIBlockAgentTaskResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPIBlockAgentTask, map[string]string{"taskId": taskId}, query.values(), body, &response)
 	return response, err
 }
-func (c *OpenAPIClient) CancelWorkflow(ctx context.Context, workflowId string, body *OpenAPICancelWorkflowRequestBody) (OpenAPICancelWorkflowResponseBody, error) {
+func (c *OpenAPIClient) CancelWorkflow(ctx context.Context, workflowId string, body OpenAPICancelWorkflowRequestBody) (OpenAPICancelWorkflowResponseBody, error) {
 	var response OpenAPICancelWorkflowResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPICancelWorkflow, map[string]string{"workflowId": workflowId}, nil, body, &response)
 	return response, err
@@ -302,7 +334,7 @@ func (c *OpenAPIClient) CreateSandbox(ctx context.Context, body OpenAPICreateSan
 	err := c.connection.doOpenAPI(ctx, openAPICreateSandbox, nil, nil, body, &response)
 	return response, err
 }
-func (c *OpenAPIClient) CreateSandboxSession(ctx context.Context, sandboxId string, body *OpenAPICreateSandboxSessionRequestBody) (OpenAPICreateSandboxSessionResponseBody, error) {
+func (c *OpenAPIClient) CreateSandboxSession(ctx context.Context, sandboxId string, body OpenAPICreateSandboxSessionRequestBody) (OpenAPICreateSandboxSessionResponseBody, error) {
 	var response OpenAPICreateSandboxSessionResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPICreateSandboxSession, map[string]string{"sandboxId": sandboxId}, nil, body, &response)
 	return response, err
@@ -357,7 +389,7 @@ func (c *OpenAPIClient) Health(ctx context.Context) (OpenAPIHealthResponseBody, 
 	err := c.connection.doOpenAPI(ctx, openAPIHealth, nil, nil, nil, &response)
 	return response, err
 }
-func (c *OpenAPIClient) HeartbeatAgentTask(ctx context.Context, taskId string, query OpenAPIHeartbeatAgentTaskQuery, body *OpenAPIHeartbeatAgentTaskRequestBody) (OpenAPIHeartbeatAgentTaskResponseBody, error) {
+func (c *OpenAPIClient) HeartbeatAgentTask(ctx context.Context, taskId string, query OpenAPIHeartbeatAgentTaskQuery, body OpenAPIHeartbeatAgentTaskRequestBody) (OpenAPIHeartbeatAgentTaskResponseBody, error) {
 	var response OpenAPIHeartbeatAgentTaskResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPIHeartbeatAgentTask, map[string]string{"taskId": taskId}, query.values(), body, &response)
 	return response, err
@@ -397,7 +429,7 @@ func (c *OpenAPIClient) ListWorkflows(ctx context.Context, query OpenAPIListWork
 	err := c.connection.doOpenAPI(ctx, openAPIListWorkflows, nil, query.values(), nil, &response)
 	return response, err
 }
-func (c *OpenAPIClient) PauseSchedule(ctx context.Context, scheduleId string, body *OpenAPIPauseScheduleRequestBody) (OpenAPIPauseScheduleResponseBody, error) {
+func (c *OpenAPIClient) PauseSchedule(ctx context.Context, scheduleId string, body OpenAPIPauseScheduleRequestBody) (OpenAPIPauseScheduleResponseBody, error) {
 	var response OpenAPIPauseScheduleResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPIPauseSchedule, map[string]string{"scheduleId": scheduleId}, nil, body, &response)
 	return response, err
@@ -437,17 +469,17 @@ func (c *OpenAPIClient) StopSandbox(ctx context.Context, sandboxId string) (Open
 	err := c.connection.doOpenAPI(ctx, openAPIStopSandbox, map[string]string{"sandboxId": sandboxId}, nil, nil, &response)
 	return response, err
 }
-func (c *OpenAPIClient) TerminateWorkflow(ctx context.Context, workflowId string, body *OpenAPITerminateWorkflowRequestBody) (OpenAPITerminateWorkflowResponseBody, error) {
+func (c *OpenAPIClient) TerminateWorkflow(ctx context.Context, workflowId string, body OpenAPITerminateWorkflowRequestBody) (OpenAPITerminateWorkflowResponseBody, error) {
 	var response OpenAPITerminateWorkflowResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPITerminateWorkflow, map[string]string{"workflowId": workflowId}, nil, body, &response)
 	return response, err
 }
-func (c *OpenAPIClient) TriggerSchedule(ctx context.Context, scheduleId string, body *OpenAPITriggerScheduleRequestBody) (OpenAPITriggerScheduleResponseBody, error) {
+func (c *OpenAPIClient) TriggerSchedule(ctx context.Context, scheduleId string, body OpenAPITriggerScheduleRequestBody) (OpenAPITriggerScheduleResponseBody, error) {
 	var response OpenAPITriggerScheduleResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPITriggerSchedule, map[string]string{"scheduleId": scheduleId}, nil, body, &response)
 	return response, err
 }
-func (c *OpenAPIClient) UnpauseSchedule(ctx context.Context, scheduleId string, body *OpenAPIUnpauseScheduleRequestBody) (OpenAPIUnpauseScheduleResponseBody, error) {
+func (c *OpenAPIClient) UnpauseSchedule(ctx context.Context, scheduleId string, body OpenAPIUnpauseScheduleRequestBody) (OpenAPIUnpauseScheduleResponseBody, error) {
 	var response OpenAPIUnpauseScheduleResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPIUnpauseSchedule, map[string]string{"scheduleId": scheduleId}, nil, body, &response)
 	return response, err
@@ -462,4 +494,4 @@ func (c *OpenAPIClient) UpdateSchedule(ctx context.Context, scheduleId string, b
 // connection operations, which use Connection's custom adapters.
 const OpenAPIClientOperationCount = 40
 
-const openAPIClientSpecSHA256 = "b3e8760f556d384a0dcaebd288d5646dec60215b1345d6b195fe225ba43a0e3f"
+const openAPIClientSpecSHA256 = "1e297793b59ae69b88f5df3082fad26bdc392215a4b2d17582c1d418de3655e8"

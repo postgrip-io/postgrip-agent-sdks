@@ -84,6 +84,33 @@ func TestGeneratedOpenAPIClientCallsTypedOperation(t *testing.T) {
 	}
 }
 
+func TestGeneratedOpenAPIListQueryParameters(t *testing.T) {
+	orderBy := "-created_at"
+	pageToken := "20"
+	agentID := "agent-1"
+	if got, want := (OpenAPIListTasksQuery{
+		OrderBy:   &orderBy,
+		PageToken: &pageToken,
+	}).values().Encode(), "order_by=-created_at&page_token=20"; got != want {
+		t.Fatalf("task query = %q, want %q", got, want)
+	}
+	if got, want := (OpenAPIListSchedulesQuery{
+		PageToken: &pageToken,
+	}).values().Encode(), "page_token=20"; got != want {
+		t.Fatalf("schedule query = %q, want %q", got, want)
+	}
+	if got, want := (OpenAPIListWorkflowsQuery{
+		AgentId: &agentID,
+	}).values().Encode(), "agent_id=agent-1"; got != want {
+		t.Fatalf("workflow query = %q, want %q", got, want)
+	}
+	if got, want := (OpenAPICountWorkflowsQuery{
+		AgentId: &agentID,
+	}).values().Encode(), "agent_id=agent-1"; got != want {
+		t.Fatalf("workflow count query = %q, want %q", got, want)
+	}
+}
+
 func TestResolveOpenAPIOperationRequiresPathParameters(t *testing.T) {
 	_, err := resolveOpenAPIOperation(openAPIGetTask, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "taskId") {

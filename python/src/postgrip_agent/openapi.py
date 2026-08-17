@@ -8,7 +8,7 @@ import re
 from typing import Any, Literal, Mapping, Protocol, Sequence, TypeAlias, TypedDict, cast
 from urllib.parse import quote, urlencode
 
-OPENAPI_SPEC_SHA256 = 'b3e8760f556d384a0dcaebd288d5646dec60215b1345d6b195fe225ba43a0e3f'
+OPENAPI_SPEC_SHA256 = '1e297793b59ae69b88f5df3082fad26bdc392215a4b2d17582c1d418de3655e8'
 OPENAPI_OPERATION_COUNT = 42
 OPENAPI_CLIENT_OPERATION_COUNT = 40
 CONNECT_SANDBOX_SESSION_PATH_SESSION_ID = 'sessionId'
@@ -855,12 +855,12 @@ class OpenAPIClient:
     def backfill_schedule(self, schedule_id: str, body: BackfillScheduleRequestBody) -> BackfillScheduleResponseBody:
         return cast(BackfillScheduleResponseBody, self._transport(OperationId.BACKFILL_SCHEDULE, body, path_parameters={'scheduleId': schedule_id}))
 
-    def block_agent_task(self, task_id: str, body: BlockAgentTaskRequestBody | None = None, *, agent_id: str | None = None) -> BlockAgentTaskResponseBody:
+    def block_agent_task(self, task_id: str, body: BlockAgentTaskRequestBody, *, agent_id: str | None = None) -> BlockAgentTaskResponseBody:
         _query: dict[str, Any] = {}
         if agent_id is not None: _query['agent_id'] = agent_id
         return cast(BlockAgentTaskResponseBody, self._transport(OperationId.BLOCK_AGENT_TASK, body, path_parameters={'taskId': task_id}, query=_query))
 
-    def cancel_workflow(self, workflow_id: str, body: CancelWorkflowRequestBody | None = None) -> CancelWorkflowResponseBody:
+    def cancel_workflow(self, workflow_id: str, body: CancelWorkflowRequestBody) -> CancelWorkflowResponseBody:
         return cast(CancelWorkflowResponseBody, self._transport(OperationId.CANCEL_WORKFLOW, body, path_parameters={'workflowId': workflow_id}))
 
     def compact(self, body: CompactRequestBody) -> CompactResponseBody:
@@ -871,7 +871,7 @@ class OpenAPIClient:
         if agent_id is not None: _query['agent_id'] = agent_id
         return cast(CompleteAgentTaskResponseBody, self._transport(OperationId.COMPLETE_AGENT_TASK, body, path_parameters={'taskId': task_id}, query=_query))
 
-    def count_workflows(self, *, namespace: str | None = None, id: str | None = None, run_id: str | None = None, type: str | None = None, queue: str | None = None, state: _SchemaWorkflowState | None = None, query: str | None = None, search: Mapping[str, Any] | None = None) -> CountWorkflowsResponseBody:
+    def count_workflows(self, *, namespace: str | None = None, id: str | None = None, run_id: str | None = None, type: str | None = None, queue: str | None = None, state: _SchemaWorkflowState | None = None, query: str | None = None, q: str | None = None, agent_id: str | None = None, search: Mapping[str, Any] | None = None) -> CountWorkflowsResponseBody:
         _query: dict[str, Any] = {}
         if namespace is not None: _query['namespace'] = namespace
         if id is not None: _query['id'] = id
@@ -880,6 +880,8 @@ class OpenAPIClient:
         if queue is not None: _query['queue'] = queue
         if state is not None: _query['state'] = state
         if query is not None: _query['query'] = query
+        if q is not None: _query['q'] = q
+        if agent_id is not None: _query['agent_id'] = agent_id
         if search: _query.update({f'search.{key}': value for key, value in search.items()})
         return cast(CountWorkflowsResponseBody, self._transport(OperationId.COUNT_WORKFLOWS, query=_query))
 
@@ -889,7 +891,7 @@ class OpenAPIClient:
     def create_sandbox(self, body: CreateSandboxRequestBody) -> CreateSandboxResponseBody:
         return cast(CreateSandboxResponseBody, self._transport(OperationId.CREATE_SANDBOX, body))
 
-    def create_sandbox_session(self, sandbox_id: str, body: CreateSandboxSessionRequestBody | None = None) -> CreateSandboxSessionResponseBody:
+    def create_sandbox_session(self, sandbox_id: str, body: CreateSandboxSessionRequestBody) -> CreateSandboxSessionResponseBody:
         return cast(CreateSandboxSessionResponseBody, self._transport(OperationId.CREATE_SANDBOX_SESSION, body, path_parameters={'sandboxId': sandbox_id}))
 
     def create_schedule(self, body: CreateScheduleRequestBody) -> CreateScheduleResponseBody:
@@ -924,7 +926,7 @@ class OpenAPIClient:
     def health(self) -> HealthResponseBody:
         return cast(HealthResponseBody, self._transport(OperationId.HEALTH))
 
-    def heartbeat_agent_task(self, task_id: str, body: HeartbeatAgentTaskRequestBody | None = None, *, agent_id: str | None = None) -> HeartbeatAgentTaskResponseBody:
+    def heartbeat_agent_task(self, task_id: str, body: HeartbeatAgentTaskRequestBody, *, agent_id: str | None = None) -> HeartbeatAgentTaskResponseBody:
         _query: dict[str, Any] = {}
         if agent_id is not None: _query['agent_id'] = agent_id
         return cast(HeartbeatAgentTaskResponseBody, self._transport(OperationId.HEARTBEAT_AGENT_TASK, body, path_parameters={'taskId': task_id}, query=_query))
@@ -935,10 +937,11 @@ class OpenAPIClient:
     def list_sandboxes(self) -> ListSandboxesResponseBody:
         return cast(ListSandboxesResponseBody, self._transport(OperationId.LIST_SANDBOXES))
 
-    def list_schedules(self, *, namespace: str | None = None, state: _SchemaScheduleState | None = None, limit: int | None = None, offset: int | None = None) -> ListSchedulesResponseBody:
+    def list_schedules(self, *, namespace: str | None = None, state: _SchemaScheduleState | None = None, page_token: str | None = None, limit: int | None = None, offset: int | None = None) -> ListSchedulesResponseBody:
         _query: dict[str, Any] = {}
         if namespace is not None: _query['namespace'] = namespace
         if state is not None: _query['state'] = state
+        if page_token is not None: _query['page_token'] = page_token
         if limit is not None: _query['limit'] = limit
         if offset is not None: _query['offset'] = offset
         return cast(ListSchedulesResponseBody, self._transport(OperationId.LIST_SCHEDULES, query=_query))
@@ -946,12 +949,14 @@ class OpenAPIClient:
     def list_task_events(self, task_id: str) -> ListTaskEventsResponseBody:
         return cast(ListTaskEventsResponseBody, self._transport(OperationId.LIST_TASK_EVENTS, path_parameters={'taskId': task_id}))
 
-    def list_tasks(self, *, namespace: str | None = None, queue: str | None = None, type: str | None = None, state: _SchemaTaskState | None = None, limit: int | None = None, offset: int | None = None) -> ListTasksResponseBody:
+    def list_tasks(self, *, namespace: str | None = None, queue: str | None = None, type: str | None = None, state: _SchemaTaskState | None = None, order_by: str | None = None, page_token: str | None = None, limit: int | None = None, offset: int | None = None) -> ListTasksResponseBody:
         _query: dict[str, Any] = {}
         if namespace is not None: _query['namespace'] = namespace
         if queue is not None: _query['queue'] = queue
         if type is not None: _query['type'] = type
         if state is not None: _query['state'] = state
+        if order_by is not None: _query['order_by'] = order_by
+        if page_token is not None: _query['page_token'] = page_token
         if limit is not None: _query['limit'] = limit
         if offset is not None: _query['offset'] = offset
         return cast(ListTasksResponseBody, self._transport(OperationId.LIST_TASKS, query=_query))
@@ -959,7 +964,7 @@ class OpenAPIClient:
     def list_workflow_history(self, workflow_id: str) -> ListWorkflowHistoryResponseBody:
         return cast(ListWorkflowHistoryResponseBody, self._transport(OperationId.LIST_WORKFLOW_HISTORY, path_parameters={'workflowId': workflow_id}))
 
-    def list_workflows(self, *, namespace: str | None = None, id: str | None = None, run_id: str | None = None, type: str | None = None, queue: str | None = None, state: _SchemaWorkflowState | None = None, query: str | None = None, order_by: str | None = None, page_token: str | None = None, search: Mapping[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> ListWorkflowsResponseBody:
+    def list_workflows(self, *, namespace: str | None = None, id: str | None = None, run_id: str | None = None, type: str | None = None, queue: str | None = None, state: _SchemaWorkflowState | None = None, query: str | None = None, q: str | None = None, agent_id: str | None = None, order_by: str | None = None, order: str | None = None, page_token: str | None = None, search: Mapping[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> ListWorkflowsResponseBody:
         _query: dict[str, Any] = {}
         if namespace is not None: _query['namespace'] = namespace
         if id is not None: _query['id'] = id
@@ -968,14 +973,17 @@ class OpenAPIClient:
         if queue is not None: _query['queue'] = queue
         if state is not None: _query['state'] = state
         if query is not None: _query['query'] = query
+        if q is not None: _query['q'] = q
+        if agent_id is not None: _query['agent_id'] = agent_id
         if order_by is not None: _query['order_by'] = order_by
+        if order is not None: _query['order'] = order
         if page_token is not None: _query['page_token'] = page_token
         if search: _query.update({f'search.{key}': value for key, value in search.items()})
         if limit is not None: _query['limit'] = limit
         if offset is not None: _query['offset'] = offset
         return cast(ListWorkflowsResponseBody, self._transport(OperationId.LIST_WORKFLOWS, query=_query))
 
-    def pause_schedule(self, schedule_id: str, body: PauseScheduleRequestBody | None = None) -> PauseScheduleResponseBody:
+    def pause_schedule(self, schedule_id: str, body: PauseScheduleRequestBody) -> PauseScheduleResponseBody:
         return cast(PauseScheduleResponseBody, self._transport(OperationId.PAUSE_SCHEDULE, body, path_parameters={'scheduleId': schedule_id}))
 
     def poll_agent_task(self, *, namespace: str | None = None, queue: str, agent_id: str | None = None, wait_seconds: int | None = None, task_types: str | None = None) -> PollAgentTaskResponseBody:
@@ -1005,13 +1013,13 @@ class OpenAPIClient:
     def stop_sandbox(self, sandbox_id: str) -> StopSandboxResponseBody:
         return cast(StopSandboxResponseBody, self._transport(OperationId.STOP_SANDBOX, path_parameters={'sandboxId': sandbox_id}))
 
-    def terminate_workflow(self, workflow_id: str, body: TerminateWorkflowRequestBody | None = None) -> TerminateWorkflowResponseBody:
+    def terminate_workflow(self, workflow_id: str, body: TerminateWorkflowRequestBody) -> TerminateWorkflowResponseBody:
         return cast(TerminateWorkflowResponseBody, self._transport(OperationId.TERMINATE_WORKFLOW, body, path_parameters={'workflowId': workflow_id}))
 
-    def trigger_schedule(self, schedule_id: str, body: TriggerScheduleRequestBody | None = None) -> TriggerScheduleResponseBody:
+    def trigger_schedule(self, schedule_id: str, body: TriggerScheduleRequestBody) -> TriggerScheduleResponseBody:
         return cast(TriggerScheduleResponseBody, self._transport(OperationId.TRIGGER_SCHEDULE, body, path_parameters={'scheduleId': schedule_id}))
 
-    def unpause_schedule(self, schedule_id: str, body: UnpauseScheduleRequestBody | None = None) -> UnpauseScheduleResponseBody:
+    def unpause_schedule(self, schedule_id: str, body: UnpauseScheduleRequestBody) -> UnpauseScheduleResponseBody:
         return cast(UnpauseScheduleResponseBody, self._transport(OperationId.UNPAUSE_SCHEDULE, body, path_parameters={'scheduleId': schedule_id}))
 
     def update_schedule(self, schedule_id: str, body: UpdateScheduleRequestBody) -> UpdateScheduleResponseBody:

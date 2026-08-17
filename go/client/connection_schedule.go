@@ -42,7 +42,7 @@ func (c *Connection) UpdateSchedule(ctx context.Context, scheduleID string, req 
 
 // PauseSchedule pauses scheduled triggers.
 func (c *Connection) PauseSchedule(ctx context.Context, scheduleID string, req PauseScheduleRequest) (*Schedule, error) {
-	out, err := c.OpenAPI().PauseSchedule(ctx, scheduleID, &req)
+	out, err := c.OpenAPI().PauseSchedule(ctx, scheduleID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *Connection) PauseSchedule(ctx context.Context, scheduleID string, req P
 
 // UnpauseSchedule resumes scheduled triggers.
 func (c *Connection) UnpauseSchedule(ctx context.Context, scheduleID string, req UnpauseScheduleRequest) (*Schedule, error) {
-	out, err := c.OpenAPI().UnpauseSchedule(ctx, scheduleID, &req)
+	out, err := c.OpenAPI().UnpauseSchedule(ctx, scheduleID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (c *Connection) UnpauseSchedule(ctx context.Context, scheduleID string, req
 
 // TriggerSchedule fires the schedule once immediately.
 func (c *Connection) TriggerSchedule(ctx context.Context, scheduleID string, req TriggerScheduleRequest) (*TriggerScheduleResponse, error) {
-	out, err := c.OpenAPI().TriggerSchedule(ctx, scheduleID, &req)
+	out, err := c.OpenAPI().TriggerSchedule(ctx, scheduleID, req)
 	if err != nil {
 		return nil, err
 	}

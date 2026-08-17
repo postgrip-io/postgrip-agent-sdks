@@ -99,7 +99,7 @@ func (c *Connection) CreateSandboxSession(ctx context.Context, sandboxID string,
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	out, err := c.OpenAPI().CreateSandboxSession(ctx, sandboxID, &req)
+	out, err := c.OpenAPI().CreateSandboxSession(ctx, sandboxID, req)
 	if err != nil {
 		return nil, err
 	}

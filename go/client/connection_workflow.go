@@ -34,14 +34,14 @@ func (c *Connection) SignalWithStartWorkflow(ctx context.Context, workflowID str
 // CancelWorkflow requests cancellation of a running workflow.
 func (c *Connection) CancelWorkflow(ctx context.Context, workflowID, reason string) error {
 	body := OpenAPICancelWorkflowRequestBody{Reason: reason}
-	_, err := c.OpenAPI().CancelWorkflow(ctx, workflowID, &body)
+	_, err := c.OpenAPI().CancelWorkflow(ctx, workflowID, body)
 	return err
 }
 
 // TerminateWorkflow forcibly fails a running workflow with the given reason.
 func (c *Connection) TerminateWorkflow(ctx context.Context, workflowID, reason string) error {
 	body := OpenAPITerminateWorkflowRequestBody{Reason: reason}
-	_, err := c.OpenAPI().TerminateWorkflow(ctx, workflowID, &body)
+	_, err := c.OpenAPI().TerminateWorkflow(ctx, workflowID, body)
 	return err
 }
 
