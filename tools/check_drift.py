@@ -85,6 +85,20 @@ TRACKED_TYPES = [
     "ScheduleAction",
     "ScheduleCalendarSpec",
     "RetryPolicy",
+    # Sandbox platform, client-facing shapes only. The agent-plane sandbox
+    # types (SandboxObservation, SandboxReconcile*, SandboxSessionAssignment,
+    # SandboxEvent) are deliberately absent: they never cross a client SDK, and
+    # tracking them would force TS/Python to mirror types nothing there uses —
+    # the same reason EnrollAgentRequest and PollTaskResponse aren't listed.
+    "Sandbox",
+    "SandboxCreateRequest",
+    "SandboxListResponse",
+    "SandboxResourceLimits",
+    "SandboxNetworkPolicy",
+    "SandboxPortMapping",
+    "SandboxWorkspace",
+    "CreateSandboxSessionRequest",
+    "CreateSandboxSessionResponse",
 ]
 
 # Where to fetch type files. The "go" url points at agent-sdk-protocol so the
@@ -96,24 +110,31 @@ TRACKED_TYPES = [
 # layout means consumer imports are
 # `github.com/postgrip-io/agent-sdk-protocol`, not `…/src`). TS and Python
 # keep `src/` per their idiomatic layouts.
+#
+# Each language maps to a LIST of files, concatenated before parsing. The
+# protocol package is a Go package, not a single file, and pretending
+# otherwise silently drops whatever isn't in types.go: adding sandbox.go made
+# every type in it report "not found in types.go" while the mirrors sat
+# unchecked. A language's declarations may live in as many files as it likes.
 GITHUB_SOURCES = {
-    "go":     ("postgrip-io", "agent-sdk-protocol", "types.go"),
-    "ts":     ("postgrip-io", "agent-sdk-typescript", "src/types.ts"),
-    "python": ("postgrip-io", "agent-sdk-python", "src/postgrip_agent/types.py"),
+    "go":     ("postgrip-io", "agent-sdk-protocol", ["types.go", "sandbox.go"]),
+    "ts":     ("postgrip-io", "agent-sdk-typescript", ["src/types.ts"]),
+    "python": ("postgrip-io", "agent-sdk-python", ["src/postgrip_agent/types.py"]),
 }
 # Repo-local paths, keyed by --local: the language whose types live in this
 # checkout (CI in that repo will set --local to it so a PR's changes are
 # checked against the OTHER two languages fetched from github main).
 LOCAL_PATHS = {
-    "go":     Path("types.go"),
-    "ts":     Path("src/types.ts"),
-    "python": Path("src/postgrip_agent/types.py"),
+    "go":     [Path("types.go"), Path("sandbox.go")],
+    "ts":     [Path("src/types.ts")],
+    "python": [Path("src/postgrip_agent/types.py")],
 }
 # Sibling working-dir layout for local development across all four repos.
 SIBLING_PATHS = {
-    "go":     REPO_ROOT.parent / "agent-sdk-protocol" / "types.go",
-    "ts":     REPO_ROOT.parent / "agent-sdk-typescript" / "src" / "types.ts",
-    "python": REPO_ROOT.parent / "agent-sdk-python" / "src" / "postgrip_agent" / "types.py",
+    "go":     [REPO_ROOT.parent / "agent-sdk-protocol" / "types.go",
+               REPO_ROOT.parent / "agent-sdk-protocol" / "sandbox.go"],
+    "ts":     [REPO_ROOT.parent / "agent-sdk-typescript" / "src" / "types.ts"],
+    "python": [REPO_ROOT.parent / "agent-sdk-python" / "src" / "postgrip_agent" / "types.py"],
 }
 
 # json:"..." -> field name (strip ",omitempty" etc.)
@@ -396,9 +417,19 @@ def load(path_or_url: str | Path, *, from_github: bool) -> str:
         return fh.read()
 
 
-def github_raw_url(lang: str, ref: str) -> str:
-    owner, repo, path = GITHUB_SOURCES[lang]
-    return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+def github_raw_urls(lang: str, ref: str) -> list[str]:
+    owner, repo, paths = GITHUB_SOURCES[lang]
+    return [f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{p}" for p in paths]
+
+
+def load_all(paths, *, from_github: bool) -> str:
+    """Concatenate every declaration file for one language.
+
+    Parsing the joined text is safe because every parser here is anchored to
+    line starts, and it keeps a language free to split its declarations across
+    files without the checker quietly ignoring the ones it wasn't told about.
+    """
+    return "\n".join(load(p, from_github=from_github) for p in paths)
 
 
 def github_ref_candidates(preferred_ref: str) -> list[str]:
@@ -413,13 +444,13 @@ def load_from_github(lang: str, refs: list[str]) -> str:
     last_err: Exception | None = None
     for ref in refs:
         try:
-            return load(github_raw_url(lang, ref), from_github=True)
+            return load_all(github_raw_urls(lang, ref), from_github=True)
         except urllib.error.HTTPError as exc:
             if exc.code != 404:
                 raise
             last_err = exc
     raise RuntimeError(
-        f"could not fetch {lang} type file from GitHub refs {', '.join(refs)}"
+        f"could not fetch {lang} type files from GitHub refs {', '.join(refs)}"
     ) from last_err
 
 
@@ -657,7 +688,7 @@ def main() -> int:
             if args.from_github:
                 protocol_source = load_from_github("go", github_refs)
             else:
-                protocol_source = load(SIBLING_PATHS["go"], from_github=False)
+                protocol_source = load_all(SIBLING_PATHS["go"], from_github=False)
         except (RuntimeError, FileNotFoundError) as e:
             print(f"check_drift: {e}", file=sys.stderr)
             return 2
@@ -680,7 +711,7 @@ def main() -> int:
     for lang in ("go", "ts", "python"):
         if args.local == lang:
             try:
-                sources[lang] = load(REPO_ROOT / LOCAL_PATHS[lang], from_github=False)
+                sources[lang] = load_all([REPO_ROOT / p for p in LOCAL_PATHS[lang]], from_github=False)
             except FileNotFoundError as e:
                 print(f"check_drift: --local={lang} but {e}", file=sys.stderr)
                 return 2
@@ -692,11 +723,11 @@ def main() -> int:
                 return 2
         else:
             try:
-                sources[lang] = load(SIBLING_PATHS[lang], from_github=False)
+                sources[lang] = load_all(SIBLING_PATHS[lang], from_github=False)
             except FileNotFoundError:
                 print(
                     f"check_drift: sibling working dir for {lang} not found at "
-                    f"{SIBLING_PATHS[lang]}; retry with --from-github or --local={lang}",
+                    f"{', '.join(str(p) for p in SIBLING_PATHS[lang])}; retry with --from-github or --local={lang}",
                     file=sys.stderr,
                 )
                 return 2
