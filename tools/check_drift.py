@@ -125,20 +125,33 @@ GO_STRUCT_RE = re.compile(r'^type\s+(\w+)\s+struct\s*\{', re.MULTILINE)
 GO_ALIAS_RE = re.compile(r'^type\s+(\w+)\s*=\s*(\w+)\s*$', re.MULTILINE)
 # Go: a const bound to a string literal, typed or untyped, inside a block or
 # on its own line:
-#   TaskTypeNoop              = "noop"
-#   TaskStateQueued TaskState = "queued"
-#   const TaskTypeNoop        = "noop"
+#   TaskTypeNoop                       = "noop"
+#   TaskStateQueued TaskState          = "queued"
+#   TaskStateQueued protocol.TaskState = "queued"   <- qualified type
+#   const TaskTypeNoop                 = `noop`     <- raw string literal
 # The leading keyword is consumed explicitly — without it the single-line form
 # captures "const" as the constant's name and the real name goes unchecked.
+# The type is `[\w.]+` (not `\w+`) so a qualified type doesn't hide the
+# declaration, and both interpreted and raw string literals count: either
+# spelling hardcodes a protocol-owned value just as thoroughly.
 # Matches assignment to a literal only, so `X = protocol.X` (the correct
 # re-export form) is deliberately not a hit.
 GO_LITERAL_CONST_RE = re.compile(
-    r'^\s*(?:(?:const|var)\s+)?(\w+)(?:\s+\w+)?\s*=\s*"', re.MULTILINE,
+    r'^\s*(?:(?:const|var)\s+)?(\w+)(?:\s+[\w.]+)?\s*=\s*["`]', re.MULTILINE,
 )
 
 # Directories skipped when scanning the Go SDK tree: generated docs sites and
-# vendored content, none of which declare wire types.
-GO_SDK_SKIP_DIRS = {".git", "site", "docs", "doc"}
+# vendored dependencies. `vendor/` matters most — a dependency declaring a
+# common name like `type Task struct` is not an SDK redeclaration, and without
+# this the job is unusable in a vendored checkout.
+GO_SDK_SKIP_DIRS = {".git", "site", "docs", "doc", "vendor", "node_modules"}
+
+# One type declaration, as it appears either on its own line (after the `type`
+# keyword is stripped) or inside a grouped `type ( ... )` block:
+#   Task = protocol.Task     -> alias, target protocol.Task
+#   Task protocol.Task       -> DEFINED type: compiles, distinct identity
+#   Task struct {            -> local redeclaration
+GO_TYPE_DECL_RE = re.compile(r"(\w+)\s*(=)?\s*(.+)")
 
 
 def parse_go_types(source: str) -> dict[str, set[str]]:
@@ -208,6 +221,30 @@ def go_struct_names(source: str) -> set[str]:
     return {m.group(1) for m in GO_STRUCT_RE.finditer(source)}
 
 
+def go_type_declarations(source: str) -> list[tuple[str, bool, str]]:
+    """Every type declaration as (name, is_alias, target).
+
+    Covers both spellings, because the SDK uses both: a grouped
+    `type ( X = protocol.X ... )` block for the re-exports, and standalone
+    `type X struct {` for anything it declares itself.
+    """
+    lines: list[str] = []
+    for block in re.finditer(r"^type\s*\(\s*$(.*?)^\)", source, re.MULTILINE | re.DOTALL):
+        lines.extend(block.group(1).splitlines())
+    for m in re.finditer(r"^type\s+(.+)$", source, re.MULTILINE):
+        lines.append(m.group(1))
+
+    out: list[tuple[str, bool, str]] = []
+    for line in lines:
+        line = line.split("//")[0].strip()
+        if not line:
+            continue
+        m = GO_TYPE_DECL_RE.match(line)
+        if m:
+            out.append((m.group(1), m.group(2) == "=", m.group(3).strip()))
+    return out
+
+
 def go_literal_const_names(source: str) -> set[str]:
     """Names bound to a string literal in a const/var block."""
     return {m.group(1) for m in GO_LITERAL_CONST_RE.finditer(source)}
@@ -230,10 +267,20 @@ def check_go_sdk(root: Path, protocol_source: str) -> list[str]:
     vocabulary. In each case the SDK keeps compiling against a stale pin
     instead of failing to build, which is what let the divergence live.
     """
+    # Ownership is EVERY struct the protocol package declares, not just
+    # TRACKED_TYPES. That list is deliberately narrow — it's the set the TS and
+    # Python SDKs promise to mirror — and using it here would leave a Go SDK
+    # copy of PollTaskResponse, EnrollAgentRequest or AgentSecurityRecord
+    # entirely unchecked, despite this mode promising to reject protocol-owned
+    # redeclarations.
+    #
     # Matched case-insensitively: an unexported copy (`workflowRuntimePayload`)
     # forks the wire shape exactly as an exported one does, and is in fact the
     # likelier form — it's the struct a marshalling helper reaches for.
-    owned_types = {name.lower(): name for name in TRACKED_TYPES}
+    owned_types = {
+        name.lower(): name
+        for name in set(TRACKED_TYPES) | go_struct_names(protocol_source)
+    }
     owned_consts = {name.lower(): name for name in go_literal_const_names(protocol_source)}
     failures: list[str] = []
     for path in iter_go_sdk_sources(root):
@@ -243,14 +290,22 @@ def check_go_sdk(root: Path, protocol_source: str) -> list[str]:
             failures.append(f"  {path}: could not read ({exc})")
             continue
         rel = path.relative_to(root)
-        for declared in sorted(go_struct_names(source)):
+        for declared, is_alias, target in go_type_declarations(source):
             owned = owned_types.get(declared.lower())
             if owned is None:
                 continue
+            # Only one form is acceptable: an alias to the protocol type of the
+            # same name. `type Task protocol.Task` compiles but creates a
+            # DISTINCT type, and `type Task = SomethingElse` re-exports the
+            # wrong shape — both leave the SDK free to diverge while looking
+            # like a re-export.
+            if is_alias and target == f"protocol.{owned}":
+                continue
+            how = f"= {target}" if is_alias else target
             failures.append(
-                f"  {rel}: redeclares wire type `{owned}` as a local struct "
-                f"`{declared}` — alias it instead (`{owned} = protocol.{owned}`) "
-                f"and bump the agent-sdk-protocol pin if the type is missing there"
+                f"  {rel}: `{declared} {how}` is not an alias of the wire type "
+                f"`{owned}` — declare it as `{owned} = protocol.{owned}` and "
+                f"bump the agent-sdk-protocol pin if the type is missing there"
             )
         for declared in sorted(go_literal_const_names(source)):
             owned = owned_consts.get(declared.lower())
@@ -407,12 +462,20 @@ class TimerPayload(TypedDict, total=False):
 '''
 
 # A Go SDK file doing it right: aliases and re-exports, declares nothing.
+# Includes the grouped `type ( ... )` form the SDK actually uses.
 SELF_TEST_SDK_GOOD = '''
 package client
 
 import "github.com/postgrip-io/agent-sdk-protocol"
 
-type TimerPayload = protocol.TimerPayload
+type (
+	TimerPayload = protocol.TimerPayload
+	OwnedElsewhere = protocol.TimerPayload
+)
+
+type LocalOptions struct {
+	Name string
+}
 
 const TaskTypeNoop = protocol.TaskTypeNoop
 '''
@@ -426,6 +489,22 @@ type timerPayload struct {
 }
 
 const TaskTypeNoop = "noop"
+'''
+
+# Three shapes that compile, look like re-exports, and are not:
+#   defined type   -> distinct identity, free to diverge
+#   wrong target   -> re-exports something else entirely
+#   raw literal / qualified type -> hardcodes a protocol-owned value
+SELF_TEST_SDK_SUBTLE = '''
+package client
+
+type TimerPayload protocol.TimerPayload
+
+type (
+	TaskResult = LocalTaskResult
+)
+
+const TaskTypeTimer protocol.TaskType = `timer`
 '''
 
 
@@ -454,6 +533,18 @@ def self_test() -> int:
     check("go_literal_const_names", go_literal_const_names(SELF_TEST_GO), {"TaskTypeNoop", "TaskTypeTimer"})
     # The correct re-export form must NOT register as a literal const.
     check("go_literal_const_names ignores re-exports", go_literal_const_names(SELF_TEST_SDK_GOOD), set())
+    # Regression: a qualified type or a raw string literal used to slip past
+    # the const detector entirely, so a hardcoded protocol value read clean.
+    check(
+        "go_literal_const_names sees qualified types and raw literals",
+        go_literal_const_names('const TaskTypeTimer protocol.TaskType = `timer`'),
+        {"TaskTypeTimer"},
+    )
+    # Regression: only standalone `type X struct` was parsed, so the grouped
+    # `type ( ... )` form the SDK actually uses went entirely unexamined.
+    decls = dict((n, (a, t)) for n, a, t in go_type_declarations(SELF_TEST_SDK_GOOD))
+    check("go_type_declarations grouped alias", decls.get("TimerPayload"), (True, "protocol.TimerPayload"))
+    check("go_type_declarations local struct", decls.get("LocalOptions"), (False, "struct {"))
 
     check(
         "diff_field_sets missing",
@@ -490,6 +581,32 @@ def self_test() -> int:
         (root / "fixture_test.go").write_text(SELF_TEST_SDK_BAD, encoding="utf-8")
         if len(check_go_sdk(root, SELF_TEST_GO)) != 2:
             failures.append("  check_go_sdk: _test.go files are no longer skipped")
+        # Regression: vendored dependencies were scanned despite the comment
+        # claiming otherwise, so any dep declaring `type Task struct` made the
+        # job unusable in a vendored checkout.
+        (root / "vendor").mkdir()
+        (root / "vendor" / "dep.go").write_text(SELF_TEST_SDK_BAD, encoding="utf-8")
+        if len(check_go_sdk(root, SELF_TEST_GO)) != 2:
+            failures.append("  check_go_sdk: vendor/ is no longer skipped")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        # Regression: three shapes that compile and read as re-exports but
+        # aren't — a defined type (distinct identity), an alias to the wrong
+        # target, and a raw-literal constant with a qualified type. All three
+        # used to pass clean.
+        (root / "subtle.go").write_text(SELF_TEST_SDK_SUBTLE, encoding="utf-8")
+        subtle = check_go_sdk(root, SELF_TEST_GO)
+        if len(subtle) != 3:
+            failures.append(f"  check_go_sdk subtle forms: got {len(subtle)} findings, want 3: {subtle}")
+        # Regression: ownership came from TRACKED_TYPES, so a copy of any
+        # protocol struct outside that narrow list went unchecked.
+        (root / "wide.go").write_text(
+            "package client\n\ntype PollTaskResponse struct {\n\tTask string\n}\n", encoding="utf-8"
+        )
+        wide = check_go_sdk(root, "type PollTaskResponse struct {\n\tTask *Task `json:\"task\"`\n}\n")
+        if not any("PollTaskResponse" in f for f in wide):
+            failures.append(f"  check_go_sdk ownership beyond TRACKED_TYPES: got {wide}")
 
     if failures:
         print("check_drift self-test FAILED:", file=sys.stderr)
