@@ -243,6 +243,13 @@ export interface ContainerExecPayload {
   timeout_seconds?: number;
 }
 
+/**
+ * Isolation tiers a workflow.runtime workload can require. A requested tier
+ * is a floor: container work may run in a stronger tier, microvm work must
+ * never run in a weaker one, and an unrecognized value satisfies nothing.
+ */
+export type IsolationTier = 'container' | 'microvm';
+
 export interface WorkflowRuntimePayload {
   runtime_id?: string;
   image?: string;
@@ -254,6 +261,13 @@ export interface WorkflowRuntimePayload {
   queue?: string;
   pull_policy?: 'always' | 'missing' | 'never';
   timeout_seconds?: number;
+  /**
+   * Isolation floor this workload requires; empty means the container
+   * default. Requires `image` — a command-only runtime executes directly on
+   * the agent host, which honors no isolation floor, and the orchestrator
+   * rejects that combination at enqueue.
+   */
+  isolation?: IsolationTier;
 }
 
 export type WorkflowFunction<Args extends unknown[] = unknown[], R = unknown> = (...args: Args) => Promise<R> | R;
@@ -470,19 +484,6 @@ export interface ActivityInvocationPayload<Args extends unknown[] = unknown[]> {
   cancellationType?: CancellationType;
   retry?: RetryPolicy;
   args: Args;
-}
-
-export interface WorkflowRuntimePayload {
-  runtime_id?: string;
-  image?: string;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  working_dir?: string;
-  namespace?: string;
-  queue?: string;
-  pull_policy?: 'always' | 'missing' | 'never';
-  timeout_seconds?: number;
 }
 
 export interface TimerPayload {

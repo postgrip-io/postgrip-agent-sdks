@@ -106,6 +106,24 @@ await client.task.workflowRuntime({
 });
 ```
 
+To run the runtime from an image instead of a host command, pass `image` — and
+optionally an `isolation` floor of `'container'` (the default) or `'microvm'`:
+
+```ts
+await client.task.workflowRuntime({
+  queue: 'default',
+  image: 'ghcr.io/example/workflow-runtime:1.4.0',
+  isolation: 'microvm',
+  runtimeQueue: 'default',
+});
+```
+
+`isolation` is a floor, not an exact match: `'container'` work may be scheduled
+onto a stronger tier, but `'microvm'` work is never downgraded — it only leases
+to agents advertising that tier. It requires `image`; a command-only runtime
+executes directly on the agent host, which honors no isolation floor, and the
+orchestrator rejects that combination at enqueue.
+
 Inside a managed runtime, the workflow client can inspect and interact with workflows:
 
 ```ts
