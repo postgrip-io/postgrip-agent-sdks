@@ -252,6 +252,22 @@ class SandboxClient:
         single stream, so they cannot be separated client-side. ``exit_code``
         is ``None`` when the close carried no code, meaning the transport ended
         rather than the process.
+
+        .. warning::
+
+           **Commands that read stdin to EOF will hang.** There is no
+           end-of-input signal on the wire. The agent hands the relay
+           connection to the process as its stdin directly, so that stdin
+           reaches EOF only when the whole session closes — which is also what
+           carries the exit status back. Sending ``stdin`` here therefore
+           delivers the bytes but tells the sandbox nothing more, and a command
+           that reads until EOF (``cat``, ``sort``,
+           ``python -c 'import sys; sys.stdin.read()'``) waits for input while
+           this call waits for output.
+
+           Commands that read a bounded amount, and commands that read nothing,
+           are unaffected. Closing this properly needs a half-close on the wire,
+           which is a protocol change rather than an SDK one.
         """
         session = self.open_session(
             sandbox_id, kind="exec", command=command, relay_base_url=relay_base_url
