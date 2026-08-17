@@ -1,0 +1,6 @@
+# This repo ships a Python tool (tools/check_drift.py), so running it here — as
+# CI and the self-test both do — leaves bytecode behind. Without this file the
+# repo had no ignore rules at all, and the first `git add -A` after a local run
+# committed tools/__pycache__/check_drift.cpython-312.pyc.
+__pycache__/
+*.py[cod]

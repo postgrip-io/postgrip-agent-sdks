@@ -1,0 +1,49 @@
+title: PostGrip Agent — Go SDK
+description: Go SDK for the PostGrip Agent runtime service. Tasks, workflows, schedules, and a polling worker.
+url: https://postgrip-io.github.io
+baseurl: /agent-sdk-go
+
+remote_theme: just-the-docs/just-the-docs
+
+color_scheme: light
+search_enabled: true
+heading_anchors: true
+
+aux_links:
+  GitHub:
+    - https://github.com/postgrip-io/agent-sdk-go
+  pkg.go.dev:
+    - https://pkg.go.dev/go.postgrip.io/sdk
+
+aux_links_new_tab: true
+
+nav_external_links:
+  - title: TypeScript SDK
+    url: https://github.com/postgrip-io/agent-sdk-typescript
+  - title: Python SDK
+    url: https://github.com/postgrip-io/agent-sdk-python
+
+footer_content: >
+  Mirrors agent-sdk-typescript and agent-sdk-python; wire shapes from agent-sdk-protocol.
+
+# just-the-docs callouts for inline notes / warnings.
+callouts:
+  note:
+    title: Note
+    color: blue
+  warning:
+    title: Warning
+    color: yellow
+  important:
+    title: Important
+    color: red
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+# Don't try to render anything from the parent repo (Go source, etc.).
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

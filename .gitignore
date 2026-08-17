@@ -1,0 +1,19 @@
+# Go
+*.test
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+
+# TypeScript
+node_modules/
+dist/
+*.log
+
+# Local configuration
+.env
+.env.local

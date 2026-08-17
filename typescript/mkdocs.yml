@@ -1,0 +1,69 @@
+site_name: PostGrip Agent — TypeScript SDK
+site_description: TypeScript SDK for the PostGrip Agent runtime service. Tasks, workflows, schedules, and a polling agent.
+site_url: https://postgrip-io.github.io/agent-sdk-typescript/
+repo_url: https://github.com/postgrip-io/agent-sdk-typescript
+repo_name: postgrip-io/agent-sdk-typescript
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/postgrip-io/agent-sdk-typescript
+    - icon: fontawesome/brands/npm
+      link: https://www.npmjs.com/package/@postgrip/agent
+  generator: false
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quick start: quickstart.md
+  - Workflow runtime: workflow-runtime.md
+  - API: api.md
+  - Release notes: release-notes.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
