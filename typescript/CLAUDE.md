@@ -131,7 +131,9 @@ The npm package is `@postgrip/agent`. Releases are gated on a `typescript/v*` ta
 - Workflow filename: `publish-typescript.yml`
 - Environment: `npm`
 
-The publish step uses `npm publish --provenance --access public`, which requires the workflow's `id-token: write` permission (set at workflow level) and includes [SLSA build provenance](https://docs.npmjs.com/generating-provenance-statements) on the published artifact.
+The workflow uses `npm publish --access public` with `id-token: write` for
+trusted publishing. The monorepo is currently private, so npm provenance is
+not available; do not add `--provenance` until the repository is public.
 
 To cut a release:
 
@@ -146,4 +148,7 @@ The `version` in `package.json` must match the tag suffix.
 
 ## Docs
 
-The customer-facing docs site is built with MkDocs Material. Source lives in `docs/` plus `mkdocs.yml`; the root docs workflow publishes it below the monorepo Pages site.
+The customer-facing docs site is built with MkDocs Material from `docs/` and
+`mkdocs.yml`. It remains published from the public `agent-sdk-typescript`
+repository while this monorepo is private. Mirror documentation changes there
+until the Pages cutover described in `../MIGRATION.md` is complete.

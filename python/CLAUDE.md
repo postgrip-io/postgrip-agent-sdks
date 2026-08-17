@@ -104,4 +104,7 @@ The version in `pyproject.toml` should match the tag suffix.
 
 ## Docs
 
-The customer-facing docs site is built with MkDocs Material. Source lives in `docs/` plus `mkdocs.yml`; the root docs workflow publishes it below the monorepo Pages site.
+The customer-facing docs site is built with MkDocs Material from `docs/` and
+`mkdocs.yml`. It remains published from the public `agent-sdk-python`
+repository while this monorepo is private. Mirror documentation changes there
+until the Pages cutover described in `../MIGRATION.md` is complete.
