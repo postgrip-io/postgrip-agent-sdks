@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -9,6 +10,44 @@ import (
 	"testing"
 	"time"
 )
+
+// SignalWithStart posted to the collection path `/api/v1/workflows/signal-with-start`
+// from the SDK's first commit. The orchestrator routes this off a
+// `/signal-with-start` *suffix* on a per-workflow path, so the collection form
+// was read as a workflow named "signal-with-start" and 404'd every time. It
+// also decoded the {workflow, task, signal} response envelope into a bare
+// Task, which silently produced an empty id. Nothing covered it.
+func TestSignalWithStartUsesPerWorkflowPath(t *testing.T) {
+	t.Parallel()
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"workflow":{"id":"order-42","run_id":"run-7"},"task":{"id":"task-9"},"signal":{"id":"evt-1"}}`))
+	}))
+	defer server.Close()
+
+	conn, _ := NewConnection(ConnectionOptions{Address: server.URL})
+	conn.SeedAgentSession("agent-1", "tok", time.Now().Add(time.Hour))
+	c := New(conn)
+
+	handle, err := c.Workflow.SignalWithStart(context.Background(), "OrderWorkflow", "approve", SignalWithStartOptions{
+		WorkflowStartOptions: WorkflowStartOptions{WorkflowID: "order-42"},
+	})
+	if err != nil {
+		t.Fatalf("SignalWithStart: %v", err)
+	}
+	if want := "/api/v1/workflows/order-42/signal-with-start"; gotPath != want {
+		t.Fatalf("path = %q, want %q", gotPath, want)
+	}
+	// The envelope must be decoded as an envelope, not as a Task.
+	if handle.WorkflowID != "order-42" {
+		t.Fatalf("handle.WorkflowID = %q, want order-42", handle.WorkflowID)
+	}
+	if handle.TaskID != "task-9" {
+		t.Fatalf("handle.TaskID = %q, want task-9", handle.TaskID)
+	}
+}
 
 func TestNewConnectionNormalizesAddress(t *testing.T) {
 	t.Parallel()
@@ -165,12 +204,48 @@ func TestWorkflowRuntimeSubmissionIsExternalPath(t *testing.T) {
 	if task.ID != "runtime-task" || seen.Type != TaskTypeWorkflowRuntime {
 		t.Fatalf("task = %+v seen type = %q", task, seen.Type)
 	}
-	var payload workflowRuntimePayload
+	var payload WorkflowRuntimePayload
 	if err := json.Unmarshal(seen.Payload, &payload); err != nil {
 		t.Fatalf("runtime payload: %v", err)
 	}
 	if payload.Queue == "" || payload.Queue == "default" {
 		t.Fatalf("runtime queue = %q, want generated isolated queue", payload.Queue)
+	}
+	// An absent isolation floor must stay absent on the wire. Serializing it
+	// as "" would read as a present-but-empty floor server-side.
+	if bytes.Contains(seen.Payload, []byte(`"isolation"`)) {
+		t.Fatalf("unset isolation serialized into payload: %s", seen.Payload)
+	}
+}
+
+// The isolation floor has to survive the trip from WorkflowRuntimeInput onto
+// the wire. It was unreachable from every SDK until agent-sdk-protocol carried
+// the field, so this is the regression guarding that fix.
+func TestWorkflowRuntimeSendsIsolationFloor(t *testing.T) {
+	t.Parallel()
+	var seen EnqueueTaskRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&seen)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"runtime-task","namespace":"default","queue":"default","type":"workflow.runtime","state":"queued","attempt":0,"lease_timeout_seconds":0,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	conn, _ := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "management"})
+	c := New(conn)
+	if _, err := c.Task.WorkflowRuntime(context.Background(), WorkflowRuntimeInput{
+		Queue:     "default",
+		Image:     "ghcr.io/example/runtime:1",
+		Isolation: IsolationTierMicroVM,
+	}); err != nil {
+		t.Fatalf("WorkflowRuntime: %v", err)
+	}
+	var payload WorkflowRuntimePayload
+	if err := json.Unmarshal(seen.Payload, &payload); err != nil {
+		t.Fatalf("runtime payload: %v", err)
+	}
+	if payload.Isolation != IsolationTierMicroVM {
+		t.Fatalf("isolation = %q, want %q", payload.Isolation, IsolationTierMicroVM)
 	}
 }
 

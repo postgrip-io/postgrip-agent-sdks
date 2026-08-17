@@ -114,14 +114,19 @@ func (c *WorkflowClient) SignalWithStart(ctx context.Context, workflowType, sign
 	if len(opts.SearchAttributes) > 0 {
 		req.SearchAttributes = opts.SearchAttributes
 	}
-	task, err := c.conn.SignalWithStartWorkflow(ctx, req)
+	started, err := c.conn.SignalWithStartWorkflow(ctx, opts.WorkflowID, req)
 	if err != nil {
 		return nil, err
 	}
+	// The response carries the workflow execution alongside the task, so the
+	// handle is keyed on the real workflow id rather than falling back to the
+	// task id. That fallback was always wrong — this endpoint returns a
+	// {workflow, task, signal} envelope, which the old code decoded into a
+	// bare Task, yielding an empty id on every call.
 	return &WorkflowHandle{
 		conn:       c.conn,
-		WorkflowID: orDefault(opts.WorkflowID, task.ID),
-		TaskID:     task.ID,
+		WorkflowID: orDefault(started.Workflow.ID, orDefault(opts.WorkflowID, started.Task.ID)),
+		TaskID:     started.Task.ID,
 	}, nil
 }
 
