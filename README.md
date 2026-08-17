@@ -124,6 +124,72 @@ to agents advertising that tier. It requires `image`; a command-only runtime
 executes directly on the agent host, which honors no isolation floor, and the
 orchestrator rejects that combination at enqueue.
 
+## Sandboxes
+
+Sandboxes are persistent development environments assigned to one of your
+agents. `client.sandbox` covers the lifecycle plus interactive and
+non-interactive execution.
+
+Sandbox endpoints use a **management token**, not an agent token — pass
+`authToken` on the connection. Treat the value as opaque; the console issues a
+bare hex string with no prefix.
+
+```ts
+const connection = await Connection.connect({
+  baseUrl: 'https://agents.example.com',
+  authToken: process.env.POSTGRIP_TOKEN,
+});
+const client = new Client({ connection });
+
+const workspace = await client.sandbox.uploadWorkspace(archive, {
+  repositoryName: 'my-repo',
+  revision,
+});
+let box = await client.sandbox.create({
+  name: 'task-1',
+  image: 'postgrip/sandbox:1',
+  workspaceId: workspace.id,
+  setupCommand: ['/bin/sh', 'setup.sh'],
+});
+
+// create() returns as soon as the record exists; the sandbox is not up yet.
+box = await client.sandbox.waitUntilRunning(box.id!);
+
+const { exitCode, output } = await client.sandbox.exec(box.id!, ['npm', 'test']);
+
+await client.sandbox.delete(box.id!);
+```
+
+`waitUntilRunning` treats readiness as `observedState === 'running'` **and**
+`observedGeneration >= generation`. A "running" reading can predate a start or
+stop the assigned agent hasn't observed yet, so state alone can hand back a
+sandbox that is about to stop. It returns immediately if the sandbox reaches
+`failed`, carrying the sandbox's own failure message.
+
+### Interactive sessions
+
+```ts
+const session = await client.sandbox.openSession(box.id!, 'pty', { rows: 40, columns: 120 });
+session.onData((chunk) => process.stdout.write(chunk));
+session.send('ls -la\n');
+const code = await session.exitCode();
+```
+
+Three relay properties that are not obvious:
+
+- **stdout and stderr are interleaved.** The relay carries one byte stream, so
+  they cannot be separated client-side.
+- **There is no resize channel.** `rows`/`columns` are fixed at session
+  creation; resizing your terminal mid-session cannot reach the sandbox.
+- **Exit codes arrive as the WebSocket close status** (`4000 + code`), not in
+  the stream. `exitCode()` resolves `undefined` when the close carried no exit
+  code — that means the transport ended, not that the process succeeded.
+
+Writes must stay at or below `SANDBOX_RELAY_MAX_FRAME_BYTES` (1 MiB); larger
+frames throw locally rather than having the relay close the session.
+
+Node 22+ has a global `WebSocket`. On older runtimes pass `webSocketImpl`.
+
 Inside a managed runtime, the workflow client can inspect and interact with workflows:
 
 ```ts
