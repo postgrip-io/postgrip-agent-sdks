@@ -135,8 +135,13 @@ func (s SandboxObservedState) Valid() bool {
 	}
 }
 
-// SandboxTerminal reports whether the state will not change again without a
-// new client request — useful for bounding a readiness poll.
+// Terminal reports whether this state will not change again without a new
+// client request.
+//
+// It answers a question about the state alone, so it is not sufficient to bound
+// a poll: a sandbox that has just been asked to start still reads `stopped`
+// from the previous generation until the agent observes the request. Use
+// Sandbox.Settled for that.
 func (s SandboxObservedState) Terminal() bool {
 	switch s {
 	case SandboxObservedRunning, SandboxObservedStopped, SandboxObservedDeleted, SandboxObservedFailed:
@@ -206,6 +211,19 @@ type Sandbox struct {
 // to a just-issued start or stop.
 func (s Sandbox) Ready() bool {
 	return s.ObservedState == SandboxObservedRunning && s.ObservedGeneration >= s.Generation
+}
+
+// Settled reports whether the sandbox has reached a state that will not change
+// without a new client request, *and* that state reflects the client's most
+// recent request. This is the predicate that bounds a poll.
+//
+// ObservedState.Terminal alone is not enough, and the gap is not theoretical:
+// start a stopped sandbox and its record carries the new Generation while
+// ObservedState is still `stopped` from the previous one. A poll bounded on the
+// state would give up on the start it was waiting for, having observed only the
+// state it was trying to leave.
+func (s Sandbox) Settled() bool {
+	return s.ObservedState.Terminal() && s.ObservedGeneration >= s.Generation
 }
 
 // SandboxCreateRequest is the body of POST /api/v1/sandboxes.
@@ -329,11 +347,26 @@ type SandboxSessionAssignment struct {
 
 // IsolationForSandboxBackend maps a backend onto the isolation tier vocabulary
 // shared with workflow.runtime, so both planes describe isolation the same way.
-func IsolationForSandboxBackend(backend SandboxBackend) string {
-	if backend == SandboxBackendFirecracker {
-		return IsolationTierMicroVM
+// It reports resolved=false for SandboxBackendAuto, whose tier is not knowable
+// until the control plane picks a runtime.
+//
+// The second return value is not decoration. Auto is allowed to resolve to
+// Firecracker, so returning IsolationTierContainer for it — as this did — makes
+// a caller advertise the opposite tier from the runtime that actually gets
+// chosen. Reporting the empty string instead would be no better, because empty
+// already means "the container default" in the workflow.runtime Isolation
+// field, so an unresolved tier would read as a resolved one there. A caller
+// that must persist something for an auto sandbox has to choose a placeholder
+// knowingly, and this signature is what forces that choice to be visible.
+func IsolationForSandboxBackend(backend SandboxBackend) (tier string, resolved bool) {
+	switch backend {
+	case SandboxBackendFirecracker:
+		return IsolationTierMicroVM, true
+	case SandboxBackendDocker, SandboxBackendPodman:
+		return IsolationTierContainer, true
+	default:
+		return "", false
 	}
-	return IsolationTierContainer
 }
 
 // NormalizeSandboxBackend trims and lowercases a backend, mapping empty onto

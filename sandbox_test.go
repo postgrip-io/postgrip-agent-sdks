@@ -98,13 +98,53 @@ func TestNormalizeSandboxBackend(t *testing.T) {
 // The sandbox and workflow.runtime planes must describe isolation with one
 // vocabulary, or a firecracker sandbox and a microvm runtime disagree.
 func TestIsolationForSandboxBackendSharesTheTierVocabulary(t *testing.T) {
-	if got := IsolationForSandboxBackend(SandboxBackendFirecracker); got != IsolationTierMicroVM {
-		t.Fatalf("firecracker isolation = %q, want %q", got, IsolationTierMicroVM)
+	if got, ok := IsolationForSandboxBackend(SandboxBackendFirecracker); got != IsolationTierMicroVM || !ok {
+		t.Fatalf("firecracker isolation = (%q, %t), want (%q, true)", got, ok, IsolationTierMicroVM)
 	}
-	for _, b := range []SandboxBackend{SandboxBackendAuto, SandboxBackendDocker, SandboxBackendPodman} {
-		if got := IsolationForSandboxBackend(b); got != IsolationTierContainer {
-			t.Fatalf("%q isolation = %q, want %q", b, got, IsolationTierContainer)
+	for _, b := range []SandboxBackend{SandboxBackendDocker, SandboxBackendPodman} {
+		if got, ok := IsolationForSandboxBackend(b); got != IsolationTierContainer || !ok {
+			t.Fatalf("%q isolation = (%q, %t), want (%q, true)", b, got, ok, IsolationTierContainer)
 		}
+	}
+}
+
+// Auto is allowed to resolve to firecracker, so claiming container isolation
+// for it advertises the opposite tier from the runtime that may be chosen. An
+// unknown backend is equally unresolved — never silently a container.
+func TestIsolationForSandboxBackendLeavesAutoUnresolved(t *testing.T) {
+	for _, b := range []SandboxBackend{SandboxBackendAuto, SandboxBackend(""), SandboxBackend("containerd")} {
+		got, ok := IsolationForSandboxBackend(b)
+		if ok {
+			t.Fatalf("%q reported a resolved isolation tier %q", b, got)
+		}
+		// Not the empty *tier* by accident: empty means "the container default"
+		// in the workflow.runtime Isolation field, so the boolean carries the
+		// distinction and callers must not read the string without it.
+		if got != "" {
+			t.Fatalf("%q unresolved isolation = %q, want empty", b, got)
+		}
+	}
+}
+
+// A poll bounded on ObservedState alone abandons a just-issued start: the
+// record carries the new Generation while ObservedState is still the terminal
+// state of the previous one.
+func TestSettledRequiresTheObservedGenerationToCatchUp(t *testing.T) {
+	starting := Sandbox{ObservedState: SandboxObservedStopped, Generation: 2, ObservedGeneration: 1}
+	if !starting.ObservedState.Terminal() {
+		t.Fatal("precondition: stopped is a terminal state")
+	}
+	if starting.Settled() {
+		t.Fatal("a sandbox with an unobserved start must not be settled")
+	}
+	observed := starting
+	observed.ObservedGeneration = 2
+	if !observed.Settled() {
+		t.Fatal("a terminal state at the current generation must be settled")
+	}
+	running := Sandbox{ObservedState: SandboxObservedProvisioning, Generation: 1, ObservedGeneration: 1}
+	if running.Settled() {
+		t.Fatal("a non-terminal state must not be settled")
 	}
 }
 

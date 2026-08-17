@@ -458,9 +458,9 @@ def load(path_or_url: str | Path, *, from_github: bool) -> str:
     raise FetchError(f"fetching {path_or_url}: {last_err}") from last_err
 
 
-def github_raw_urls(lang: str, ref: str) -> list[str]:
-    owner, repo, paths = GITHUB_SOURCES[lang]
-    return [f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{p}" for p in paths]
+def github_raw_url(lang: str, ref: str, path: str) -> str:
+    owner, repo, _ = GITHUB_SOURCES[lang]
+    return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
 
 
 def load_all(paths, *, from_github: bool) -> str:
@@ -481,21 +481,36 @@ def github_ref_candidates(preferred_ref: str) -> list[str]:
     return refs
 
 
-def load_from_github(lang: str, refs: list[str]) -> str:
+def load_one_from_github(lang: str, path: str, refs: list[str]) -> str:
+    """Fetch one declaration file, resolving the ref candidates for it alone.
+
+    The fallback is deliberately per path rather than per language. Resolving it
+    for the whole bundle meant that a PR branch adding sandbox.go while leaving
+    types.go untouched 404'd on the second URL and dropped *back to main for
+    both* — so the branch's real types.go was silently replaced by main's, and
+    the cross-repo drift job could pass without ever reading the wire change it
+    was triggered for. A missing file on a branch means that one file is
+    unchanged there, never that the branch should be abandoned.
+    """
     last_err: Exception | None = None
     for ref in refs:
         try:
-            return load_all(github_raw_urls(lang, ref), from_github=True)
+            return load(github_raw_url(lang, ref, path), from_github=True)
         except urllib.error.HTTPError as exc:
             # Only a 404 means "this ref doesn't have the file" and should fall
             # through to the next candidate ref. Anything else already
             # exhausted its retries in load().
             if exc.code != 404:
-                raise FetchError(f"fetching {lang} at ref {ref}: {exc}") from exc
+                raise FetchError(f"fetching {lang} {path} at ref {ref}: {exc}") from exc
             last_err = exc
     raise FetchError(
-        f"could not fetch {lang} type files from GitHub refs {', '.join(refs)}"
+        f"could not fetch {lang} file {path} from GitHub refs {', '.join(refs)}"
     ) from last_err
+
+
+def load_from_github(lang: str, refs: list[str]) -> str:
+    _, _, paths = GITHUB_SOURCES[lang]
+    return "\n".join(load_one_from_github(lang, p, refs) for p in paths)
 
 
 def diff_field_sets(
@@ -697,6 +712,33 @@ def self_test() -> int:
         wide = check_go_sdk(root, "type PollTaskResponse struct {\n\tTask *Task `json:\"task\"`\n}\n")
         if not any("PollTaskResponse" in f for f in wide):
             failures.append(f"  check_go_sdk ownership beyond TRACKED_TYPES: got {wide}")
+
+    # Regression: the preferred/main fallback was resolved once for the whole
+    # language bundle. A PR branch that changed sandbox.go but not types.go
+    # 404'd on types.go and dropped back to main for *both* files, so the job
+    # checked main's sandbox.go — never the wire change it was triggered for,
+    # and reported success. Each path must resolve its own ref.
+    fetched: list[str] = []
+
+    def fake_load(url, *, from_github):
+        fetched.append(url.rsplit("/agent-sdk-protocol/", 1)[-1])
+        if url.endswith("/branch/types.go"):
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        return f"// {url}\n"
+
+    real_load = globals()["load"]
+    globals()["load"] = fake_load
+    try:
+        joined = load_from_github("go", ["branch", "main"])
+    finally:
+        globals()["load"] = real_load
+    check(
+        "load_from_github resolves the ref per path",
+        fetched,
+        ["branch/types.go", "main/types.go", "branch/sandbox.go"],
+    )
+    # And the branch's own file is what lands in the parsed text, not main's.
+    check("load_from_github keeps the branch file", "branch/sandbox.go" in joined, True)
 
     if failures:
         print("check_drift self-test FAILED:", file=sys.stderr)
