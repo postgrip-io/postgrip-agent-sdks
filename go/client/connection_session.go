@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"errors"
-	"net/http"
 	"time"
 
 	"github.com/postgrip-io/agent-sdk-protocol"
@@ -59,7 +58,7 @@ func (c *Connection) hasAgentRuntimeCredentials() bool {
 func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken string) error {
 	body := map[string]string{"refreshToken": refreshToken}
 	var out AgentSessionResponse
-	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/session/refresh", body, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIRefreshAgentSession, nil, nil, body, &out); err != nil {
 		return err
 	}
 	c.applyAgentSession(out)

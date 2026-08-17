@@ -1,0 +1,845 @@
+{
+  "openapi": "3.1.0",
+  "x-postgrip-source": "postgrip-web/api/agent-openapi.json",
+  "info": {
+    "title": "PostGrip Agent API",
+    "version": "1.0.0",
+    "description": "Canonical HTTP contract consumed by the PostGrip Agent SDKs. Workflow replay, request signing, archive streaming, and WebSocket framing remain SDK runtime concerns."
+  },
+  "servers": [
+    {
+      "url": "https://agentorchestrator.postgrip.app"
+    }
+  ],
+  "tags": [
+    { "name": "System" },
+    { "name": "Namespaces" },
+    { "name": "Tasks" },
+    { "name": "Schedules" },
+    { "name": "Workflows" },
+    { "name": "Agent runtime" },
+    { "name": "Sandboxes" }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "tags": ["System"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "public",
+        "responses": {
+          "200": { "$ref": "#/components/responses/HealthResponse" }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "ready",
+        "tags": ["System"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ReadyResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/namespaces": {
+      "get": {
+        "operationId": "listNamespaces",
+        "tags": ["Namespaces"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Namespaces",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Namespace" } }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "post": {
+        "operationId": "createNamespace",
+        "tags": ["Namespaces"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateNamespaceRequest" } } }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/NamespaceResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/admin/compact": {
+      "post": {
+        "operationId": "compact",
+        "tags": ["System"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CompactRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Compaction result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CompactResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "tags": ["Tasks"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/NamespaceQuery" },
+          { "$ref": "#/components/parameters/QueueQuery" },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "schema": { "$ref": "#/components/schemas/TaskState" } },
+          { "$ref": "#/components/parameters/LimitQuery" },
+          { "$ref": "#/components/parameters/OffsetQuery" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tasks",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "post": {
+        "operationId": "enqueueTask",
+        "tags": ["Tasks"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnqueueTaskRequest" } } }
+        },
+        "responses": {
+          "202": { "$ref": "#/components/responses/TaskResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/tasks/{taskId}": {
+      "parameters": [{ "$ref": "#/components/parameters/TaskId" }],
+      "get": {
+        "operationId": "getTask",
+        "tags": ["Tasks"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/TaskResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/tasks/{taskId}/events": {
+      "parameters": [{ "$ref": "#/components/parameters/TaskId" }],
+      "get": {
+        "operationId": "listTaskEvents",
+        "tags": ["Tasks"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Task events",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/TaskEvent" } } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/schedules": {
+      "get": {
+        "operationId": "listSchedules",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/NamespaceQuery" },
+          { "name": "state", "in": "query", "schema": { "$ref": "#/components/schemas/ScheduleState" } },
+          { "$ref": "#/components/parameters/LimitQuery" },
+          { "$ref": "#/components/parameters/OffsetQuery" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedules",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Schedule" } } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "post": {
+        "operationId": "createSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateScheduleRequest" } } }
+        },
+        "responses": {
+          "202": { "$ref": "#/components/responses/ScheduleResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/schedules/{scheduleId}": {
+      "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
+      "get": {
+        "operationId": "getSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ScheduleResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "patch": {
+        "operationId": "updateSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateScheduleRequest" } } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/ScheduleResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ScheduleResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/schedules/{scheduleId}/pause": {
+      "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
+      "post": {
+        "operationId": "pauseSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PauseScheduleRequest" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/ScheduleResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/schedules/{scheduleId}/unpause": {
+      "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
+      "post": {
+        "operationId": "unpauseSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnpauseScheduleRequest" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/ScheduleResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/schedules/{scheduleId}/trigger": {
+      "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
+      "post": {
+        "operationId": "triggerSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TriggerScheduleRequest" } } } },
+        "responses": {
+          "202": {
+            "description": "Triggered run",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TriggerScheduleResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/schedules/{scheduleId}/backfill": {
+      "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
+      "post": {
+        "operationId": "backfillSchedule",
+        "tags": ["Schedules"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BackfillScheduleRequest" } } }
+        },
+        "responses": {
+          "202": {
+            "description": "Backfilled runs",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BackfillScheduleResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows": {
+      "get": {
+        "operationId": "listWorkflows",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/NamespaceQuery" },
+          { "name": "id", "in": "query", "schema": { "type": "string" } },
+          { "name": "run_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "$ref": "#/components/parameters/QueueQuery" },
+          { "name": "state", "in": "query", "schema": { "$ref": "#/components/schemas/WorkflowState" } },
+          { "name": "query", "in": "query", "schema": { "type": "string" } },
+          { "name": "order_by", "in": "query", "schema": { "type": "string" } },
+          { "name": "page_token", "in": "query", "schema": { "type": "string" } },
+          { "name": "search.*", "in": "query", "schema": { "$ref": "#/components/schemas/JsonValue" }, "description": "Search-attribute filter; replace * with the attribute name." },
+          { "$ref": "#/components/parameters/LimitQuery" },
+          { "$ref": "#/components/parameters/OffsetQuery" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow executions",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/WorkflowExecution" } } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/count": {
+      "get": {
+        "operationId": "countWorkflows",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/NamespaceQuery" },
+          { "name": "id", "in": "query", "schema": { "type": "string" } },
+          { "name": "run_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "$ref": "#/components/parameters/QueueQuery" },
+          { "name": "state", "in": "query", "schema": { "$ref": "#/components/schemas/WorkflowState" } },
+          { "name": "query", "in": "query", "schema": { "type": "string" } },
+          { "name": "search.*", "in": "query", "schema": { "$ref": "#/components/schemas/JsonValue" }, "description": "Search-attribute filter; replace * with the attribute name." }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow count",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowCountResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}": {
+      "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
+      "get": {
+        "operationId": "getWorkflow",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/WorkflowResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/history": {
+      "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
+      "get": {
+        "operationId": "listWorkflowHistory",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "responses": {
+          "200": {
+            "description": "Workflow history",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/WorkflowHistoryEvent" } } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/signal": {
+      "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
+      "post": {
+        "operationId": "signalWorkflow",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SignalWorkflowRequest" } } }
+        },
+        "responses": {
+          "202": { "$ref": "#/components/responses/WorkflowHistoryEventResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/signal-with-start": {
+      "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
+      "post": {
+        "operationId": "signalWithStartWorkflow",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SignalWithStartWorkflowRequest" } } }
+        },
+        "responses": {
+          "202": {
+            "description": "Workflow execution and history event",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SignalWithStartWorkflowResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/cancel": {
+      "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
+      "post": {
+        "operationId": "cancelWorkflow",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CancelWorkflowRequest" } } } },
+        "responses": {
+          "202": { "$ref": "#/components/responses/WorkflowHistoryEventResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflowId}/terminate": {
+      "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
+      "post": {
+        "operationId": "terminateWorkflow",
+        "tags": ["Workflows"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "either",
+        "security": [{ "managementToken": [] }, { "agentSession": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TerminateWorkflowRequest" } } } },
+        "responses": {
+          "202": { "$ref": "#/components/responses/WorkflowHistoryEventResponse" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/agent/session/refresh": {
+      "post": {
+        "operationId": "refreshAgentSession",
+        "tags": ["Agent runtime"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "public",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshAgentSessionRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Refreshed delegated session",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentSessionResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/agent/poll": {
+      "get": {
+        "operationId": "pollAgentTask",
+        "tags": ["Agent runtime"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "agent",
+        "security": [{ "agentSession": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/NamespaceQuery" },
+          { "$ref": "#/components/parameters/QueueQueryRequired" },
+          { "$ref": "#/components/parameters/AgentIdQuery" },
+          { "name": "wait_seconds", "in": "query", "schema": { "type": "integer", "minimum": 0, "maximum": 30, "default": 20 } },
+          { "name": "task_types", "in": "query", "schema": { "type": "string" }, "description": "Comma-separated task types." }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leased task, if available",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PollTaskResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/agent/tasks/{taskId}/heartbeat": {
+      "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
+      "post": {
+        "operationId": "heartbeatAgentTask",
+        "tags": ["Agent runtime"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "agent",
+        "x-postgrip-request-signing": "agent-task-v1",
+        "security": [{ "agentSession": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HeartbeatTaskRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/TaskResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/agent/tasks/{taskId}/events": {
+      "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
+      "post": {
+        "operationId": "appendAgentTaskEvent",
+        "tags": ["Agent runtime"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "agent",
+        "x-postgrip-request-signing": "agent-task-v1",
+        "security": [{ "agentSession": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AppendTaskEventRequest" } } } },
+        "responses": { "202": { "$ref": "#/components/responses/TaskEventResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/agent/tasks/{taskId}/complete": {
+      "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
+      "post": {
+        "operationId": "completeAgentTask",
+        "tags": ["Agent runtime"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "agent",
+        "x-postgrip-request-signing": "agent-task-v1",
+        "security": [{ "agentSession": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CompleteTaskRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/TaskResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/agent/tasks/{taskId}/block": {
+      "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
+      "post": {
+        "operationId": "blockAgentTask",
+        "tags": ["Agent runtime"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "agent",
+        "x-postgrip-request-signing": "agent-task-v1",
+        "security": [{ "agentSession": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BlockTaskRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/TaskResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/agent/tasks/{taskId}/fail": {
+      "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
+      "post": {
+        "operationId": "failAgentTask",
+        "tags": ["Agent runtime"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "agent",
+        "x-postgrip-request-signing": "agent-task-v1",
+        "security": [{ "agentSession": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FailTaskRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/TaskResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/sandboxes": {
+      "get": {
+        "operationId": "listSandboxes",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "200": { "description": "Sandbox envelope", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxListResponse" } } } },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "post": {
+        "operationId": "createSandbox",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxCreateRequest" } } } },
+        "responses": { "201": { "$ref": "#/components/responses/SandboxResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/sandboxes/{sandboxId}": {
+      "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
+      "get": {
+        "operationId": "getSandbox",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": { "200": { "$ref": "#/components/responses/SandboxResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      },
+      "delete": {
+        "operationId": "deleteSandbox",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": { "202": { "$ref": "#/components/responses/SandboxResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/sandboxes/{sandboxId}/start": {
+      "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
+      "post": {
+        "operationId": "startSandbox",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": { "202": { "$ref": "#/components/responses/SandboxResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/sandboxes/{sandboxId}/stop": {
+      "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
+      "post": {
+        "operationId": "stopSandbox",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": { "202": { "$ref": "#/components/responses/SandboxResponse" }, "default": { "$ref": "#/components/responses/ErrorResponse" } }
+      }
+    },
+    "/api/v1/sandboxes/{sandboxId}/sessions": {
+      "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
+      "post": {
+        "operationId": "createSandboxSession",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateSandboxSessionRequest" } } } },
+        "responses": {
+          "201": { "description": "Single-use relay ticket", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateSandboxSessionResponse" } } } },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workspaces": {
+      "post": {
+        "operationId": "uploadWorkspace",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "x-postgrip-streaming-request": true,
+        "security": [{ "managementToken": [] }],
+        "parameters": [
+          { "name": "X-PostGrip-Repository", "in": "header", "schema": { "type": "string" } },
+          { "name": "X-PostGrip-Revision", "in": "header", "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } }
+        },
+        "responses": {
+          "201": { "description": "Content-addressed workspace", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxWorkspace" } } } },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/sandbox-sessions/{sessionId}/connect": {
+      "parameters": [
+        { "$ref": "#/components/parameters/SessionId" },
+        { "name": "ticket", "in": "query", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "operationId": "connectSandboxSession",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "x-postgrip-websocket": true,
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "101": { "description": "WebSocket protocol switch" },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "managementToken": { "type": "http", "scheme": "bearer", "description": "Management token issued by the PostGrip console." },
+      "agentSession": { "type": "http", "scheme": "bearer", "description": "Delegated short-lived agent session. Signed operations also carry the PostGrip Ed25519 request-signing headers." }
+    },
+    "parameters": {
+      "TaskId": { "name": "taskId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "ScheduleId": { "name": "scheduleId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "WorkflowId": { "name": "workflowId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "SandboxId": { "name": "sandboxId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "SessionId": { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "AgentIdQuery": { "name": "agent_id", "in": "query", "schema": { "type": "string" }, "description": "Compatibility identifier; authenticated requests derive the agent from the session token." },
+      "NamespaceQuery": { "name": "namespace", "in": "query", "schema": { "type": "string" } },
+      "QueueQuery": { "name": "queue", "in": "query", "schema": { "type": "string" } },
+      "QueueQueryRequired": { "name": "queue", "in": "query", "required": true, "schema": { "type": "string" } },
+      "LimitQuery": { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 0 } },
+      "OffsetQuery": { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0 } }
+    },
+    "responses": {
+      "HealthResponse": { "description": "Service health", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } } },
+      "ReadyResponse": { "description": "Service readiness", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReadyResponse" } } } },
+      "NamespaceResponse": { "description": "Namespace", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Namespace" } } } },
+      "TaskResponse": { "description": "Task", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+      "TaskEventResponse": { "description": "Task event", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskEvent" } } } },
+      "ScheduleResponse": { "description": "Schedule", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Schedule" } } } },
+      "WorkflowResponse": { "description": "Workflow execution", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowExecution" } } } },
+      "WorkflowHistoryEventResponse": { "description": "Workflow history event", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowHistoryEvent" } } } },
+      "SandboxResponse": { "description": "Sandbox", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Sandbox" } } } },
+      "ErrorResponse": { "description": "Request failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+    },
+    "schemas": {
+      "JsonValue": {},
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status"],
+        "properties": { "status": { "type": "string" } }
+      },
+      "ReadyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "stats"],
+        "properties": { "status": { "type": "string" }, "stats": { "type": "object", "additionalProperties": { "type": "integer" } } }
+      },
+      "TaskState": { "type": "string", "enum": ["queued", "leased", "blocked", "succeeded", "failed"] },
+      "WorkflowState": { "type": "string", "enum": ["running", "succeeded", "failed", "continued_as_new"] },
+      "ScheduleState": { "type": "string", "enum": ["active", "paused", "deleted"] },
+      "Namespace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "created_at", "updated_at"],
+        "properties": {
+          "tenantId": { "type": "string" },
+          "name": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateNamespaceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": { "name": { "type": "string", "minLength": 1 } }
+      },
+      "CompactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "retention_seconds": { "type": "integer", "minimum": 0, "default": 0 } }
+      },
+      "CompactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["removed_tasks", "removed_workflows"],
+        "properties": {
+          "removed_tasks": { "type": "integer" },
+          "removed_workflows": { "type": "integer" }
+        }
+      },
+      "EnqueueTaskRequest": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string" },
+          "namespace": { "type": "string" },
+          "queue": { "type": "string" },
+          "payload": { "$ref": "#/components/schemas/JsonValue" },
+          "lease_timeout_seconds": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "namespace", "queue", "type", "state", "attempt", "lease_timeout_seconds", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "state": { "$ref": "#/components/schemas/TaskState" },
+          "namespace": { "type": "string" },
+          "queue": { "type": "string" },
+          "attempt": { "type": "integer", "minimum": 0 },
+          "lease_timeout_seconds": { "type": "integer", "minimum": 0 },
+          "payload": { "$ref": "#/components/schemas/JsonValue" },
+          "result": { "$ref": "#/components/schemas/JsonValue" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TaskEventInput": { "type": "object", "additionalProperties": true, "required": ["kind"], "properties": { "kind": { "type": "string" } } },
+      "TaskEvent": { "type": "object", "additionalProperties": true, "required": ["id", "task_id", "kind", "created_at"], "properties": { "id": { "type": "string" }, "task_id": { "type": "string" }, "kind": { "type": "string" }, "created_at": { "type": "string", "format": "date-time" } } },
+      "Schedule": { "type": "object", "additionalProperties": true, "required": ["id", "namespace", "state", "spec", "action", "next_run_at", "created_at", "updated_at"] },
+      "CreateScheduleRequest": { "type": "object", "additionalProperties": true, "required": ["spec", "action"] },
+      "UpdateScheduleRequest": { "type": "object", "additionalProperties": true },
+      "PauseScheduleRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
+      "UnpauseScheduleRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
+      "TriggerScheduleRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
+      "TriggerScheduleResponse": { "type": "object", "additionalProperties": true, "required": ["schedule", "task"] },
+      "BackfillScheduleRequest": { "type": "object", "additionalProperties": false, "required": ["start_at", "end_at"], "properties": { "start_at": { "type": "string", "format": "date-time" }, "end_at": { "type": "string", "format": "date-time" } } },
+      "BackfillScheduleResponse": { "type": "object", "additionalProperties": true, "required": ["schedule", "tasks"] },
+      "WorkflowExecution": { "type": "object", "additionalProperties": true, "required": ["id", "run_id", "namespace", "type", "queue", "task_id", "state", "created_at", "updated_at"] },
+      "WorkflowHistoryEvent": { "type": "object", "additionalProperties": true, "required": ["id", "workflow_id", "type", "created_at"] },
+      "WorkflowCountResponse": { "type": "object", "additionalProperties": false, "required": ["count"], "properties": { "count": { "type": "integer", "minimum": 0 } } },
+      "SignalWorkflowRequest": { "type": "object", "additionalProperties": false, "required": ["name"], "properties": { "name": { "type": "string" }, "args": { "type": "array", "items": { "$ref": "#/components/schemas/JsonValue" } } } },
+      "SignalWithStartWorkflowRequest": { "type": "object", "additionalProperties": true, "required": ["workflowType", "signal"], "properties": { "workflowType": { "type": "string" }, "signal": { "$ref": "#/components/schemas/SignalWorkflowRequest" } } },
+      "SignalWithStartWorkflowResponse": { "type": "object", "additionalProperties": false, "required": ["workflow", "task", "signal"], "properties": { "workflow": { "$ref": "#/components/schemas/WorkflowExecution" }, "task": { "$ref": "#/components/schemas/Task" }, "signal": { "$ref": "#/components/schemas/WorkflowHistoryEvent" } } },
+      "CancelWorkflowRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
+      "TerminateWorkflowRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
+      "PollTaskResponse": { "type": "object", "additionalProperties": true, "properties": { "task": { "$ref": "#/components/schemas/Task" } } },
+      "HeartbeatTaskRequest": { "type": "object", "additionalProperties": false, "properties": { "lease_timeout_seconds": { "type": "integer", "minimum": 0 }, "event": { "$ref": "#/components/schemas/TaskEventInput" } } },
+      "AppendTaskEventRequest": { "type": "object", "additionalProperties": false, "required": ["event"], "properties": { "event": { "$ref": "#/components/schemas/TaskEventInput" } } },
+      "CompleteTaskRequest": { "type": "object", "additionalProperties": false, "required": ["result"], "properties": { "result": { "$ref": "#/components/schemas/JsonValue" } } },
+      "BlockTaskRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
+      "FailTaskRequest": { "type": "object", "additionalProperties": false, "required": ["error"], "properties": { "error": { "type": "string" }, "result": { "$ref": "#/components/schemas/JsonValue" } } },
+      "RefreshAgentSessionRequest": { "type": "object", "additionalProperties": false, "required": ["refreshToken"], "properties": { "refreshToken": { "type": "string" } } },
+      "AgentSessionResponse": { "type": "object", "additionalProperties": true, "required": ["agentId", "tenantId", "tokenFamilyId", "accessToken", "refreshToken", "accessExpiresAt", "refreshExpiresAt", "status", "trustState"] },
+      "Sandbox": { "type": "object", "additionalProperties": true, "required": ["tenantId", "id", "name", "createdBy", "desiredState", "observedState", "generation", "observedGeneration", "backend", "isolationClass", "image", "resourceLimits", "networkPolicy", "createdAt", "updatedAt"] },
+      "SandboxCreateRequest": { "type": "object", "additionalProperties": true, "required": ["name", "image"] },
+      "SandboxListResponse": { "type": "object", "additionalProperties": false, "required": ["sandboxes"], "properties": { "sandboxes": { "type": "array", "items": { "$ref": "#/components/schemas/Sandbox" } } } },
+      "CreateSandboxSessionRequest": { "type": "object", "additionalProperties": true },
+      "CreateSandboxSessionResponse": { "type": "object", "additionalProperties": true, "required": ["id", "ticket", "expiresAt"] },
+      "SandboxWorkspace": { "type": "object", "additionalProperties": true, "required": ["tenantId", "id", "sha256", "sizeBytes", "repositoryName", "createdBy", "createdAt", "expiresAt"] },
+      "ErrorResponse": { "type": "object", "additionalProperties": true, "required": ["error"], "properties": { "error": { "type": "string" }, "code": { "type": "string" } } }
+    }
+  }
+}

@@ -41,6 +41,10 @@ import {
   signRequest,
   type AgentSigningKey,
 } from './_signing.js';
+import {
+  resolveOpenAPIOperation,
+  type OpenAPIOperationId,
+} from './generated/openapi.js';
 
 export interface ConnectionOptions {
   baseUrl?: string;
@@ -123,7 +127,7 @@ export class Connection {
   }
 
   async health(): Promise<{ status: string }> {
-    return this.request('GET', '/healthz');
+    return this.requestOpenAPI('health');
   }
 
   configureAgentAuth(options: AgentAuthOptions): void {
@@ -155,26 +159,26 @@ export class Connection {
   }
 
   async ready(): Promise<{ status: string; stats: Record<string, number> }> {
-    return this.request('GET', '/readyz');
+    return this.requestOpenAPI('ready');
   }
 
   async listNamespaces(): Promise<Namespace[]> {
-    return this.request('GET', '/api/v1/namespaces');
+    return this.requestOpenAPI('listNamespaces');
   }
 
   async createNamespace(name: string): Promise<Namespace> {
-    return this.request('POST', '/api/v1/namespaces', { name });
+    return this.requestOpenAPI('createNamespace', { body: { name } });
   }
 
   async compact(options: { retentionSeconds?: number } = {}): Promise<CompactResponse> {
-    return this.request('POST', '/api/v1/admin/compact', { retention_seconds: options.retentionSeconds ?? 0 });
+    return this.requestOpenAPI('compact', { body: { retention_seconds: options.retentionSeconds ?? 0 } });
   }
 
   async enqueueTask<P = unknown, R = unknown>(request: EnqueueTaskRequest<P>): Promise<Task<P, R>> {
     if (runtimeOnlyTaskType(request.type) && !this.hasAgentRuntimeCredentials()) {
       throw new Error('postgrip-agent: workflow tasks can only be enqueued from a managed runtime; submit workflow.runtime to an agent pool');
     }
-    return this.request('POST', '/api/v1/tasks', request);
+    return this.requestOpenAPI('enqueueTask', { body: request });
   }
 
   async listTasks<P = unknown, R = unknown>(options: {
@@ -192,19 +196,19 @@ export class Connection {
     if (options.state) query.set('state', options.state);
     if (options.limit != null) query.set('limit', String(options.limit));
     if (options.offset != null) query.set('offset', String(options.offset));
-    return this.request('GET', `/api/v1/tasks${query.size ? `?${query.toString()}` : ''}`);
+    return this.requestOpenAPI('listTasks', { query });
   }
 
   async getTask<P = unknown, R = unknown>(taskId: string): Promise<Task<P, R>> {
-    return this.request('GET', `/api/v1/tasks/${encodeURIComponent(taskId)}`);
+    return this.requestOpenAPI('getTask', { pathParameters: { taskId } });
   }
 
   async getTaskEvents(taskId: string): Promise<TaskEvent[]> {
-    return this.request('GET', `/api/v1/tasks/${encodeURIComponent(taskId)}/events`);
+    return this.requestOpenAPI('listTaskEvents', { pathParameters: { taskId } });
   }
 
   async createSchedule<Args extends unknown[] = unknown[]>(request: CreateScheduleRequest<Args>): Promise<Schedule<Args>> {
-    return this.request('POST', '/api/v1/schedules', request);
+    return this.requestOpenAPI('createSchedule', { body: request });
   }
 
   async listSchedules<Args extends unknown[] = unknown[]>(options: {
@@ -218,41 +222,41 @@ export class Connection {
     if (options.state) query.set('state', options.state);
     if (options.limit != null) query.set('limit', String(options.limit));
     if (options.offset != null) query.set('offset', String(options.offset));
-    return this.request('GET', `/api/v1/schedules${query.size ? `?${query.toString()}` : ''}`);
+    return this.requestOpenAPI('listSchedules', { query });
   }
 
   async getSchedule<Args extends unknown[] = unknown[]>(scheduleId: string): Promise<Schedule<Args>> {
-    return this.request('GET', `/api/v1/schedules/${encodeURIComponent(scheduleId)}`);
+    return this.requestOpenAPI('getSchedule', { pathParameters: { scheduleId } });
   }
 
   async updateSchedule<Args extends unknown[] = unknown[]>(scheduleId: string, request: UpdateScheduleRequest<Args>): Promise<Schedule<Args>> {
-    return this.request('PATCH', `/api/v1/schedules/${encodeURIComponent(scheduleId)}`, request);
+    return this.requestOpenAPI('updateSchedule', { pathParameters: { scheduleId }, body: request });
   }
 
   async deleteSchedule<Args extends unknown[] = unknown[]>(scheduleId: string): Promise<Schedule<Args>> {
-    return this.request('DELETE', `/api/v1/schedules/${encodeURIComponent(scheduleId)}`);
+    return this.requestOpenAPI('deleteSchedule', { pathParameters: { scheduleId } });
   }
 
   async pauseSchedule<Args extends unknown[] = unknown[]>(scheduleId: string, request: PauseScheduleRequest = {}): Promise<Schedule<Args>> {
-    return this.request('POST', `/api/v1/schedules/${encodeURIComponent(scheduleId)}/pause`, request);
+    return this.requestOpenAPI('pauseSchedule', { pathParameters: { scheduleId }, body: request });
   }
 
   async unpauseSchedule<Args extends unknown[] = unknown[]>(scheduleId: string, request: UnpauseScheduleRequest = {}): Promise<Schedule<Args>> {
-    return this.request('POST', `/api/v1/schedules/${encodeURIComponent(scheduleId)}/unpause`, request);
+    return this.requestOpenAPI('unpauseSchedule', { pathParameters: { scheduleId }, body: request });
   }
 
   async triggerSchedule<Args extends unknown[] = unknown[], R = unknown>(
     scheduleId: string,
     request: TriggerScheduleRequest = {},
   ): Promise<TriggerScheduleResponse<Args, R>> {
-    return this.request('POST', `/api/v1/schedules/${encodeURIComponent(scheduleId)}/trigger`, request);
+    return this.requestOpenAPI('triggerSchedule', { pathParameters: { scheduleId }, body: request });
   }
 
   async backfillSchedule<Args extends unknown[] = unknown[], R = unknown>(
     scheduleId: string,
     request: BackfillScheduleRequest,
   ): Promise<BackfillScheduleResponse<Args, R>> {
-    return this.request('POST', `/api/v1/schedules/${encodeURIComponent(scheduleId)}/backfill`, request);
+    return this.requestOpenAPI('backfillSchedule', { pathParameters: { scheduleId }, body: request });
   }
 
   async listWorkflows<R = unknown>(options: {
@@ -284,7 +288,7 @@ export class Connection {
     for (const [key, value] of Object.entries(options.searchAttributes ?? {})) {
       query.set(`search.${key}`, String(value));
     }
-    return this.request('GET', `/api/v1/workflows${query.size ? `?${query.toString()}` : ''}`);
+    return this.requestOpenAPI('listWorkflows', { query });
   }
 
   async countWorkflows(options: {
@@ -308,19 +312,19 @@ export class Connection {
     for (const [key, value] of Object.entries(options.searchAttributes ?? {})) {
       query.set(`search.${key}`, String(value));
     }
-    return this.request('GET', `/api/v1/workflows/count${query.size ? `?${query.toString()}` : ''}`);
+    return this.requestOpenAPI('countWorkflows', { query });
   }
 
   async getWorkflow<R = unknown>(workflowId: string): Promise<WorkflowExecution<R>> {
-    return this.request('GET', `/api/v1/workflows/${encodeURIComponent(workflowId)}`);
+    return this.requestOpenAPI('getWorkflow', { pathParameters: { workflowId } });
   }
 
   async getWorkflowHistory(workflowId: string): Promise<WorkflowHistoryEvent[]> {
-    return this.request('GET', `/api/v1/workflows/${encodeURIComponent(workflowId)}/history`);
+    return this.requestOpenAPI('listWorkflowHistory', { pathParameters: { workflowId } });
   }
 
   async signalWorkflow<Args extends unknown[] = unknown[]>(workflowId: string, request: SignalWorkflowRequest<Args>): Promise<WorkflowHistoryEvent> {
-    return this.request('POST', `/api/v1/workflows/${encodeURIComponent(workflowId)}/signal`, request);
+    return this.requestOpenAPI('signalWorkflow', { pathParameters: { workflowId }, body: request });
   }
 
   async signalWithStartWorkflow<WorkflowArgs extends unknown[] = unknown[], SignalArgs extends unknown[] = unknown[], R = unknown>(
@@ -330,15 +334,15 @@ export class Connection {
     if (!this.hasAgentRuntimeCredentials()) {
       throw new Error('postgrip-agent: signal-with-start can only run from a managed runtime; submit workflow.runtime to an agent pool');
     }
-    return this.request('POST', `/api/v1/workflows/${encodeURIComponent(workflowId)}/signal-with-start`, request);
+    return this.requestOpenAPI('signalWithStartWorkflow', { pathParameters: { workflowId }, body: request });
   }
 
   async cancelWorkflow(workflowId: string, request: CancelWorkflowRequest = {}): Promise<WorkflowHistoryEvent> {
-    return this.request('POST', `/api/v1/workflows/${encodeURIComponent(workflowId)}/cancel`, request);
+    return this.requestOpenAPI('cancelWorkflow', { pathParameters: { workflowId }, body: request });
   }
 
   async terminateWorkflow(workflowId: string, request: TerminateWorkflowRequest = {}): Promise<WorkflowHistoryEvent> {
-    return this.request('POST', `/api/v1/workflows/${encodeURIComponent(workflowId)}/terminate`, request);
+    return this.requestOpenAPI('terminateWorkflow', { pathParameters: { workflowId }, body: request });
   }
 
   async pollTask<P = unknown, R = unknown>(options: PollTaskOptions): Promise<Task<P, R> | undefined> {
@@ -356,43 +360,62 @@ export class Connection {
       query.set('task_types', options.taskTypes.join(','));
     }
     await this.ensureAgentSession({ namespace: options.namespace ?? 'default', queue: options.queue, agentId });
-    const response = await this.request<PollTaskResponse<P, R>>('GET', `/api/v1/agent/poll?${query.toString()}`, undefined, options.signal, { agentAuth: true });
+    const response = await this.requestOpenAPI<PollTaskResponse<P, R>>('pollAgentTask', {
+      query,
+      signal: options.signal,
+    });
     return response.task;
   }
 
   async heartbeatTask(taskId: string, agentId: string, event?: TaskEventInput): Promise<Task> {
     await this.ensureAgentSession({ agentId });
-    return this.request('POST', this.agentTaskPath(taskId, 'heartbeat', agentId), { event }, undefined, { agentAuth: true });
+    return this.requestOpenAPI('heartbeatAgentTask', {
+      pathParameters: { taskId },
+      query: new URLSearchParams({ agent_id: agentId }),
+      body: { event },
+    });
   }
 
   async appendTaskEvent(taskId: string, agentId: string, event: TaskEventInput): Promise<TaskEvent> {
     await this.ensureAgentSession({ agentId });
-    return this.request('POST', this.agentTaskPath(taskId, 'events', agentId), { event }, undefined, { agentAuth: true });
+    return this.requestOpenAPI('appendAgentTaskEvent', {
+      pathParameters: { taskId },
+      query: new URLSearchParams({ agent_id: agentId }),
+      body: { event },
+    });
   }
 
   async completeTask<R = unknown>(taskId: string, agentId: string, result: TaskResult<R>): Promise<Task> {
     await this.ensureAgentSession({ agentId });
-    return this.request('POST', this.agentTaskPath(taskId, 'complete', agentId), { result }, undefined, { agentAuth: true });
+    return this.requestOpenAPI('completeAgentTask', {
+      pathParameters: { taskId },
+      query: new URLSearchParams({ agent_id: agentId }),
+      body: { result },
+    });
   }
 
   async blockTask(taskId: string, agentId: string, reason?: string): Promise<Task> {
     await this.ensureAgentSession({ agentId });
-    return this.request('POST', this.agentTaskPath(taskId, 'block', agentId), { reason }, undefined, { agentAuth: true });
+    return this.requestOpenAPI('blockAgentTask', {
+      pathParameters: { taskId },
+      query: new URLSearchParams({ agent_id: agentId }),
+      body: { reason },
+    });
   }
 
   async failTask<R = unknown>(taskId: string, agentId: string, error: string, result?: TaskResult<R>): Promise<Task> {
     await this.ensureAgentSession({ agentId });
-    return this.request('POST', this.agentTaskPath(taskId, 'fail', agentId), { error, result }, undefined, { agentAuth: true });
-  }
-
-  private agentTaskPath(taskId: string, action: string, agentId: string): string {
-    return `/api/v1/agent/tasks/${encodeURIComponent(taskId)}/${action}?agent_id=${encodeURIComponent(agentId)}`;
+    return this.requestOpenAPI('failAgentTask', {
+      pathParameters: { taskId },
+      query: new URLSearchParams({ agent_id: agentId }),
+      body: { error, result },
+    });
   }
 
   private async refreshAgentSession(): Promise<void> {
     if (this.agentAuth.refreshToken) {
-      const session = await this.request<AgentSessionResponse>('POST', '/api/v1/agent/session/refresh', {
-        refreshToken: this.agentAuth.refreshToken,
+      const session = await this.requestOpenAPI<AgentSessionResponse>('refreshAgentSession', {
+        body: { refreshToken: this.agentAuth.refreshToken },
       });
       this.applyAgentSession(session);
       return;
@@ -416,36 +439,36 @@ export class Connection {
   // all of them, so the connection needs `authToken`.
 
   async createSandbox(request: SandboxCreateRequest): Promise<Sandbox> {
-    return this.request('POST', '/api/v1/sandboxes', request);
+    return this.requestOpenAPI('createSandbox', { body: request });
   }
 
   async listSandboxes(): Promise<Sandbox[]> {
     // The endpoint returns an envelope, not a bare array.
-    const response = await this.request<SandboxListResponse>('GET', '/api/v1/sandboxes');
+    const response = await this.requestOpenAPI<SandboxListResponse>('listSandboxes');
     return response?.sandboxes ?? [];
   }
 
   async getSandbox(sandboxId: string, signal?: AbortSignal): Promise<Sandbox> {
-    return this.request('GET', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}`, undefined, signal);
+    return this.requestOpenAPI('getSandbox', { pathParameters: { sandboxId }, signal });
   }
 
   async startSandbox(sandboxId: string): Promise<Sandbox> {
-    return this.request('POST', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}/start`);
+    return this.requestOpenAPI('startSandbox', { pathParameters: { sandboxId } });
   }
 
   async stopSandbox(sandboxId: string): Promise<Sandbox> {
-    return this.request('POST', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}/stop`);
+    return this.requestOpenAPI('stopSandbox', { pathParameters: { sandboxId } });
   }
 
   async deleteSandbox(sandboxId: string): Promise<Sandbox> {
-    return this.request('DELETE', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}`);
+    return this.requestOpenAPI('deleteSandbox', { pathParameters: { sandboxId } });
   }
 
   async createSandboxSession(
     sandboxId: string,
     request: CreateSandboxSessionRequest = {},
   ): Promise<CreateSandboxSessionResponse> {
-    return this.request('POST', `/api/v1/sandboxes/${encodeURIComponent(sandboxId)}/sessions`, request);
+    return this.requestOpenAPI('createSandboxSession', { pathParameters: { sandboxId }, body: request });
   }
 
   /**
@@ -467,8 +490,9 @@ export class Connection {
     if (metadata.repositoryName) headers.set('X-PostGrip-Repository', metadata.repositoryName);
     if (metadata.revision) headers.set('X-PostGrip-Revision', metadata.revision);
 
-    const response = await this.fetchImpl(`${this.baseUrl}/api/v1/workspaces`, {
-      method: 'POST',
+    const operation = resolveOpenAPIOperation('uploadWorkspace');
+    const response = await this.fetchImpl(`${this.baseUrl}${operation.path}`, {
+      method: operation.method,
       headers,
       body: archive,
       // Node's fetch requires this for a streaming request body.
@@ -488,8 +512,26 @@ export class Connection {
     return this.authToken ? `Bearer ${this.authToken}` : undefined;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, options: { agentAuth?: boolean } = {}): Promise<T> {
-    const useAgentAuth = options.agentAuth === true || this.shouldUseAgentRuntimeAuth(path);
+  private async requestOpenAPI<T>(
+    id: OpenAPIOperationId,
+    options: {
+      body?: unknown;
+      pathParameters?: Readonly<Record<string, string>>;
+      query?: URLSearchParams;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<T> {
+    const operation = resolveOpenAPIOperation(id, options.pathParameters, options.query);
+    const agentAuth = operation.authLane === 'agent'
+      || (operation.authLane === 'either' && this.hasAgentRuntimeCredentials());
+    return this.request(operation.method, operation.path, options.body, options.signal, {
+      agentAuth,
+      signing: operation.signing,
+    });
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, options: { agentAuth?: boolean; signing?: string } = {}): Promise<T> {
+    const useAgentAuth = options.agentAuth === true;
     if (useAgentAuth) {
       await this.ensureAgentSession();
     }
@@ -504,7 +546,7 @@ export class Connection {
       headers.set('Content-Type', 'application/json');
     }
     const bodyString = body == null ? '' : JSON.stringify(body);
-    if (useAgentAuth && this.agentSigningKey) {
+    if (useAgentAuth && options.signing === 'agent-task-v1' && this.agentSigningKey) {
       const queryStart = path.indexOf('?');
       const reqPath = queryStart === -1 ? path : path.slice(0, queryStart);
       const reqQuery = queryStart === -1 ? '' : path.slice(queryStart + 1);
@@ -534,19 +576,6 @@ export class Connection {
     } catch (err) {
       throw new Error(`postgrip-agent: ${method} ${path} -> ${response.status} (parse failed): ${text.slice(0, 200)}`);
     }
-  }
-
-  private shouldUseAgentRuntimeAuth(path: string): boolean {
-    if (!this.agentAuth.accessToken && !this.agentAuth.refreshToken) {
-      return false;
-    }
-    const queryStart = path.indexOf('?');
-    const reqPath = queryStart === -1 ? path : path.slice(0, queryStart);
-    return reqPath === '/api/v1/tasks'
-      || reqPath.startsWith('/api/v1/tasks/')
-      || reqPath === '/api/v1/workflows'
-      || reqPath.startsWith('/api/v1/workflows/')
-      || reqPath === '/api/v1/namespaces';
   }
 
   private hasAgentRuntimeCredentials(): boolean {

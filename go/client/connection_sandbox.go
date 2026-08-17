@@ -3,8 +3,6 @@ package client
 import (
 	"context"
 	"io"
-	"net/http"
-	"net/url"
 
 	"github.com/postgrip-io/agent-sdk-protocol"
 	"go.postgrip.io/sdk/failure"
@@ -21,7 +19,7 @@ import (
 // among live sandboxes, so a duplicate name is a 409. Image is required.
 func (c *Connection) CreateSandbox(ctx context.Context, req SandboxCreateRequest) (*Sandbox, error) {
 	var out Sandbox
-	if err := c.do(ctx, http.MethodPost, "/api/v1/sandboxes", req, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPICreateSandbox, nil, nil, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -31,7 +29,7 @@ func (c *Connection) CreateSandbox(ctx context.Context, req SandboxCreateRequest
 // filtered out here but stay fetchable by id through GetSandbox.
 func (c *Connection) ListSandboxes(ctx context.Context) ([]Sandbox, error) {
 	var out SandboxListResponse
-	if err := c.do(ctx, http.MethodGet, "/api/v1/sandboxes", nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIListSandboxes, nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out.Sandboxes, nil
@@ -44,7 +42,7 @@ func (c *Connection) GetSandbox(ctx context.Context, sandboxID string) (*Sandbox
 		return nil, err
 	}
 	var out Sandbox
-	if err := c.do(ctx, http.MethodGet, sandboxPath(sandboxID), nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIGetSandbox, map[string]string{"sandboxId": sandboxID}, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -57,7 +55,7 @@ func (c *Connection) StartSandbox(ctx context.Context, sandboxID string) (*Sandb
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	return c.sandboxLifecycle(ctx, http.MethodPost, sandboxPath(sandboxID)+"/start")
+	return c.sandboxLifecycle(ctx, openAPIStartSandbox, sandboxID)
 }
 
 // StopSandbox requests a running sandbox be stopped. Asynchronous, as
@@ -66,7 +64,7 @@ func (c *Connection) StopSandbox(ctx context.Context, sandboxID string) (*Sandbo
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	return c.sandboxLifecycle(ctx, http.MethodPost, sandboxPath(sandboxID)+"/stop")
+	return c.sandboxLifecycle(ctx, openAPIStopSandbox, sandboxID)
 }
 
 // DeleteSandbox requests deletion. If no agent has been assigned yet this
@@ -76,12 +74,12 @@ func (c *Connection) DeleteSandbox(ctx context.Context, sandboxID string) (*Sand
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	return c.sandboxLifecycle(ctx, http.MethodDelete, sandboxPath(sandboxID))
+	return c.sandboxLifecycle(ctx, openAPIDeleteSandbox, sandboxID)
 }
 
-func (c *Connection) sandboxLifecycle(ctx context.Context, method, path string) (*Sandbox, error) {
+func (c *Connection) sandboxLifecycle(ctx context.Context, operationID openAPIOperationID, sandboxID string) (*Sandbox, error) {
 	var out Sandbox
-	if err := c.do(ctx, method, path, nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, operationID, map[string]string{"sandboxId": sandboxID}, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -99,7 +97,7 @@ func (c *Connection) CreateSandboxSession(ctx context.Context, sandboxID string,
 		return nil, err
 	}
 	var out CreateSandboxSessionResponse
-	if err := c.do(ctx, http.MethodPost, sandboxPath(sandboxID)+"/sessions", req, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPICreateSandboxSession, map[string]string{"sandboxId": sandboxID}, nil, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -123,14 +121,10 @@ func (c *Connection) UploadWorkspace(ctx context.Context, archive io.Reader, rep
 		headers[protocol.SandboxWorkspaceRevisionHeader] = revision
 	}
 	var out SandboxWorkspace
-	if err := c.doStream(ctx, http.MethodPost, "/api/v1/workspaces", archive, headers, &out); err != nil {
+	if err := c.doStreamOpenAPI(ctx, openAPIUploadWorkspace, archive, headers, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
-}
-
-func sandboxPath(sandboxID string) string {
-	return "/api/v1/sandboxes/" + url.PathEscape(sandboxID)
 }
 
 func sandboxIDRequired(sandboxID string) error {

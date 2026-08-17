@@ -10,6 +10,23 @@ plus the shared Go wire-protocol package.
 | [`typescript/`](typescript/) | `@postgrip/agent` | TypeScript client and agent SDK |
 | [`python/`](python/) | `postgrip-agent` | Python client and agent SDK |
 
+## OpenAPI Contract
+
+[`openapi.json`](openapi.json) is synchronized from the canonical server
+contract in `postgrip-web/api/agent-openapi.json`. It generates the internal
+method, path, authentication-lane, signing, streaming, and WebSocket metadata
+used by all three SDK transports. Public SDK APIs and runtime-specific logic
+remain hand-written.
+
+```sh
+python3 scripts/generate_openapi.py
+python3 scripts/generate_openapi.py --check
+python3 scripts/generate_openapi.py --check-source ../postgrip-web/api/agent-openapi.json
+```
+
+Never edit `*.gen.go` or a `generated/openapi.*` file directly. Update the
+canonical contract, synchronize `openapi.json`, and rerun the generator.
+
 ## Development
 
 Each package keeps its native toolchain. From the repository root:
@@ -20,6 +37,7 @@ go test ./protocol/... ./go/...
 (cd python && PYTHONPATH=src python -m unittest discover -s test)
 python3 protocol/tools/check_drift.py --self-test
 python3 protocol/tools/check_drift.py --monorepo
+python3 scripts/generate_openapi.py --check
 ```
 
 The root `go.work` makes the Go SDK consume the local protocol module during

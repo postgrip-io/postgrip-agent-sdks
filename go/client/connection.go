@@ -142,24 +142,35 @@ func (c *Connection) Address() string { return c.address }
 // test at startup before consuming Client APIs.
 func (c *Connection) Health(ctx context.Context) (map[string]any, error) {
 	var out map[string]any
-	if err := c.do(ctx, http.MethodGet, "/healthz", nil, &out, false); err != nil {
+	if err := c.doOpenAPI(ctx, openAPIHealth, nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// do is the single HTTP entrypoint; all the typed helpers funnel through
-// it. agentAuth selects between "use AuthToken" (false) and "use the
-// agent's refreshable access token" (true). When agentAuth is true and the
-// connection has a signing keypair, the request is also Ed25519-signed per
-// the protocol's agent-task-v1 canonical form.
-func (c *Connection) do(ctx context.Context, method, path string, body any, out any, agentAuth bool) error {
-	if !agentAuth && c.shouldUseAgentRuntimeAuth(path) {
+// doOpenAPI resolves the generated method, path, and authentication lane,
+// then delegates to the SDK's custom transport. Retry, session refresh, and
+// request signing intentionally remain runtime behavior rather than codegen.
+func (c *Connection) doOpenAPI(ctx context.Context, id openAPIOperationID, pathParameters map[string]string, query url.Values, body any, out any) error {
+	operation, err := resolveOpenAPIOperation(id, pathParameters, query)
+	if err != nil {
+		return &failure.SDKError{Message: "resolve OpenAPI operation", Cause: err}
+	}
+	agentAuth := operation.AuthLane == "agent" || (operation.AuthLane == "either" && c.hasAgentRuntimeCredentials())
+	if agentAuth {
 		if err := c.ensureAgentSession(ctx, "", "", ""); err != nil {
 			return err
 		}
-		agentAuth = true
 	}
+	return c.do(ctx, operation.Method, operation.Path, body, out, agentAuth, operation.Signing)
+}
+
+// do is the single HTTP entrypoint; all the typed helpers funnel through
+// it. agentAuth selects between "use AuthToken" (false) and "use the
+// agent's refreshable access token" (true). signing is generated from the
+// contract and selects the protocol's agent-task-v1 canonical signature for
+// the task actions that require it.
+func (c *Connection) do(ctx context.Context, method, path string, body any, out any, agentAuth bool, signing string) error {
 	var rawBody []byte
 	var reader io.Reader
 	if body != nil {
@@ -189,7 +200,7 @@ func (c *Connection) do(ctx context.Context, method, path string, body any, out 
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
-		if len(priv) == ed25519.PrivateKeySize {
+		if signing == "agent-task-v1" && len(priv) == ed25519.PrivateKeySize {
 			ts := time.Now().UTC()
 			payload := protocol.AgentRequestSignaturePayload{
 				Method:    method,
@@ -230,24 +241,7 @@ func (c *Connection) do(ctx context.Context, method, path string, body any, out 
 	return nil
 }
 
-func (c *Connection) shouldUseAgentRuntimeAuth(path string) bool {
-	c.agentMu.Lock()
-	hasAgentSession := c.agentAccessToken != "" || c.agentRefreshToken != ""
-	c.agentMu.Unlock()
-	if !hasAgentSession {
-		return false
-	}
-	if queryStart := strings.Index(path, "?"); queryStart >= 0 {
-		path = path[:queryStart]
-	}
-	return path == "/api/v1/tasks" ||
-		strings.HasPrefix(path, "/api/v1/tasks/") ||
-		path == "/api/v1/workflows" ||
-		strings.HasPrefix(path, "/api/v1/workflows/") ||
-		path == "/api/v1/namespaces"
-}
-
-func encodeQuery(params map[string]string) string {
+func queryValues(params map[string]string) url.Values {
 	values := url.Values{}
 	for k, v := range params {
 		if v == "" {
@@ -255,15 +249,7 @@ func encodeQuery(params map[string]string) string {
 		}
 		values.Set(k, v)
 	}
-	return values.Encode()
-}
-
-func agentTaskPath(taskID, action, agentID string) string {
-	return fmt.Sprintf("/api/v1/agent/tasks/%s/%s?agent_id=%s",
-		url.PathEscape(taskID),
-		action,
-		url.QueryEscape(agentID),
-	)
+	return values
 }
 
 // doStream sends a raw request body rather than JSON-encoding a value, for
@@ -319,6 +305,17 @@ func (c *Connection) doStream(ctx context.Context, method, path string, body io.
 		return &failure.SDKError{Message: fmt.Sprintf("decode response from %s %s", method, path), Cause: err}
 	}
 	return nil
+}
+
+func (c *Connection) doStreamOpenAPI(ctx context.Context, id openAPIOperationID, body io.Reader, headers map[string]string, out any) error {
+	operation, err := resolveOpenAPIOperation(id, nil, nil)
+	if err != nil {
+		return &failure.SDKError{Message: "resolve OpenAPI operation", Cause: err}
+	}
+	if !operation.StreamingRequest {
+		return &failure.SDKError{Message: fmt.Sprintf("OpenAPI operation %q is not a streaming request", id)}
+	}
+	return c.doStream(ctx, operation.Method, operation.Path, body, headers, out)
 }
 
 // AuthHeader returns the management Authorization header value, empty when the

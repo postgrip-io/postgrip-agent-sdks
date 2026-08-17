@@ -11,10 +11,10 @@ from __future__ import annotations
 import time
 from typing import IO, TYPE_CHECKING, Any, Iterable
 from urllib.error import HTTPError
-from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 from .client import has_authorization_header
+from .generated.openapi import OperationId, resolve_openapi_operation
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only matters for typing
     from .client import Connection
@@ -61,10 +61,12 @@ def sandbox_relay_url(base_url: str, session_id: str, ticket: str) -> str:
         origin = f"{scheme}://{remainder}"
     else:
         raise ValueError(f"postgrip-agent: sandbox relay base must be http(s) or ws(s): {base_url}")
-    return (
-        f"{origin}/api/v1/sandbox-sessions/{quote(session_id, safe='')}"
-        f"/connect?ticket={quote(ticket, safe='')}"
+    operation = resolve_openapi_operation(
+        OperationId.CONNECT_SANDBOX_SESSION,
+        {"sessionId": session_id},
+        {"ticket": ticket},
     )
+    return origin + operation.path
 
 
 def sandbox_is_ready(record: dict[str, Any]) -> bool:
@@ -91,7 +93,7 @@ class SandboxClient:
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
         """Provision a sandbox. Returns once the record exists — the sandbox is
         not yet running, so follow with :meth:`wait_until_running`."""
-        return self.connection.request("POST", "/api/v1/sandboxes", request)
+        return self.connection._request_openapi(OperationId.CREATE_SANDBOX, request)
 
     def list(self) -> list[dict[str, Any]]:
         """List live sandboxes.
@@ -99,20 +101,32 @@ class SandboxClient:
         The endpoint returns an envelope, not a bare array; decoding it as an
         array would silently yield nothing.
         """
-        response = self.connection.request("GET", "/api/v1/sandboxes") or {}
+        response = self.connection._request_openapi(OperationId.LIST_SANDBOXES) or {}
         return response.get("sandboxes") or []
 
     def get(self, sandbox_id: str) -> dict[str, Any]:
-        return self.connection.request("GET", _sandbox_path(sandbox_id))
+        _require_sandbox_id(sandbox_id)
+        return self.connection._request_openapi(
+            OperationId.GET_SANDBOX, path_parameters={"sandboxId": sandbox_id}
+        )
 
     def start(self, sandbox_id: str) -> dict[str, Any]:
-        return self.connection.request("POST", _sandbox_path(sandbox_id) + "/start")
+        _require_sandbox_id(sandbox_id)
+        return self.connection._request_openapi(
+            OperationId.START_SANDBOX, path_parameters={"sandboxId": sandbox_id}
+        )
 
     def stop(self, sandbox_id: str) -> dict[str, Any]:
-        return self.connection.request("POST", _sandbox_path(sandbox_id) + "/stop")
+        _require_sandbox_id(sandbox_id)
+        return self.connection._request_openapi(
+            OperationId.STOP_SANDBOX, path_parameters={"sandboxId": sandbox_id}
+        )
 
     def delete(self, sandbox_id: str) -> dict[str, Any]:
-        return self.connection.request("DELETE", _sandbox_path(sandbox_id))
+        _require_sandbox_id(sandbox_id)
+        return self.connection._request_openapi(
+            OperationId.DELETE_SANDBOX, path_parameters={"sandboxId": sandbox_id}
+        )
 
     def create_session(
         self,
@@ -139,7 +153,12 @@ class SandboxClient:
             body["rows"] = rows
         if columns is not None:
             body["columns"] = columns
-        return self.connection.request("POST", _sandbox_path(sandbox_id) + "/sessions", body)
+        _require_sandbox_id(sandbox_id)
+        return self.connection._request_openapi(
+            OperationId.CREATE_SANDBOX_SESSION,
+            body,
+            path_parameters={"sandboxId": sandbox_id},
+        )
 
     def upload_workspace(
         self,
@@ -165,10 +184,13 @@ class SandboxClient:
         if revision:
             headers["X-PostGrip-Revision"] = revision
 
+        operation = resolve_openapi_operation(OperationId.UPLOAD_WORKSPACE)
+        if not operation.streaming_request:
+            raise RuntimeError("postgrip-agent: workspace upload is not a streaming OpenAPI operation")
         request = Request(
-            self.connection.address + "/api/v1/workspaces",
+            self.connection.address + operation.path,
             data=data,
-            method="POST",
+            method=operation.method,
             headers=headers,
         )
         try:
@@ -349,9 +371,8 @@ class SandboxSession:
         self.close()
 
 
-def _sandbox_path(sandbox_id: str) -> str:
+def _require_sandbox_id(sandbox_id: str) -> None:
     if not sandbox_id:
         # Otherwise this builds /api/v1/sandboxes/ and hits the collection
         # route, which is a confusing 404 or worse a list.
         raise ValueError("postgrip-agent: sandbox id is required")
-    return f"/api/v1/sandboxes/{quote(sandbox_id, safe='')}"
