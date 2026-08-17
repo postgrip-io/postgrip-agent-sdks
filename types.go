@@ -662,6 +662,16 @@ type ContainerExecPayload struct {
 const (
 	IsolationTierContainer = "container"
 	IsolationTierMicroVM   = "microvm"
+
+	// RuntimeIsolationCapabilityPrefix namespaces the isolation tiers an
+	// agent advertises in its poll capability list, e.g.
+	// "runtime_isolation:microvm". The agent emits it and the orchestrator
+	// parses it, so it belongs here with the tiers themselves: prefix and
+	// tier are two halves of one wire string, and a mismatch on either half
+	// is silent — the orchestrator simply finds no tier entries, falls back
+	// to the legacy container-only interpretation, and every microvm-capable
+	// agent is quietly downgraded.
+	RuntimeIsolationCapabilityPrefix = "runtime_isolation:"
 )
 
 // WorkflowRuntimePayload starts a supervised SDK workflow runtime under an
