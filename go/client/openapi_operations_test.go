@@ -32,12 +32,55 @@ func TestResolveOpenAPIOperation(t *testing.T) {
 	if operation.AuthLane != "agent" || operation.Signing != "agent-task-v1" {
 		t.Fatalf("unexpected operation security: %#v", operation)
 	}
+	if operation.RequestSchema != "CompleteTaskRequest" || operation.ResponseSchema != "Task" {
+		t.Fatalf("unexpected operation schemas: %#v", operation)
+	}
 	poll, err := resolveOpenAPIOperation(openAPIPollAgentTask, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if poll.AuthLane != "agent" || poll.Signing != "" {
 		t.Fatalf("unexpected poll security: %#v", poll)
+	}
+}
+
+func TestGeneratedOpenAPIPayloadTypesCompile(t *testing.T) {
+	if got, want := OpenAPIOperationCount, 42; got != want {
+		t.Fatalf("generated operation count = %d, want %d", got, want)
+	}
+	if got, want := OpenAPIClientOperationCount, 40; got != want {
+		t.Fatalf("generated client operation count = %d, want %d", got, want)
+	}
+	request := OpenAPIEnqueueTaskRequestBody{Type: "noop"}
+	var response OpenAPIEnqueueTaskResponseBody
+	if request.Type != "noop" || response.ID != "" {
+		t.Fatalf("unexpected generated payloads: request=%#v response=%#v", request, response)
+	}
+}
+
+func TestGeneratedOpenAPIClientCallsTypedOperation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/namespaces" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"name":"generated","created_at":"2026-08-17T00:00:00Z","updated_at":"2026-08-17T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	connection, err := NewConnection(ConnectionOptions{Address: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := connection.OpenAPI().CreateNamespace(
+		context.Background(),
+		OpenAPICreateNamespaceRequestBody{Name: "generated"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Name != "generated" {
+		t.Fatalf("response = %#v", response)
 	}
 }
 

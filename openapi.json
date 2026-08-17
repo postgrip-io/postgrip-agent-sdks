@@ -743,8 +743,18 @@
         "properties": { "status": { "type": "string" }, "stats": { "type": "object", "additionalProperties": { "type": "integer" } } }
       },
       "TaskState": { "type": "string", "enum": ["queued", "leased", "blocked", "succeeded", "failed"] },
+      "TaskEventKind": { "type": "string", "enum": ["leased", "started", "heartbeat", "milestone", "progress", "stdout", "stderr", "completed", "failed"] },
+      "AgentPollDirectiveType": { "type": "string", "enum": ["upgrade", "shutdown", "log_level", "poll_now", "attest"] },
+      "AgentPollDirectiveSubject": { "type": "string", "enum": ["agent", "agent_helper"] },
       "WorkflowState": { "type": "string", "enum": ["running", "succeeded", "failed", "continued_as_new"] },
+      "WorkflowIdReusePolicy": { "type": "string", "enum": ["allow_duplicate", "allow_duplicate_failed_only", "reject_duplicate"] },
       "ScheduleState": { "type": "string", "enum": ["active", "paused", "deleted"] },
+      "ScheduleOverlapPolicy": { "type": "string", "enum": ["skip", "allow_all"] },
+      "ScheduleMissedRunPolicy": { "type": "string", "enum": ["catch_up", "skip"] },
+      "SandboxBackend": { "type": "string", "enum": ["auto", "docker", "podman", "firecracker"] },
+      "SandboxDesiredState": { "type": "string", "enum": ["running", "stopped", "deleted"] },
+      "SandboxObservedState": { "type": "string", "enum": ["requested", "scheduling", "provisioning", "setting_up", "running", "stopping", "stopped", "starting", "deleting", "deleted", "failed"] },
+      "SandboxSessionKind": { "type": "string", "enum": ["pty", "exec"] },
       "Namespace": {
         "type": "object",
         "additionalProperties": false,
@@ -760,7 +770,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["name"],
-        "properties": { "name": { "type": "string", "minLength": 1 } }
+        "properties": { "tenantId": { "type": "string" }, "name": { "type": "string", "minLength": 1 } }
       },
       "CompactRequest": {
         "type": "object",
@@ -778,9 +788,10 @@
       },
       "EnqueueTaskRequest": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "required": ["type"],
         "properties": {
+          "tenantId": { "type": "string" },
           "type": { "type": "string" },
           "namespace": { "type": "string" },
           "queue": { "type": "string" },
@@ -790,56 +801,405 @@
       },
       "Task": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "required": ["id", "namespace", "queue", "type", "state", "attempt", "lease_timeout_seconds", "created_at", "updated_at"],
         "properties": {
           "id": { "type": "string" },
+          "tenantId": { "type": "string" },
           "type": { "type": "string" },
           "state": { "$ref": "#/components/schemas/TaskState" },
           "namespace": { "type": "string" },
           "queue": { "type": "string" },
           "attempt": { "type": "integer", "minimum": 0 },
+          "agent_id": { "type": "string" },
           "lease_timeout_seconds": { "type": "integer", "minimum": 0 },
+          "not_before": { "type": "string", "format": "date-time" },
+          "leased_until": { "type": "string", "format": "date-time" },
           "payload": { "$ref": "#/components/schemas/JsonValue" },
-          "result": { "$ref": "#/components/schemas/JsonValue" },
+          "result": { "$ref": "#/components/schemas/TaskResult" },
+          "error": { "type": "string" },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }
       },
-      "TaskEventInput": { "type": "object", "additionalProperties": true, "required": ["kind"], "properties": { "kind": { "type": "string" } } },
-      "TaskEvent": { "type": "object", "additionalProperties": true, "required": ["id", "task_id", "kind", "created_at"], "properties": { "id": { "type": "string" }, "task_id": { "type": "string" }, "kind": { "type": "string" }, "created_at": { "type": "string", "format": "date-time" } } },
-      "Schedule": { "type": "object", "additionalProperties": true, "required": ["id", "namespace", "state", "spec", "action", "next_run_at", "created_at", "updated_at"] },
-      "CreateScheduleRequest": { "type": "object", "additionalProperties": true, "required": ["spec", "action"] },
-      "UpdateScheduleRequest": { "type": "object", "additionalProperties": true },
+      "TaskResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "exit_code": { "type": "integer" },
+          "stdout": { "type": "string" },
+          "stderr": { "type": "string" },
+          "message": { "type": "string" },
+          "value": { "$ref": "#/components/schemas/JsonValue" },
+          "failure": { "$ref": "#/components/schemas/FailureInfo" },
+          "continue_as_new": { "$ref": "#/components/schemas/ContinueAsNewResult" },
+          "started_at": { "type": "string", "format": "date-time" },
+          "finished_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "FailureInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "message": { "type": "string" },
+          "type": { "type": "string" },
+          "non_retryable": { "type": "boolean" },
+          "details": { "type": "array", "items": { "$ref": "#/components/schemas/JsonValue" } }
+        }
+      },
+      "ContinueAsNewResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workflow_id", "workflow_type", "task_queue", "task_id"],
+        "properties": {
+          "workflow_id": { "type": "string" },
+          "workflow_type": { "type": "string" },
+          "task_queue": { "type": "string" },
+          "task_id": { "type": "string" }
+        }
+      },
+      "TaskEventInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {
+          "kind": { "$ref": "#/components/schemas/TaskEventKind" },
+          "stage": { "type": "string" },
+          "message": { "type": "string" },
+          "stream": { "type": "string" },
+          "data": { "type": "string" },
+          "details": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } }
+        }
+      },
+      "TaskEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "task_id", "kind", "created_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "task_id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "agent_id": { "type": "string" },
+          "kind": { "$ref": "#/components/schemas/TaskEventKind" },
+          "stage": { "type": "string" },
+          "message": { "type": "string" },
+          "stream": { "type": "string" },
+          "data": { "type": "string" },
+          "details": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RetryPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "maximumAttempts": { "type": "integer" },
+          "initialIntervalMs": { "type": "integer" },
+          "backoffCoefficient": { "type": "number" },
+          "maximumIntervalMs": { "type": "integer" },
+          "expirationIntervalMs": { "type": "integer" },
+          "nonRetryableErrorTypes": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ScheduleCalendarSpec": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minute": { "type": "array", "items": { "type": "integer" } },
+          "hour": { "type": "array", "items": { "type": "integer" } },
+          "day_of_month": { "type": "array", "items": { "type": "integer" } },
+          "month": { "type": "array", "items": { "type": "integer" } },
+          "day_of_week": { "type": "array", "items": { "type": "integer" } }
+        }
+      },
+      "ScheduleSpec": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "interval_seconds": { "type": "integer" },
+          "cron": { "type": "string" },
+          "calendar": { "$ref": "#/components/schemas/ScheduleCalendarSpec" },
+          "timezone": { "type": "string" },
+          "jitter_seconds": { "type": "integer" },
+          "catch_up_window_seconds": { "type": "integer" },
+          "missed_run_policy": { "$ref": "#/components/schemas/ScheduleMissedRunPolicy" },
+          "start_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ScheduleAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workflowType"],
+        "properties": {
+          "namespace": { "type": "string" },
+          "queue": { "type": "string" },
+          "workflowType": { "type": "string" },
+          "workflowId": { "type": "string" },
+          "workflowIdReusePolicy": { "$ref": "#/components/schemas/WorkflowIdReusePolicy" },
+          "runTimeoutMs": { "type": "integer" },
+          "retry": { "$ref": "#/components/schemas/RetryPolicy" },
+          "memo": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "searchAttributes": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "args": { "type": "array", "items": { "$ref": "#/components/schemas/JsonValue" } }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "namespace", "state", "spec", "action", "next_run_at", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "namespace": { "type": "string" },
+          "state": { "$ref": "#/components/schemas/ScheduleState" },
+          "overlap_policy": { "$ref": "#/components/schemas/ScheduleOverlapPolicy" },
+          "spec": { "$ref": "#/components/schemas/ScheduleSpec" },
+          "action": { "$ref": "#/components/schemas/ScheduleAction" },
+          "last_run_at": { "type": "string", "format": "date-time" },
+          "next_run_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateScheduleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["spec", "action"],
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "namespace": { "type": "string" },
+          "overlap_policy": { "$ref": "#/components/schemas/ScheduleOverlapPolicy" },
+          "spec": { "$ref": "#/components/schemas/ScheduleSpec" },
+          "action": { "$ref": "#/components/schemas/ScheduleAction" }
+        }
+      },
+      "UpdateScheduleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "overlap_policy": { "$ref": "#/components/schemas/ScheduleOverlapPolicy" },
+          "spec": { "$ref": "#/components/schemas/ScheduleSpec" },
+          "action": { "$ref": "#/components/schemas/ScheduleAction" }
+        }
+      },
       "PauseScheduleRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
       "UnpauseScheduleRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
       "TriggerScheduleRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
-      "TriggerScheduleResponse": { "type": "object", "additionalProperties": true, "required": ["schedule", "task"] },
+      "TriggerScheduleResponse": { "type": "object", "additionalProperties": false, "required": ["schedule", "task"], "properties": { "schedule": { "$ref": "#/components/schemas/Schedule" }, "task": { "$ref": "#/components/schemas/Task" } } },
       "BackfillScheduleRequest": { "type": "object", "additionalProperties": false, "required": ["start_at", "end_at"], "properties": { "start_at": { "type": "string", "format": "date-time" }, "end_at": { "type": "string", "format": "date-time" } } },
-      "BackfillScheduleResponse": { "type": "object", "additionalProperties": true, "required": ["schedule", "tasks"] },
-      "WorkflowExecution": { "type": "object", "additionalProperties": true, "required": ["id", "run_id", "namespace", "type", "queue", "task_id", "state", "created_at", "updated_at"] },
-      "WorkflowHistoryEvent": { "type": "object", "additionalProperties": true, "required": ["id", "workflow_id", "type", "created_at"] },
+      "BackfillScheduleResponse": { "type": "object", "additionalProperties": false, "required": ["schedule", "tasks"], "properties": { "schedule": { "$ref": "#/components/schemas/Schedule" }, "tasks": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } },
+      "WorkflowExecution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "run_id", "namespace", "type", "queue", "task_id", "state", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "run_id": { "type": "string" },
+          "agent_id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "namespace": { "type": "string" },
+          "type": { "type": "string" },
+          "queue": { "type": "string" },
+          "task_id": { "type": "string" },
+          "state": { "$ref": "#/components/schemas/WorkflowState" },
+          "attempt": { "type": "integer" },
+          "run_timeout_ms": { "type": "integer" },
+          "retry": { "$ref": "#/components/schemas/RetryPolicy" },
+          "memo": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "search_attributes": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "result": { "$ref": "#/components/schemas/TaskResult" },
+          "error": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WorkflowHistoryEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "workflow_id", "type", "created_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "workflow_id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "task_id": { "type": "string" },
+          "type": { "type": "string" },
+          "attributes": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
       "WorkflowCountResponse": { "type": "object", "additionalProperties": false, "required": ["count"], "properties": { "count": { "type": "integer", "minimum": 0 } } },
       "SignalWorkflowRequest": { "type": "object", "additionalProperties": false, "required": ["name"], "properties": { "name": { "type": "string" }, "args": { "type": "array", "items": { "$ref": "#/components/schemas/JsonValue" } } } },
-      "SignalWithStartWorkflowRequest": { "type": "object", "additionalProperties": true, "required": ["workflowType", "signal"], "properties": { "workflowType": { "type": "string" }, "signal": { "$ref": "#/components/schemas/SignalWorkflowRequest" } } },
+      "SignalWithStartWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workflowType", "signal"],
+        "properties": {
+          "namespace": { "type": "string" },
+          "queue": { "type": "string" },
+          "workflowType": { "type": "string" },
+          "workflowId": { "type": "string" },
+          "workflowIdReusePolicy": { "$ref": "#/components/schemas/WorkflowIdReusePolicy" },
+          "lease_timeout_seconds": { "type": "integer" },
+          "runTimeoutMs": { "type": "integer" },
+          "retry": { "$ref": "#/components/schemas/RetryPolicy" },
+          "memo": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "searchAttributes": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+          "args": { "type": "array", "items": { "$ref": "#/components/schemas/JsonValue" } },
+          "signal": { "$ref": "#/components/schemas/SignalWorkflowRequest" }
+        }
+      },
       "SignalWithStartWorkflowResponse": { "type": "object", "additionalProperties": false, "required": ["workflow", "task", "signal"], "properties": { "workflow": { "$ref": "#/components/schemas/WorkflowExecution" }, "task": { "$ref": "#/components/schemas/Task" }, "signal": { "$ref": "#/components/schemas/WorkflowHistoryEvent" } } },
       "CancelWorkflowRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
       "TerminateWorkflowRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
-      "PollTaskResponse": { "type": "object", "additionalProperties": true, "properties": { "task": { "$ref": "#/components/schemas/Task" } } },
+      "AgentPollDirective": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": { "$ref": "#/components/schemas/AgentPollDirectiveType" },
+          "image": { "type": "string" },
+          "expectedVersion": { "type": "integer" },
+          "force": { "type": "boolean" },
+          "logLevel": { "type": "string" },
+          "subject": { "$ref": "#/components/schemas/AgentPollDirectiveSubject" }
+        }
+      },
+      "PollTaskResponse": { "type": "object", "additionalProperties": false, "properties": { "task": { "$ref": "#/components/schemas/Task" }, "directive": { "$ref": "#/components/schemas/AgentPollDirective" } } },
       "HeartbeatTaskRequest": { "type": "object", "additionalProperties": false, "properties": { "lease_timeout_seconds": { "type": "integer", "minimum": 0 }, "event": { "$ref": "#/components/schemas/TaskEventInput" } } },
       "AppendTaskEventRequest": { "type": "object", "additionalProperties": false, "required": ["event"], "properties": { "event": { "$ref": "#/components/schemas/TaskEventInput" } } },
-      "CompleteTaskRequest": { "type": "object", "additionalProperties": false, "required": ["result"], "properties": { "result": { "$ref": "#/components/schemas/JsonValue" } } },
+      "CompleteTaskRequest": { "type": "object", "additionalProperties": false, "required": ["result"], "properties": { "result": { "$ref": "#/components/schemas/TaskResult" } } },
       "BlockTaskRequest": { "type": "object", "additionalProperties": false, "properties": { "reason": { "type": "string" } } },
-      "FailTaskRequest": { "type": "object", "additionalProperties": false, "required": ["error"], "properties": { "error": { "type": "string" }, "result": { "$ref": "#/components/schemas/JsonValue" } } },
+      "FailTaskRequest": { "type": "object", "additionalProperties": false, "required": ["error"], "properties": { "error": { "type": "string" }, "result": { "$ref": "#/components/schemas/TaskResult" } } },
       "RefreshAgentSessionRequest": { "type": "object", "additionalProperties": false, "required": ["refreshToken"], "properties": { "refreshToken": { "type": "string" } } },
-      "AgentSessionResponse": { "type": "object", "additionalProperties": true, "required": ["agentId", "tenantId", "tokenFamilyId", "accessToken", "refreshToken", "accessExpiresAt", "refreshExpiresAt", "status", "trustState"] },
-      "Sandbox": { "type": "object", "additionalProperties": true, "required": ["tenantId", "id", "name", "createdBy", "desiredState", "observedState", "generation", "observedGeneration", "backend", "isolationClass", "image", "resourceLimits", "networkPolicy", "createdAt", "updatedAt"] },
-      "SandboxCreateRequest": { "type": "object", "additionalProperties": true, "required": ["name", "image"] },
+      "AgentSessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["agentId", "tenantId", "tokenFamilyId", "accessToken", "refreshToken", "accessExpiresAt", "refreshExpiresAt", "status", "trustState"],
+        "properties": {
+          "agentId": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "tokenFamilyId": { "type": "string" },
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "accessExpiresAt": { "type": "string", "format": "date-time" },
+          "refreshExpiresAt": { "type": "string", "format": "date-time" },
+          "status": { "type": "string" },
+          "trustState": { "type": "string" },
+          "trustReason": { "type": "string" }
+        }
+      },
+      "SandboxResourceLimits": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "cpus": { "type": "number" }, "memoryBytes": { "type": "integer" }, "diskBytes": { "type": "integer" } }
+      },
+      "SandboxPortMapping": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hostPort", "guestPort"],
+        "properties": { "hostPort": { "type": "integer" }, "guestPort": { "type": "integer" }, "protocol": { "type": "string" } }
+      },
+      "SandboxNetworkPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["internetEgress", "denyHostAccess"],
+        "properties": {
+          "internetEgress": { "type": "boolean" },
+          "allowCidrs": { "type": "array", "items": { "type": "string" } },
+          "denyHostAccess": { "type": "boolean" },
+          "ports": { "type": "array", "items": { "$ref": "#/components/schemas/SandboxPortMapping" } }
+        }
+      },
+      "Sandbox": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tenantId", "id", "name", "createdBy", "desiredState", "observedState", "generation", "observedGeneration", "backend", "isolationClass", "image", "resourceLimits", "networkPolicy", "createdAt", "updatedAt"],
+        "properties": {
+          "tenantId": { "type": "string" },
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "agentId": { "type": "string" },
+          "desiredState": { "$ref": "#/components/schemas/SandboxDesiredState" },
+          "observedState": { "$ref": "#/components/schemas/SandboxObservedState" },
+          "generation": { "type": "integer" },
+          "observedGeneration": { "type": "integer" },
+          "backend": { "$ref": "#/components/schemas/SandboxBackend" },
+          "isolationClass": { "type": "string" },
+          "image": { "type": "string" },
+          "architecture": { "type": "string" },
+          "workspaceId": { "type": "string" },
+          "repositoryName": { "type": "string" },
+          "setupCommand": { "type": "array", "items": { "type": "string" } },
+          "credentialRefs": { "type": "array", "items": { "type": "string" } },
+          "resourceLimits": { "$ref": "#/components/schemas/SandboxResourceLimits" },
+          "networkPolicy": { "$ref": "#/components/schemas/SandboxNetworkPolicy" },
+          "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+          "runtimeInstanceId": { "type": "string" },
+          "failureCode": { "type": "string" },
+          "failureMessage": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "lastActivityAt": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "stoppedAt": { "type": "string", "format": "date-time" },
+          "deletedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SandboxCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "image"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$" },
+          "backend": { "$ref": "#/components/schemas/SandboxBackend" },
+          "image": { "type": "string", "minLength": 1 },
+          "architecture": { "type": "string" },
+          "workspaceId": { "type": "string" },
+          "repositoryName": { "type": "string" },
+          "setupCommand": { "type": "array", "items": { "type": "string" } },
+          "credentialRefs": { "type": "array", "items": { "type": "string" } },
+          "resourceLimits": { "$ref": "#/components/schemas/SandboxResourceLimits" },
+          "networkPolicy": { "$ref": "#/components/schemas/SandboxNetworkPolicy" },
+          "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
       "SandboxListResponse": { "type": "object", "additionalProperties": false, "required": ["sandboxes"], "properties": { "sandboxes": { "type": "array", "items": { "$ref": "#/components/schemas/Sandbox" } } } },
-      "CreateSandboxSessionRequest": { "type": "object", "additionalProperties": true },
-      "CreateSandboxSessionResponse": { "type": "object", "additionalProperties": true, "required": ["id", "ticket", "expiresAt"] },
-      "SandboxWorkspace": { "type": "object", "additionalProperties": true, "required": ["tenantId", "id", "sha256", "sizeBytes", "repositoryName", "createdBy", "createdAt", "expiresAt"] },
-      "ErrorResponse": { "type": "object", "additionalProperties": true, "required": ["error"], "properties": { "error": { "type": "string" }, "code": { "type": "string" } } }
+      "CreateSandboxSessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rows": { "type": "integer", "minimum": 1 },
+          "columns": { "type": "integer", "minimum": 1 },
+          "kind": { "$ref": "#/components/schemas/SandboxSessionKind" },
+          "command": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "CreateSandboxSessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "ticket", "expiresAt"],
+        "properties": { "id": { "type": "string" }, "ticket": { "type": "string" }, "expiresAt": { "type": "string", "format": "date-time" } }
+      },
+      "SandboxWorkspace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tenantId", "id", "sha256", "sizeBytes", "repositoryName", "createdBy", "createdAt", "expiresAt"],
+        "properties": {
+          "tenantId": { "type": "string" },
+          "id": { "type": "string" },
+          "sha256": { "type": "string" },
+          "sizeBytes": { "type": "integer" },
+          "repositoryName": { "type": "string" },
+          "revision": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ErrorResponse": { "type": "object", "additionalProperties": false, "required": ["error"], "properties": { "error": { "type": "string" }, "code": { "type": "string" } } }
     }
   }
 }

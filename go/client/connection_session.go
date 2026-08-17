@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	"github.com/postgrip-io/agent-sdk-protocol"
 )
 
 // ensureAgentSession is a no-op when a non-expired access token is cached.
@@ -56,24 +54,13 @@ func (c *Connection) hasAgentRuntimeCredentials() bool {
 }
 
 func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken string) error {
-	body := map[string]string{"refreshToken": refreshToken}
-	var out AgentSessionResponse
-	if err := c.doOpenAPI(ctx, openAPIRefreshAgentSession, nil, nil, body, &out); err != nil {
+	out, err := c.OpenAPI().RefreshAgentSession(ctx, OpenAPIRefreshAgentSessionRequestBody{RefreshToken: refreshToken})
+	if err != nil {
 		return err
 	}
 	c.applyAgentSession(out)
 	return nil
 }
-
-// AgentSessionResponse is the session envelope the orchestrator returns from
-// enroll and refresh.
-//
-// This was a local struct carrying five of the wire type's ten fields:
-// TenantID, TokenFamilyID, Status, TrustState and TrustReason were dropped on
-// decode, so a runtime could not tell that the session it had just refreshed
-// came back quarantined or untrusted. It also missed protocol's custom
-// UnmarshalJSON.
-type AgentSessionResponse = protocol.AgentSessionResponse
 
 func (c *Connection) applyAgentSession(s AgentSessionResponse) {
 	c.agentMu.Lock()

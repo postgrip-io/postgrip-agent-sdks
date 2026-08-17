@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 
-	"github.com/postgrip-io/agent-sdk-protocol"
 	"go.postgrip.io/sdk/failure"
 )
 
@@ -18,8 +17,8 @@ import (
 // Name must match ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$ and is unique per tenant
 // among live sandboxes, so a duplicate name is a 409. Image is required.
 func (c *Connection) CreateSandbox(ctx context.Context, req SandboxCreateRequest) (*Sandbox, error) {
-	var out Sandbox
-	if err := c.doOpenAPI(ctx, openAPICreateSandbox, nil, nil, req, &out); err != nil {
+	out, err := c.OpenAPI().CreateSandbox(ctx, req)
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -28,8 +27,8 @@ func (c *Connection) CreateSandbox(ctx context.Context, req SandboxCreateRequest
 // ListSandboxes returns the tenant's live sandboxes. Deleted ones are
 // filtered out here but stay fetchable by id through GetSandbox.
 func (c *Connection) ListSandboxes(ctx context.Context) ([]Sandbox, error) {
-	var out SandboxListResponse
-	if err := c.doOpenAPI(ctx, openAPIListSandboxes, nil, nil, nil, &out); err != nil {
+	out, err := c.OpenAPI().ListSandboxes(ctx)
+	if err != nil {
 		return nil, err
 	}
 	return out.Sandboxes, nil
@@ -41,8 +40,8 @@ func (c *Connection) GetSandbox(ctx context.Context, sandboxID string) (*Sandbox
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	var out Sandbox
-	if err := c.doOpenAPI(ctx, openAPIGetSandbox, map[string]string{"sandboxId": sandboxID}, nil, nil, &out); err != nil {
+	out, err := c.OpenAPI().GetSandbox(ctx, sandboxID)
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -55,7 +54,11 @@ func (c *Connection) StartSandbox(ctx context.Context, sandboxID string) (*Sandb
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	return c.sandboxLifecycle(ctx, openAPIStartSandbox, sandboxID)
+	out, err := c.OpenAPI().StartSandbox(ctx, sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // StopSandbox requests a running sandbox be stopped. Asynchronous, as
@@ -64,7 +67,11 @@ func (c *Connection) StopSandbox(ctx context.Context, sandboxID string) (*Sandbo
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	return c.sandboxLifecycle(ctx, openAPIStopSandbox, sandboxID)
+	out, err := c.OpenAPI().StopSandbox(ctx, sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // DeleteSandbox requests deletion. If no agent has been assigned yet this
@@ -74,12 +81,8 @@ func (c *Connection) DeleteSandbox(ctx context.Context, sandboxID string) (*Sand
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	return c.sandboxLifecycle(ctx, openAPIDeleteSandbox, sandboxID)
-}
-
-func (c *Connection) sandboxLifecycle(ctx context.Context, operationID openAPIOperationID, sandboxID string) (*Sandbox, error) {
-	var out Sandbox
-	if err := c.doOpenAPI(ctx, operationID, map[string]string{"sandboxId": sandboxID}, nil, nil, &out); err != nil {
+	out, err := c.OpenAPI().DeleteSandbox(ctx, sandboxID)
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -96,8 +99,8 @@ func (c *Connection) CreateSandboxSession(ctx context.Context, sandboxID string,
 	if err := sandboxIDRequired(sandboxID); err != nil {
 		return nil, err
 	}
-	var out CreateSandboxSessionResponse
-	if err := c.doOpenAPI(ctx, openAPICreateSandboxSession, map[string]string{"sandboxId": sandboxID}, nil, req, &out); err != nil {
+	out, err := c.OpenAPI().CreateSandboxSession(ctx, sandboxID, &req)
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -115,10 +118,10 @@ func (c *Connection) CreateSandboxSession(ctx context.Context, sandboxID string,
 func (c *Connection) UploadWorkspace(ctx context.Context, archive io.Reader, repositoryName, revision string) (*SandboxWorkspace, error) {
 	headers := map[string]string{"Content-Type": "application/gzip"}
 	if repositoryName != "" {
-		headers[protocol.SandboxWorkspaceRepositoryHeader] = repositoryName
+		headers[OpenAPIUploadWorkspaceHeaderXPostGripRepository] = repositoryName
 	}
 	if revision != "" {
-		headers[protocol.SandboxWorkspaceRevisionHeader] = revision
+		headers[OpenAPIUploadWorkspaceHeaderXPostGripRevision] = revision
 	}
 	var out SandboxWorkspace
 	if err := c.doStreamOpenAPI(ctx, openAPIUploadWorkspace, archive, headers, &out); err != nil {

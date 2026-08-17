@@ -7,7 +7,8 @@ import (
 
 // SignalWorkflow appends a signal to a workflow execution.
 func (c *Connection) SignalWorkflow(ctx context.Context, workflowID string, req SignalWorkflowRequest) error {
-	return c.doOpenAPI(ctx, openAPISignalWorkflow, map[string]string{"workflowId": workflowID}, nil, req, nil)
+	_, err := c.OpenAPI().SignalWorkflow(ctx, workflowID, req)
+	return err
 }
 
 // SignalWithStartWorkflow starts a workflow if it does not exist, otherwise
@@ -23,8 +24,8 @@ func (c *Connection) SignalWithStartWorkflow(ctx context.Context, workflowID str
 	if !c.hasAgentRuntimeCredentials() {
 		return nil, errors.New("postgrip-agent: signal-with-start can only run from a managed runtime; submit workflow.runtime to an agent pool")
 	}
-	var out SignalWithStartWorkflowResponse
-	if err := c.doOpenAPI(ctx, openAPISignalWithStartWorkflow, map[string]string{"workflowId": workflowID}, nil, req, &out); err != nil {
+	out, err := c.OpenAPI().SignalWithStartWorkflow(ctx, workflowID, req)
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -32,26 +33,22 @@ func (c *Connection) SignalWithStartWorkflow(ctx context.Context, workflowID str
 
 // CancelWorkflow requests cancellation of a running workflow.
 func (c *Connection) CancelWorkflow(ctx context.Context, workflowID, reason string) error {
-	body := map[string]any{}
-	if reason != "" {
-		body["reason"] = reason
-	}
-	return c.doOpenAPI(ctx, openAPICancelWorkflow, map[string]string{"workflowId": workflowID}, nil, body, nil)
+	body := OpenAPICancelWorkflowRequestBody{Reason: reason}
+	_, err := c.OpenAPI().CancelWorkflow(ctx, workflowID, &body)
+	return err
 }
 
 // TerminateWorkflow forcibly fails a running workflow with the given reason.
 func (c *Connection) TerminateWorkflow(ctx context.Context, workflowID, reason string) error {
-	body := map[string]any{}
-	if reason != "" {
-		body["reason"] = reason
-	}
-	return c.doOpenAPI(ctx, openAPITerminateWorkflow, map[string]string{"workflowId": workflowID}, nil, body, nil)
+	body := OpenAPITerminateWorkflowRequestBody{Reason: reason}
+	_, err := c.OpenAPI().TerminateWorkflow(ctx, workflowID, &body)
+	return err
 }
 
 // GetWorkflowExecution returns the durable workflow execution row.
 func (c *Connection) GetWorkflowExecution(ctx context.Context, workflowID string) (*WorkflowExecution, error) {
-	var out WorkflowExecution
-	if err := c.doOpenAPI(ctx, openAPIGetWorkflow, map[string]string{"workflowId": workflowID}, nil, nil, &out); err != nil {
+	out, err := c.OpenAPI().GetWorkflow(ctx, workflowID)
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -59,9 +56,5 @@ func (c *Connection) GetWorkflowExecution(ctx context.Context, workflowID string
 
 // GetWorkflowHistory returns the ordered durable history for a workflow.
 func (c *Connection) GetWorkflowHistory(ctx context.Context, workflowID string) ([]WorkflowHistoryEvent, error) {
-	var out []WorkflowHistoryEvent
-	if err := c.doOpenAPI(ctx, openAPIListWorkflowHistory, map[string]string{"workflowId": workflowID}, nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return c.OpenAPI().ListWorkflowHistory(ctx, workflowID)
 }

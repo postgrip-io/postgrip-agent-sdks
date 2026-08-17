@@ -9,6 +9,7 @@ export type { ActivityEventInput, ActivityInfo, ActivityOutputOptions, Milestone
 export { Client, ScheduleClient, TaskClient, WorkflowClient, WorkflowHandle, WorkflowUpdateHandle } from './client.js';
 export { Connection } from './connection.js';
 export type { ConnectionOptions } from './connection.js';
+export * from './generated/openapi.js';
 export {
   ApplicationFailure,
   CancelledFailure,

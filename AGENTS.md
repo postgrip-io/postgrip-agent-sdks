@@ -19,9 +19,9 @@ Follow native conventions: `gofmt` and idiomatic exported comments for Go, two-s
 
 ## Wire Contract Changes
 
-Treat JSON names, optionality, timestamp formats, and signing bytes as public API. Update the protocol and both hand-maintained mirrors atomically. The Go SDK must alias protocol-owned types rather than redeclare them. Do not alter the `agent-task-v1` canonical signing format without adding a new version.
+Treat JSON names, optionality, timestamp formats, and signing bytes as public API. HTTP models are OpenAPI-owned: update the canonical server contract, synchronize `openapi.json`, and regenerate every SDK. Runtime-only models remain protocol-owned and must update the TypeScript/Python mirrors atomically. The Go SDK must alias protocol types rather than redeclare them. Do not alter the `agent-task-v1` signing format without adding a version.
 
-The server-owned Agent HTTP contract is synchronized into `openapi.json`. After changing it, run `python3 scripts/generate_openapi.py`; CI runs the same command with `--check`. Never hand-edit generated operation files. Keep session refresh, signing, long polling, archive streaming, and WebSocket framing in the SDK adapters.
+After synchronizing the contract, run `python3 scripts/generate_openapi.py`; CI runs it with `--check`. Never hand-edit generated operation, client, or wire-type files. Keep schemas closed and complete. Authentication, signing, long polling, archive streaming, and WebSocket framing stay in transport adapters.
 
 ## Commits and Pull Requests
 

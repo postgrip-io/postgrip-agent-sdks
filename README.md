@@ -13,10 +13,12 @@ plus the shared Go wire-protocol package.
 ## OpenAPI Contract
 
 [`openapi.json`](openapi.json) is synchronized from the canonical server
-contract in `postgrip-web/api/agent-openapi.json`. It generates the internal
-method, path, authentication-lane, signing, streaming, and WebSocket metadata
-used by all three SDK transports. Public SDK APIs and runtime-specific logic
-remain hand-written.
+contract in `postgrip-web/api/agent-openapi.json`. It generates closed public
+wire models, per-operation request/response types, and typed low-level clients
+for Go, TypeScript, and Python. All 42 operations generate transport metadata;
+the 40 ordinary JSON operations also generate client methods. Stable public
+facades delegate to these clients. Workspace archive streaming and sandbox
+WebSocket sessions retain custom adapters while consuming generated metadata.
 
 ```sh
 python3 scripts/generate_openapi.py
@@ -24,8 +26,9 @@ python3 scripts/generate_openapi.py --check
 python3 scripts/generate_openapi.py --check-source ../postgrip-web/api/agent-openapi.json
 ```
 
-Never edit `*.gen.go` or a `generated/openapi.*` file directly. Update the
-canonical contract, synchronize `openapi.json`, and rerun the generator.
+Never edit `*.gen.go`, `typescript/src/generated/openapi.ts`, or
+`python/src/postgrip_agent/openapi.py` directly. Update the canonical contract,
+synchronize `openapi.json`, and rerun the generator.
 
 ## Development
 
@@ -41,9 +44,9 @@ python3 scripts/generate_openapi.py --check
 ```
 
 The root `go.work` makes the Go SDK consume the local protocol module during
-development. Cross-language wire changes must update `protocol/`,
-`typescript/src/types.ts`, and `python/src/postgrip_agent/types.py` in one
-commit.
+development. HTTP wire changes belong in the canonical server contract and
+must be followed by synchronization and regeneration here. Runtime-only wire
+changes still update `protocol/` and the TypeScript/Python mirrors together.
 
 See [MIGRATION.md](MIGRATION.md) for legacy Go module compatibility and release
 cutover notes.

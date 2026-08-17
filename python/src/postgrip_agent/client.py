@@ -17,7 +17,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from . import _signing
 from .errors import TaskFailedError, TimeoutFailure
-from .generated.openapi import (
+from .openapi import (
+    OpenAPIClient,
     OperationId,
     openapi_auth_lane_for_request,
     resolve_openapi_operation,
@@ -89,6 +90,7 @@ class Connection:
         # runtimes.
         signing_private_key = agent_signing_private_key or os.environ.get("POSTGRIP_AGENT_SIGNING_PRIVATE_KEY")
         self._agent_sign_priv: Ed25519PrivateKey | None = _signing.decode_private_key(signing_private_key) if signing_private_key else None
+        self.openapi = OpenAPIClient(self._request_openapi)
 
     @classmethod
     async def connect(cls, address: str | None = None, **options: Any) -> "Connection":
@@ -226,10 +228,7 @@ class Connection:
 
             if refresh_token:
                 self._apply_agent_session(
-                    self._request_openapi(
-                        OperationId.REFRESH_AGENT_SESSION,
-                        {"refreshToken": refresh_token},
-                    )
+                    self.openapi.refresh_agent_session({"refreshToken": refresh_token})
                 )
                 return True
 
@@ -247,33 +246,33 @@ class Connection:
             self._agent_access_expires_at = _parse_timestamp(session.get("accessExpiresAt"))
 
     def health(self) -> dict[str, Any]:
-        return self._request_openapi(OperationId.HEALTH)
+        return self.openapi.health()
 
     def ready(self) -> dict[str, Any]:
-        return self._request_openapi(OperationId.READY)
+        return self.openapi.ready()
 
     def list_namespaces(self) -> list[dict[str, Any]]:
-        return self._request_openapi(OperationId.LIST_NAMESPACES)
+        return self.openapi.list_namespaces()
 
     def create_namespace(self, name: str) -> dict[str, Any]:
-        return self._request_openapi(OperationId.CREATE_NAMESPACE, {"name": name})
+        return self.openapi.create_namespace({"name": name})
 
     def compact(self, *, retention_seconds: int = 0) -> dict[str, Any]:
-        return self._request_openapi(OperationId.COMPACT, {"retention_seconds": retention_seconds})
+        return self.openapi.compact({"retention_seconds": retention_seconds})
 
     def enqueue_task(self, request: dict[str, Any]) -> dict[str, Any]:
         if _runtime_only_task_type(str(request.get("type") or "")) and not self._has_agent_runtime_credentials():
             raise RuntimeError("postgrip-agent: workflow tasks can only be enqueued from a managed runtime; submit workflow.runtime to an agent pool")
-        return self._request_openapi(OperationId.ENQUEUE_TASK, request)
+        return self.openapi.enqueue_task(request)
 
     def list_tasks(self, **options: Any) -> list[dict[str, Any]]:
-        return self._request_openapi(OperationId.LIST_TASKS, query=_query_options(options))
+        return self.openapi.list_tasks(**_query_options(options))
 
     def get_task(self, task_id: str) -> dict[str, Any]:
-        return self._request_openapi(OperationId.GET_TASK, path_parameters={"taskId": task_id})
+        return self.openapi.get_task(task_id)
 
     def get_task_events(self, task_id: str) -> list[dict[str, Any]]:
-        return self._request_openapi(OperationId.LIST_TASK_EVENTS, path_parameters={"taskId": task_id})
+        return self.openapi.list_task_events(task_id)
 
     def complete_task(self, task_id: str, agent_id: str | None = None, result: dict[str, Any] | object = _MISSING, *, worker_id: str | None = None) -> dict[str, Any]:
         resolved_agent_id = agent_id or worker_id
@@ -282,24 +281,14 @@ class Connection:
         if result is _MISSING:
             raise TypeError("result is required")
         self.ensure_agent_session(agent_id=resolved_agent_id)
-        return self._request_openapi(
-            OperationId.COMPLETE_AGENT_TASK,
-            {"result": result},
-            path_parameters={"taskId": task_id},
-            query={"agent_id": resolved_agent_id},
-        )
+        return self.openapi.complete_agent_task(task_id, {"result": result}, agent_id=resolved_agent_id)
 
     def block_task(self, task_id: str, agent_id: str | None = None, reason: str | None = None, *, worker_id: str | None = None) -> dict[str, Any]:
         resolved_agent_id = agent_id or worker_id
         if not resolved_agent_id:
             raise TypeError("agent_id is required")
         self.ensure_agent_session(agent_id=resolved_agent_id)
-        return self._request_openapi(
-            OperationId.BLOCK_AGENT_TASK,
-            {"reason": reason},
-            path_parameters={"taskId": task_id},
-            query={"agent_id": resolved_agent_id},
-        )
+        return self.openapi.block_agent_task(task_id, {"reason": reason}, agent_id=resolved_agent_id)
 
     def fail_task(self, task_id: str, agent_id: str | None = None, error: str | object = _MISSING, result: dict[str, Any] | None = None, *, worker_id: str | None = None) -> dict[str, Any]:
         resolved_agent_id = agent_id or worker_id
@@ -308,24 +297,14 @@ class Connection:
         if error is _MISSING:
             raise TypeError("error is required")
         self.ensure_agent_session(agent_id=resolved_agent_id)
-        return self._request_openapi(
-            OperationId.FAIL_AGENT_TASK,
-            {"error": error, "result": result},
-            path_parameters={"taskId": task_id},
-            query={"agent_id": resolved_agent_id},
-        )
+        return self.openapi.fail_agent_task(task_id, {"error": error, "result": result}, agent_id=resolved_agent_id)
 
     def heartbeat_task(self, task_id: str, agent_id: str | None = None, event: dict[str, Any] | None = None, *, worker_id: str | None = None) -> dict[str, Any]:
         resolved_agent_id = agent_id or worker_id
         if not resolved_agent_id:
             raise TypeError("agent_id is required")
         self.ensure_agent_session(agent_id=resolved_agent_id)
-        return self._request_openapi(
-            OperationId.HEARTBEAT_AGENT_TASK,
-            {"event": event},
-            path_parameters={"taskId": task_id},
-            query={"agent_id": resolved_agent_id},
-        )
+        return self.openapi.heartbeat_agent_task(task_id, {"event": event}, agent_id=resolved_agent_id)
 
     def append_task_event(self, task_id: str, agent_id: str | None = None, event: dict[str, Any] | object = _MISSING, *, worker_id: str | None = None) -> dict[str, Any]:
         resolved_agent_id = agent_id or worker_id
@@ -334,91 +313,76 @@ class Connection:
         if event is _MISSING:
             raise TypeError("event is required")
         self.ensure_agent_session(agent_id=resolved_agent_id)
-        return self._request_openapi(
-            OperationId.APPEND_AGENT_TASK_EVENT,
-            {"event": event},
-            path_parameters={"taskId": task_id},
-            query={"agent_id": resolved_agent_id},
-        )
+        return self.openapi.append_agent_task_event(task_id, {"event": event}, agent_id=resolved_agent_id)
 
     def poll_task(self, *, namespace: str, queue: str, agent_id: str | None = None, worker_id: str | None = None, wait_seconds: int = 20, task_types: list[str] | tuple[str, ...] | None = None) -> dict[str, Any] | None:
         resolved_agent_id = agent_id or worker_id
         if not resolved_agent_id:
             raise TypeError("agent_id is required")
         self.ensure_agent_session(namespace=namespace, queue=queue, agent_id=resolved_agent_id)
-        query_values = {"namespace": namespace, "queue": queue, "agent_id": resolved_agent_id, "wait_seconds": wait_seconds}
-        if task_types:
-            query_values["task_types"] = ",".join(task_types)
-        return self._request_openapi(OperationId.POLL_AGENT_TASK, query=query_values).get("task")
+        response = self.openapi.poll_agent_task(
+            namespace=namespace,
+            queue=queue,
+            agent_id=resolved_agent_id,
+            wait_seconds=wait_seconds,
+            task_types=",".join(task_types) if task_types else None,
+        )
+        return response.get("task")
 
     def get_workflow(self, workflow_id_or_run_id: str) -> dict[str, Any]:
-        return self._request_openapi(OperationId.GET_WORKFLOW, path_parameters={"workflowId": workflow_id_or_run_id})
+        return self.openapi.get_workflow(workflow_id_or_run_id)
 
     def get_workflow_history(self, workflow_id_or_run_id: str) -> list[dict[str, Any]]:
-        return self._request_openapi(OperationId.LIST_WORKFLOW_HISTORY, path_parameters={"workflowId": workflow_id_or_run_id})
+        return self.openapi.list_workflow_history(workflow_id_or_run_id)
 
     def list_workflows(self, **options: Any) -> list[dict[str, Any]]:
-        return self._request_openapi(OperationId.LIST_WORKFLOWS, query=_query_options(options))
+        query_options, search = _generated_workflow_query(options)
+        return self.openapi.list_workflows(search=search, **query_options)
 
     def count_workflows(self, **options: Any) -> int:
-        return int(self._request_openapi(OperationId.COUNT_WORKFLOWS, query=_query_options(options))["count"])
+        query_options, search = _generated_workflow_query(options)
+        return int(self.openapi.count_workflows(search=search, **query_options)["count"])
 
     def signal_workflow(self, workflow_id_or_run_id: str, name: str, args: list[Any] | None = None) -> dict[str, Any]:
-        return self._request_openapi(
-            OperationId.SIGNAL_WORKFLOW,
-            {"name": name, "args": args or []},
-            path_parameters={"workflowId": workflow_id_or_run_id},
-        )
+        return self.openapi.signal_workflow(workflow_id_or_run_id, {"name": name, "args": args or []})
 
     def signal_with_start_workflow(self, workflow_id: str, request: dict[str, Any]) -> dict[str, Any]:
         if not self._has_agent_runtime_credentials():
             raise RuntimeError("postgrip-agent: signal-with-start can only run from a managed runtime; submit workflow.runtime to an agent pool")
-        return self._request_openapi(
-            OperationId.SIGNAL_WITH_START_WORKFLOW,
-            request,
-            path_parameters={"workflowId": workflow_id},
-        )
+        return self.openapi.signal_with_start_workflow(workflow_id, request)
 
     def cancel_workflow(self, workflow_id_or_run_id: str, reason: str | None = None) -> dict[str, Any]:
-        return self._request_openapi(
-            OperationId.CANCEL_WORKFLOW,
-            {"reason": reason or ""},
-            path_parameters={"workflowId": workflow_id_or_run_id},
-        )
+        return self.openapi.cancel_workflow(workflow_id_or_run_id, {"reason": reason or ""})
 
     def terminate_workflow(self, workflow_id_or_run_id: str, reason: str | None = None) -> dict[str, Any]:
-        return self._request_openapi(
-            OperationId.TERMINATE_WORKFLOW,
-            {"reason": reason or ""},
-            path_parameters={"workflowId": workflow_id_or_run_id},
-        )
+        return self.openapi.terminate_workflow(workflow_id_or_run_id, {"reason": reason or ""})
 
     def create_schedule(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self._request_openapi(OperationId.CREATE_SCHEDULE, request)
+        return self.openapi.create_schedule(request)
 
     def list_schedules(self, **options: Any) -> list[dict[str, Any]]:
-        return self._request_openapi(OperationId.LIST_SCHEDULES, query=_query_options(options))
+        return self.openapi.list_schedules(**_query_options(options))
 
     def get_schedule(self, schedule_id: str) -> dict[str, Any]:
-        return self._request_openapi(OperationId.GET_SCHEDULE, path_parameters={"scheduleId": schedule_id})
+        return self.openapi.get_schedule(schedule_id)
 
     def update_schedule(self, schedule_id: str, request: dict[str, Any]) -> dict[str, Any]:
-        return self._request_openapi(OperationId.UPDATE_SCHEDULE, request, path_parameters={"scheduleId": schedule_id})
+        return self.openapi.update_schedule(schedule_id, request)
 
     def delete_schedule(self, schedule_id: str) -> dict[str, Any]:
-        return self._request_openapi(OperationId.DELETE_SCHEDULE, path_parameters={"scheduleId": schedule_id})
+        return self.openapi.delete_schedule(schedule_id)
 
     def pause_schedule(self, schedule_id: str, request: dict[str, Any] | None = None) -> dict[str, Any]:
-        return self._request_openapi(OperationId.PAUSE_SCHEDULE, request or {}, path_parameters={"scheduleId": schedule_id})
+        return self.openapi.pause_schedule(schedule_id, request or {})
 
     def unpause_schedule(self, schedule_id: str, request: dict[str, Any] | None = None) -> dict[str, Any]:
-        return self._request_openapi(OperationId.UNPAUSE_SCHEDULE, request or {}, path_parameters={"scheduleId": schedule_id})
+        return self.openapi.unpause_schedule(schedule_id, request or {})
 
     def trigger_schedule(self, schedule_id: str, request: dict[str, Any] | None = None) -> dict[str, Any]:
-        return self._request_openapi(OperationId.TRIGGER_SCHEDULE, request or {}, path_parameters={"scheduleId": schedule_id})
+        return self.openapi.trigger_schedule(schedule_id, request or {})
 
     def backfill_schedule(self, schedule_id: str, request: dict[str, Any]) -> dict[str, Any]:
-        return self._request_openapi(OperationId.BACKFILL_SCHEDULE, request, path_parameters={"scheduleId": schedule_id})
+        return self.openapi.backfill_schedule(schedule_id, request)
 
 
 class Client:
@@ -900,6 +864,18 @@ def _query_options(options: dict[str, Any]) -> dict[str, Any]:
             continue
         query[key] = value
     return query
+
+
+def _generated_workflow_query(options: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    query = _query_options(options)
+    search = {
+        key.removeprefix("search."): value
+        for key, value in list(query.items())
+        if key.startswith("search.")
+    }
+    for key in search:
+        query.pop(f"search.{key}", None)
+    return query, search or None
 
 
 def _workflow_query_options(options: dict[str, Any]) -> dict[str, Any]:

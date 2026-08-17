@@ -89,6 +89,7 @@ from .agent import Agent
 from .worker import Worker
 from .workflow_worker import WorkflowWorker
 from .workflow import CancellationScope
+from .openapi import OpenAPIClient
 
 __all__ = [
     "ApplicationFailure",
@@ -118,6 +119,7 @@ __all__ = [
     "FailureInfo",
     "IsolationTier",
     "Namespace",
+    "OpenAPIClient",
     "PauseScheduleRequest",
     "PostGripAgentError",
     "RetryPolicy",

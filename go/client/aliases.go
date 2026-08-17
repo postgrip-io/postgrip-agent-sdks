@@ -10,63 +10,17 @@ import "github.com/postgrip-io/agent-sdk-protocol"
 // Re-export the wire types so customer code can stay within the client
 // package when reading task / workflow / schedule responses.
 type (
-	Task                            = protocol.Task
-	TaskState                       = protocol.TaskState
-	TaskResult                      = protocol.TaskResult
-	TaskEvent                       = protocol.TaskEvent
-	TaskEventInput                  = protocol.TaskEventInput
-	TaskEventKind                   = protocol.TaskEventKind
-	EnqueueTaskRequest              = protocol.EnqueueTaskRequest
-	FailureInfo                     = protocol.FailureInfo
-	ContinueAsNewResult             = protocol.ContinueAsNewResult
-	ShellExecPayload                = protocol.ShellExecPayload
-	WorkflowPayload                 = protocol.WorkflowPayload
-	WorkflowQueryPayload            = protocol.WorkflowQueryPayload
-	WorkflowUpdatePayload           = protocol.WorkflowUpdatePayload
-	WorkflowExecution               = protocol.WorkflowExecution
-	WorkflowHistoryEvent            = protocol.WorkflowHistoryEvent
-	WorkflowCountResponse           = protocol.WorkflowCountResponse
-	Namespace                       = protocol.Namespace
-	RetryPolicy                     = protocol.RetryPolicy
-	Schedule                        = protocol.Schedule
-	ScheduleSpec                    = protocol.ScheduleSpec
-	ScheduleCalendarSpec            = protocol.ScheduleCalendarSpec
-	ScheduleAction                  = protocol.ScheduleAction
-	CreateScheduleRequest           = protocol.CreateScheduleRequest
-	UpdateScheduleRequest           = protocol.UpdateScheduleRequest
-	PauseScheduleRequest            = protocol.PauseScheduleRequest
-	UnpauseScheduleRequest          = protocol.UnpauseScheduleRequest
-	TriggerScheduleRequest          = protocol.TriggerScheduleRequest
-	TriggerScheduleResponse         = protocol.TriggerScheduleResponse
-	BackfillScheduleRequest         = protocol.BackfillScheduleRequest
-	BackfillScheduleResponse        = protocol.BackfillScheduleResponse
-	ActivityTaskPayload             = protocol.ActivityTaskPayload
-	TimerPayload                    = protocol.TimerPayload
-	ContainerExecPayload            = protocol.ContainerExecPayload
-	SignalWithStartWorkflowRequest  = protocol.SignalWithStartWorkflowRequest
-	SignalWithStartWorkflowResponse = protocol.SignalWithStartWorkflowResponse
-	AgentPollDirective              = protocol.AgentPollDirective
-	PollTaskResponse                = protocol.PollTaskResponse
-	Sandbox                         = protocol.Sandbox
-	SandboxBackend                  = protocol.SandboxBackend
-	SandboxCreateRequest            = protocol.SandboxCreateRequest
-	SandboxDesiredState             = protocol.SandboxDesiredState
-	SandboxListResponse             = protocol.SandboxListResponse
-	SandboxNetworkPolicy            = protocol.SandboxNetworkPolicy
-	SandboxObservedState            = protocol.SandboxObservedState
-	SandboxPortMapping              = protocol.SandboxPortMapping
-	SandboxResourceLimits           = protocol.SandboxResourceLimits
-	SandboxWorkspace                = protocol.SandboxWorkspace
-	CreateSandboxSessionRequest     = protocol.CreateSandboxSessionRequest
-	CreateSandboxSessionResponse    = protocol.CreateSandboxSessionResponse
-	AgentMaintenanceWindow          = protocol.AgentMaintenanceWindow
-	AgentMaintenanceWindowRequest   = protocol.AgentMaintenanceWindowRequest
-	UpdateAgentRequest              = protocol.UpdateAgentRequest
-	CompleteTaskRequest             = protocol.CompleteTaskRequest
-	FailTaskRequest                 = protocol.FailTaskRequest
-	BlockTaskRequest                = protocol.BlockTaskRequest
-	SignalWorkflowRequest           = protocol.SignalWorkflowRequest
-	WorkflowRuntimePayload          = protocol.WorkflowRuntimePayload
+	ShellExecPayload              = protocol.ShellExecPayload
+	WorkflowPayload               = protocol.WorkflowPayload
+	WorkflowQueryPayload          = protocol.WorkflowQueryPayload
+	WorkflowUpdatePayload         = protocol.WorkflowUpdatePayload
+	ActivityTaskPayload           = protocol.ActivityTaskPayload
+	TimerPayload                  = protocol.TimerPayload
+	ContainerExecPayload          = protocol.ContainerExecPayload
+	AgentMaintenanceWindow        = protocol.AgentMaintenanceWindow
+	AgentMaintenanceWindowRequest = protocol.AgentMaintenanceWindowRequest
+	UpdateAgentRequest            = protocol.UpdateAgentRequest
+	WorkflowRuntimePayload        = protocol.WorkflowRuntimePayload
 )
 
 // Re-export task type / event kind / state constants.

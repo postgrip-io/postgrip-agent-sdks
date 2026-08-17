@@ -1,5 +1,9 @@
 import type { Connection } from './connection.js';
-import { resolveOpenAPIOperation } from './generated/openapi.js';
+import {
+  CONNECT_SANDBOX_SESSION_PATH_SESSION_ID,
+  CONNECT_SANDBOX_SESSION_QUERY_TICKET,
+  resolveOpenAPIOperation,
+} from './generated/openapi.js';
 import type {
   CreateSandboxSessionRequest,
   CreateSandboxSessionResponse,
@@ -301,8 +305,8 @@ export function sandboxRelayUrl(baseUrl: string, sessionId: string, ticket: stri
   else throw new Error(`postgrip-agent: sandbox relay base must be http(s) or ws(s): ${baseUrl}`);
   const operation = resolveOpenAPIOperation(
     'connectSandboxSession',
-    { sessionId },
-    new URLSearchParams({ ticket }),
+    { [CONNECT_SANDBOX_SESSION_PATH_SESSION_ID]: sessionId },
+    new URLSearchParams({ [CONNECT_SANDBOX_SESSION_QUERY_TICKET]: ticket }),
   );
   return `${origin}${operation.path}`;
 }

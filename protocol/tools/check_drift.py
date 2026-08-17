@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail-loud drift check between this Go protocol package and the
-hand-mirrored TypeScript / Python definitions in the SDK monorepo.
+TypeScript / Python definitions in the SDK monorepo.
 
 The contract being checked: every exported wire-format struct in
 types.go has an equivalent type with matching field names in
@@ -8,11 +8,10 @@ agent-sdk-typescript/src/types.ts and agent-sdk-python/src/postgrip_agent/types.
 
 What we check (deliberately narrow, since the source of truth is Go):
 
-    * Every exported Go struct in types.go (excluding pure-internal
-      helpers like requests/responses unique to the runtime API surface)
-      appears with the same name in the TS and Python type files.
-    * Every JSON-tagged field on those Go structs has a same-name field on
-      the TS interface and the Python TypedDict.
+    * OpenAPI-owned models have matching Go fields and are exposed through
+      generated-model aliases in TypeScript and Python.
+    * Runtime-only models that are outside OpenAPI remain hand-mirrored with
+      matching field names in all three languages.
 
 agent-sdk-go is checked under a *different* contract (`--local go-sdk`). It
 isn't a mirror — it imports this package and re-exports the wire types as
@@ -49,6 +48,7 @@ Exit codes: 0 clean, 1 drift detected, 2 tooling failure.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -159,6 +159,7 @@ MONOREPO_PATHS = {
     "ts":     [MONOREPO_ROOT / "typescript" / "src" / "types.ts"],
     "python": [MONOREPO_ROOT / "python" / "src" / "postgrip_agent" / "types.py"],
 }
+MONOREPO_OPENAPI_PATH = MONOREPO_ROOT / "openapi.json"
 
 # json:"..." -> field name (strip ",omitempty" etc.)
 JSON_TAG_RE = re.compile(r'json:"([^",]+)')
@@ -442,6 +443,44 @@ def parse_py_types(source: str) -> dict[str, set[str]]:
     return out
 
 
+def openapi_field_names(
+    schema: dict, schemas: dict[str, dict], seen: set[str] | None = None,
+) -> set[str]:
+    """Return an OpenAPI component's object property names, resolving local refs."""
+    seen = set() if seen is None else seen
+    reference = schema.get("$ref")
+    if reference:
+        prefix = "#/components/schemas/"
+        if not reference.startswith(prefix):
+            return set()
+        name = reference[len(prefix):]
+        if name in seen or name not in schemas:
+            return set()
+        return openapi_field_names(schemas[name], schemas, seen | {name})
+    fields = set(schema.get("properties", {}))
+    for part in schema.get("allOf", []):
+        fields.update(openapi_field_names(part, schemas, seen))
+    return fields
+
+
+def has_typescript_openapi_alias(source: str, name: str) -> bool:
+    """Whether the public compatibility type is backed by its OpenAPI component."""
+    pattern = (
+        rf"export\s+type\s+{re.escape(name)}(?:<[^>]*>)?\s*=\s*"
+        rf"[^;]*OpenAPIComponents\[['\"]{re.escape(name)}['\"]\]"
+    )
+    return re.search(pattern, source, re.MULTILINE | re.DOTALL) is not None
+
+
+def has_python_openapi_alias(source: str, name: str) -> bool:
+    """Whether the public compatibility type is backed by its OpenAPI component."""
+    pattern = (
+        rf"^{re.escape(name)}:\s*TypeAlias\s*=\s*"
+        rf"_openapi\.OpenAPI{re.escape(name)}\s*$"
+    )
+    return re.search(pattern, source, re.MULTILINE) is not None
+
+
 # Statuses worth retrying rather than reporting. raw.githubusercontent
 # rate-limits (429) and sheds load (5xx) during GitHub incidents, and a fetch
 # that fails for those reasons says nothing about the type files.
@@ -629,6 +668,29 @@ def self_test() -> int:
     check("parse_go_types fields", go_types.get("TimerPayload"), {"timerId", "durationMs"})
     check("parse_ts_types fields", parse_ts_types(SELF_TEST_TS).get("TimerPayload"), {"timerId", "durationMs"})
     check("parse_py_types fields", parse_py_types(SELF_TEST_PY).get("TimerPayload"), {"timerId", "durationMs"})
+    check(
+        "openapi_field_names",
+        openapi_field_names(
+            {"allOf": [{"$ref": "#/components/schemas/Base"}], "properties": {"durationMs": {}}},
+            {"Base": {"properties": {"timerId": {}}}},
+        ),
+        {"timerId", "durationMs"},
+    )
+    check(
+        "has_typescript_openapi_alias",
+        has_typescript_openapi_alias(
+            "export type TimerPayload<T = unknown> = Omit<OpenAPIComponents['TimerPayload'], 'value'> & { value?: T };",
+            "TimerPayload",
+        ),
+        True,
+    )
+    check(
+        "has_python_openapi_alias",
+        has_python_openapi_alias(
+            "TimerPayload: TypeAlias = _openapi.OpenAPITimerPayload\n", "TimerPayload"
+        ),
+        True,
+    )
 
     # Regression: json:"-" was captured as a field named "-", so any wire type
     # carrying a server-side-only field demanded a "-" field in both mirrors.
@@ -866,6 +928,15 @@ def main() -> int:
     ts_types = parse_ts_types(sources["ts"])
     py_types = parse_py_types(sources["python"])
 
+    openapi_schemas: dict[str, dict] = {}
+    if args.monorepo:
+        try:
+            openapi_document = json.loads(MONOREPO_OPENAPI_PATH.read_text(encoding="utf-8"))
+            openapi_schemas = openapi_document["components"]["schemas"]
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"check_drift: could not load monorepo OpenAPI schemas: {exc}", file=sys.stderr)
+            return 2
+
     failures: list[str] = []
     if args.monorepo:
         failures.extend(check_go_sdk(MONOREPO_ROOT / "go", sources["go"]))
@@ -885,6 +956,18 @@ def main() -> int:
         if go_fields is None:
             failures.append(f"  {name}: not found in types.go (TRACKED_TYPES out of date?)")
             continue
+        if name in openapi_schemas:
+            schema_fields = openapi_field_names(openapi_schemas[name], openapi_schemas, {name})
+            failures.extend(diff_field_sets(name, "OpenAPI", go_fields, schema_fields))
+            if not has_typescript_openapi_alias(sources["ts"], name):
+                failures.append(
+                    f"  {name}: TypeScript public type is not backed by OpenAPIComponents['{name}']"
+                )
+            if not has_python_openapi_alias(sources["python"], name):
+                failures.append(
+                    f"  {name}: Python public type is not backed by _openapi.OpenAPI{name}"
+                )
+            continue
         ts_fields = ts_types.get(name)
         if ts_fields is None:
             failures.append(f"  {name}: missing TypeScript interface in typescript/src/types.ts")
@@ -902,15 +985,18 @@ def main() -> int:
             print(line, file=sys.stderr)
         print(file=sys.stderr)
         print(
-            "Resolve by either updating the missing language to mirror Go "
-            "(if the Go change is the source of truth) or rolling back the "
-            "Go change. Update tools/check_drift.py:TRACKED_TYPES if a type "
-            "was renamed.",
+            "Resolve OpenAPI-owned models in openapi.json and regenerate the "
+            "SDKs. Resolve runtime-only models in each language mirror. Update "
+            "tools/check_drift.py:TRACKED_TYPES if a type was renamed.",
             file=sys.stderr,
         )
         return 1
 
-    print(f"Drift check OK ({len(TRACKED_TYPES)} types verified across go / ts / python).")
+    generated_count = sum(name in openapi_schemas for name in TRACKED_TYPES)
+    print(
+        f"Drift check OK ({generated_count} OpenAPI-owned and "
+        f"{len(TRACKED_TYPES) - generated_count} runtime-only types verified)."
+    )
     return 0
 
 
