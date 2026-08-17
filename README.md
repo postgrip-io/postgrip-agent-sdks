@@ -78,6 +78,25 @@ func main() {
 }
 ```
 
+To run the runtime from an image instead of a host command, set `Image` — and
+optionally an `Isolation` floor of `client.IsolationTierContainer` (the
+default) or `client.IsolationTierMicroVM`:
+
+```go
+_, err = c.Task.WorkflowRuntime(ctx, client.WorkflowRuntimeInput{
+    Queue:        "default",
+    Image:        "ghcr.io/example/workflow-runtime:1.4.0",
+    Isolation:    client.IsolationTierMicroVM,
+    RuntimeQueue: "default",
+})
+```
+
+`Isolation` is a floor, not an exact match: container work may be scheduled
+onto a stronger tier, but microvm work is never downgraded — it only leases to
+agents advertising that tier. It requires `Image`; a command-only runtime
+executes directly on the agent host, which honors no isolation floor, and the
+orchestrator rejects that combination at enqueue.
+
 ## Workflows and activities
 
 ```go

@@ -60,6 +60,16 @@ type WorkflowRuntimeInput struct {
 	RuntimeQueue        string
 	TimeoutSeconds      int
 	LeaseTimeoutSeconds int
+	// Isolation is the isolation floor the runtime requires, one of
+	// IsolationTierContainer (the default) or IsolationTierMicroVM. It is a
+	// floor, not an exact match: container work may be scheduled onto a
+	// stronger tier, microvm work is never downgraded and only leases to
+	// agents advertising that tier.
+	//
+	// Requires Image. The orchestrator rejects an isolation floor on a
+	// command-only runtime, which would execute directly on the agent host
+	// and honor no floor at all.
+	Isolation string
 }
 
 // WorkflowStartOptions is the SDK-side input to WorkflowClient.Start. It

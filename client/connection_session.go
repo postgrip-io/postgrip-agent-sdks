@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"github.com/postgrip-io/agent-sdk-protocol"
 )
 
 // ensureAgentSession is a no-op when a non-expired access token is cached.
@@ -56,7 +58,7 @@ func (c *Connection) hasAgentRuntimeCredentials() bool {
 
 func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken string) error {
 	body := map[string]string{"refreshToken": refreshToken}
-	var out agentSessionResponse
+	var out AgentSessionResponse
 	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/session/refresh", body, &out, false); err != nil {
 		return err
 	}
@@ -64,15 +66,17 @@ func (c *Connection) refreshAgentSession(ctx context.Context, refreshToken strin
 	return nil
 }
 
-type agentSessionResponse struct {
-	AgentID          string    `json:"agentId"`
-	AccessToken      string    `json:"accessToken"`
-	RefreshToken     string    `json:"refreshToken"`
-	AccessExpiresAt  time.Time `json:"accessExpiresAt"`
-	RefreshExpiresAt time.Time `json:"refreshExpiresAt"`
-}
+// AgentSessionResponse is the session envelope the orchestrator returns from
+// enroll and refresh.
+//
+// This was a local struct carrying five of the wire type's ten fields:
+// TenantID, TokenFamilyID, Status, TrustState and TrustReason were dropped on
+// decode, so a runtime could not tell that the session it had just refreshed
+// came back quarantined or untrusted. It also missed protocol's custom
+// UnmarshalJSON.
+type AgentSessionResponse = protocol.AgentSessionResponse
 
-func (c *Connection) applyAgentSession(s agentSessionResponse) {
+func (c *Connection) applyAgentSession(s AgentSessionResponse) {
 	c.agentMu.Lock()
 	defer c.agentMu.Unlock()
 	if s.AgentID != "" {
@@ -90,7 +94,7 @@ func (c *Connection) applyAgentSession(s agentSessionResponse) {
 // an httptest server. Production code receives these credentials from a host
 // agent when it launches a managed workflow runtime.
 func (c *Connection) SeedAgentSession(agentID, accessToken string, accessExpiresAt time.Time) {
-	c.applyAgentSession(agentSessionResponse{
+	c.applyAgentSession(AgentSessionResponse{
 		AgentID:         agentID,
 		AccessToken:     accessToken,
 		AccessExpiresAt: accessExpiresAt,

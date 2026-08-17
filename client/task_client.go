@@ -78,7 +78,7 @@ func (t *TaskClient) WorkflowRuntime(ctx context.Context, in WorkflowRuntimeInpu
 	if runtimeQueue == "" {
 		runtimeQueue = defaultWorkflowRuntimeQueue()
 	}
-	payload := workflowRuntimePayload{
+	payload := WorkflowRuntimePayload{
 		RuntimeID:      in.RuntimeID,
 		Image:          in.Image,
 		Command:        in.Command,
@@ -89,6 +89,7 @@ func (t *TaskClient) WorkflowRuntime(ctx context.Context, in WorkflowRuntimeInpu
 		Queue:          runtimeQueue,
 		PullPolicy:     in.PullPolicy,
 		TimeoutSeconds: in.TimeoutSeconds,
+		Isolation:      in.Isolation,
 	}
 	return t.Enqueue(ctx, EnqueueInput{
 		Namespace:           in.Namespace,
@@ -171,17 +172,4 @@ func (t *TaskClient) WatchEvents(ctx context.Context, taskID string) (<-chan Tas
 		}
 	}()
 	return out, nil
-}
-
-type workflowRuntimePayload struct {
-	RuntimeID      string            `json:"runtime_id,omitempty"`
-	Image          string            `json:"image,omitempty"`
-	Command        string            `json:"command"`
-	Args           []string          `json:"args,omitempty"`
-	Env            map[string]string `json:"env,omitempty"`
-	WorkingDir     string            `json:"working_dir,omitempty"`
-	Namespace      string            `json:"namespace,omitempty"`
-	Queue          string            `json:"queue,omitempty"`
-	PullPolicy     string            `json:"pull_policy,omitempty"`
-	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
 }

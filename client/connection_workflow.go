@@ -15,12 +15,20 @@ func (c *Connection) SignalWorkflow(ctx context.Context, workflowID string, req 
 
 // SignalWithStartWorkflow starts a workflow if it does not exist, otherwise
 // appends a signal to the existing run.
-func (c *Connection) SignalWithStartWorkflow(ctx context.Context, req SignalWithStartWorkflowRequest) (*Task, error) {
+//
+// The workflow id is a path segment, not a body field. The orchestrator routes
+// this off the `/signal-with-start` suffix on a per-workflow path; a request to
+// the collection path is read as a workflow *named* "signal-with-start" and
+// 404s. The body's WorkflowID, when set, still wins as the start target — the
+// server takes firstNonEmpty(body.WorkflowID, pathID) — so pass the same id in
+// both unless you specifically intend to signal one workflow and start another.
+func (c *Connection) SignalWithStartWorkflow(ctx context.Context, workflowID string, req SignalWithStartWorkflowRequest) (*SignalWithStartWorkflowResponse, error) {
 	if !c.hasAgentRuntimeCredentials() {
 		return nil, errors.New("postgrip-agent: signal-with-start can only run from a managed runtime; submit workflow.runtime to an agent pool")
 	}
-	var out Task
-	if err := c.do(ctx, http.MethodPost, "/api/v1/workflows/signal-with-start", req, &out, false); err != nil {
+	path := "/api/v1/workflows/" + url.PathEscape(workflowID) + "/signal-with-start"
+	var out SignalWithStartWorkflowResponse
+	if err := c.do(ctx, http.MethodPost, path, req, &out, false); err != nil {
 		return nil, err
 	}
 	return &out, nil
