@@ -44,6 +44,8 @@ When you add or rename a field on a wire struct, write the matching change in th
 
 **Use the same branch name in every repo** for a coordinated wire change. `github_ref_candidates()` tries the PR's own branch in each peer repo before falling back to `main`, so identical branch names keep all four PRs green while they're open. They still have to merge back-to-back: once a protocol change lands on `main`, the TS/Python mirrors are red until theirs land too.
 
+**Push all the branches before opening any PR.** The peer lookup resolves at job-run time, so a branch pushed first has its CI fetch peers that don't exist yet, silently fall back to `main`, and fail against the un-mirrored old shape. It looks exactly like real drift and it isn't — it's a race with your own push order. Re-run the job once every branch is up. (Pushing all branches, *then* opening PRs, avoids it entirely.)
+
 ### agent-sdk-go is checked differently
 
 The Go SDK is not a mirror — it imports this package and re-exports the wire types as aliases, so there are no field sets to compare. Its failure mode is *redeclaration*: when its protocol pin predates a type, it grows a local copy that compiles cleanly and mirrors nothing. `--local go-sdk` scans the SDK tree and fails on any struct or string-literal constant whose name collides with something protocol owns, matched case-insensitively (an unexported `workflowRuntimePayload` forks the wire shape exactly as an exported one does). The fix is always the same: alias it, and bump the pin if the type is missing upstream.
