@@ -502,4 +502,167 @@ class ActivityOptions(TypedDict, total=False):
     retry: RetryPolicy
 
 
+# --- sandbox platform ------------------------------------------------------
+#
+# Mirrors agent-sdk-protocol/sandbox.go. Timestamps are RFC3339 strings, as
+# everywhere else in this module.
+
+SandboxBackend: TypeAlias = Literal["auto", "docker", "podman", "firecracker"]
+SandboxDesiredState: TypeAlias = Literal["running", "stopped", "deleted"]
+# Only "running", "stopped", "deleted" and "failed" are reported by agents
+# today, and "scheduling" is written by the control plane at placement. The
+# rest exist for forward compatibility — treat an unexpected value as
+# in-flight rather than as an error.
+SandboxObservedState: TypeAlias = Literal[
+    "requested",
+    "scheduling",
+    "provisioning",
+    "setting_up",
+    "running",
+    "stopping",
+    "stopped",
+    "starting",
+    "deleting",
+    "deleted",
+    "failed",
+]
+SandboxSessionKind: TypeAlias = Literal["pty", "exec"]
+
+
+class SandboxResourceLimits(TypedDict, total=False):
+    cpus: float
+    memoryBytes: int
+    diskBytes: int
+
+
+class SandboxPortMapping(TypedDict, total=False):
+    hostPort: int
+    guestPort: int
+    protocol: str
+
+
+class SandboxNetworkPolicy(TypedDict, total=False):
+    """``internetEgress`` with ``denyHostAccess`` or ``allowCidrs`` is a 400."""
+
+    internetEgress: bool
+    allowCidrs: list[str]
+    denyHostAccess: bool
+    ports: list[SandboxPortMapping]
+
+
+class Sandbox(TypedDict, total=False):
+    tenantId: str
+    id: str
+    name: str
+    createdBy: str
+    agentId: str
+    desiredState: SandboxDesiredState
+    observedState: SandboxObservedState
+    generation: int
+    observedGeneration: int
+    backend: SandboxBackend
+    isolationClass: str
+    image: str
+    architecture: str
+    workspaceId: str
+    repositoryName: str
+    setupCommand: list[str]
+    credentialRefs: list[str]
+    resourceLimits: SandboxResourceLimits
+    networkPolicy: SandboxNetworkPolicy
+    labels: dict[str, str]
+    runtimeInstanceId: str
+    failureCode: str
+    failureMessage: str
+    # The lifecycle timestamps are `*time.Time` on the wire, so an unset one
+    # arrives as JSON null, not as an absent key. total=False covers only the
+    # absent case, which left a typed consumer unable to represent a response
+    # the server genuinely sends.
+    expiresAt: str | None
+    lastActivityAt: str | None
+    createdAt: str
+    updatedAt: str
+    stoppedAt: str | None
+    deletedAt: str | None
+
+
+class SandboxCreateRequest(TypedDict):
+    """Body of ``POST /api/v1/sandboxes``.
+
+    ``name`` must match ``^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$`` and is unique per
+    tenant among live sandboxes, so a duplicate is a 409. ``credentialRefs`` is
+    reserved — any non-empty value is rejected with 400 today.
+
+    ``name`` and ``image`` are required keys, following this module's
+    ``NotRequired`` convention rather than ``total=False``: under total=False a
+    type checker accepted ``{}`` as a valid request, so the one thing this
+    mirror could have caught before the round trip — a create the server
+    answers with 400 — went through as well-typed.
+    """
+
+    name: str
+    image: str
+    backend: NotRequired[SandboxBackend]
+    architecture: NotRequired[str]
+    workspaceId: NotRequired[str]
+    repositoryName: NotRequired[str]
+    setupCommand: NotRequired[list[str]]
+    credentialRefs: NotRequired[list[str]]
+    resourceLimits: NotRequired[SandboxResourceLimits]
+    networkPolicy: NotRequired[SandboxNetworkPolicy]
+    labels: NotRequired[dict[str, str]]
+    expiresAt: NotRequired[str]
+
+
+class SandboxListResponse(TypedDict):
+    """The list endpoint returns this envelope, not a bare array.
+
+    Required, not ``total=False``: the envelope is always present and an empty
+    result is an empty list, so allowing a missing key would have described a
+    response the endpoint never sends.
+    """
+
+    sandboxes: list[Sandbox]
+
+
+class SandboxWorkspace(TypedDict, total=False):
+    """``id`` is not the digest: uploading identical bytes returns the
+    pre-existing record, so do not assume a fresh id per upload."""
+
+    tenantId: str
+    id: str
+    sha256: str
+    sizeBytes: int
+    repositoryName: str
+    revision: str
+    createdBy: str
+    createdAt: str
+    expiresAt: str
+
+
+class CreateSandboxSessionRequest(TypedDict, total=False):
+    """``rows``/``columns`` default to 24x80 and are fixed for the session's
+    life — there is no resize channel. ``kind`` defaults to ``pty``; ``exec``
+    requires ``command``. The sandbox must be observed running and assigned to
+    an agent, else the server returns a retryable 400."""
+
+    rows: int
+    columns: int
+    kind: SandboxSessionKind
+    command: list[str]
+
+
+class CreateSandboxSessionResponse(TypedDict, total=False):
+    """The ticket is returned exactly once and is short-lived."""
+
+    id: str
+    ticket: str
+    expiresAt: str
+
+
+# Computed last, deliberately. It used to sit above the sandbox section, and a
+# `globals()` comprehension only sees what has already been defined — so every
+# sandbox type was silently absent from `from postgrip_agent.types import *`,
+# unlike every other public type in this module. Keep new declarations above
+# this line.
 __all__ = [name for name in globals() if not name.startswith("_")]
