@@ -1,6 +1,16 @@
 from . import activity, types, workflow
 from .client import Client, Connection, ScheduleClient, TaskClient, WorkflowClient, WorkflowHandle, WorkflowUpdateHandle
 from .errors import ApplicationFailure, CancelledFailure, PostGripAgentError, TaskFailedError, TimeoutFailure
+from .sandbox import (
+    SANDBOX_EXEC_CLOSE_STATUS_BASE,
+    SANDBOX_EXEC_CLOSE_STATUS_MAX,
+    SANDBOX_RELAY_MAX_FRAME_BYTES,
+    SandboxClient,
+    SandboxSession,
+    sandbox_exec_exit_code,
+    sandbox_is_ready,
+    sandbox_relay_url,
+)
 from .types import (
     ActivityFunction,
     ActivityInvocationPayload,
@@ -111,7 +121,12 @@ __all__ = [
     "PauseScheduleRequest",
     "PostGripAgentError",
     "RetryPolicy",
+    "SANDBOX_EXEC_CLOSE_STATUS_BASE",
+    "SANDBOX_EXEC_CLOSE_STATUS_MAX",
+    "SANDBOX_RELAY_MAX_FRAME_BYTES",
     "Sandbox",
+    "SandboxClient",
+    "SandboxSession",
     "SandboxBackend",
     "SandboxCreateRequest",
     "SandboxDesiredState",
@@ -122,6 +137,9 @@ __all__ = [
     "SandboxResourceLimits",
     "SandboxSessionKind",
     "SandboxWorkspace",
+    "sandbox_exec_exit_code",
+    "sandbox_is_ready",
+    "sandbox_relay_url",
     "Schedule",
     "ScheduleAction",
     "ScheduleCalendarSpec",

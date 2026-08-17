@@ -19,6 +19,14 @@ dependencies = [
   "cryptography>=42",
 ]
 
+# Sandbox sessions (interactive pty / exec) speak WebSocket. Kept optional so
+# the base install stays dependency-light for callers who only use the
+# lifecycle and workflow APIs, which are plain HTTP.
+[project.optional-dependencies]
+sandbox = [
+  "websockets>=13",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
