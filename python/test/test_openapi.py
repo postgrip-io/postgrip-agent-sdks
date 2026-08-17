@@ -1,4 +1,6 @@
 import unittest
+from types import NoneType
+from typing import get_args, get_type_hints
 
 from postgrip_agent import Connection
 from postgrip_agent.openapi import (
@@ -7,6 +9,8 @@ from postgrip_agent.openapi import (
     EnqueueTaskRequestBody,
     EnqueueTaskResponseBody,
     OpenAPIClient,
+    OpenAPIPollTaskResponse,
+    OpenAPISandbox,
     OperationId,
     resolve_openapi_operation,
 )
@@ -101,6 +105,14 @@ class OpenAPIOperationTests(unittest.TestCase):
             client.cancel_workflow("workflow-1")  # type: ignore[call-arg]
         with self.assertRaises(TypeError):
             client.create_sandbox_session("sandbox-1")  # type: ignore[call-arg]
+
+    def test_nullable_response_properties_are_generated(self) -> None:
+        poll_hints = get_type_hints(OpenAPIPollTaskResponse)
+        self.assertIn(NoneType, get_args(poll_hints["task"]))
+        sandbox_hints = get_type_hints(OpenAPISandbox)
+        for field in ("expiresAt", "lastActivityAt", "stoppedAt", "deletedAt"):
+            with self.subTest(field=field):
+                self.assertIn(NoneType, get_args(sandbox_hints[field]))
 
 
 if __name__ == "__main__":

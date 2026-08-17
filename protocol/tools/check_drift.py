@@ -520,6 +520,32 @@ def has_python_openapi_alias(source: str, name: str) -> bool:
     return re.search(pattern, source, re.MULTILINE) is not None
 
 
+def inferred_openapi_alias_types(ts_source: str, py_source: str) -> set[str]:
+    """Infer OpenAPI ownership when legacy checkouts lack the monorepo generator.
+
+    A type is treated as OpenAPI-owned when either language exposes the
+    generated compatibility alias. The caller separately requires both
+    aliases, so a one-sided cutover is reported instead of being mistaken for
+    a hand-maintained runtime model.
+    """
+    return {
+        name
+        for name in TRACKED_TYPES
+        if has_typescript_openapi_alias(ts_source, name)
+        or has_python_openapi_alias(py_source, name)
+    }
+
+
+def diff_openapi_aliases(
+    names: Iterable[str], ts_source: str, py_source: str,
+) -> Iterable[str]:
+    for name in sorted(names):
+        if not has_typescript_openapi_alias(ts_source, name):
+            yield f"  {name}: TypeScript public type is not backed by OpenAPIComponents['{name}']"
+        if not has_python_openapi_alias(py_source, name):
+            yield f"  {name}: Python public type is not backed by _openapi.OpenAPI{name}"
+
+
 # Statuses worth retrying rather than reporting. raw.githubusercontent
 # rate-limits (429) and sheds load (5xx) during GitHub incidents, and a fetch
 # that fails for those reasons says nothing about the type files.
@@ -753,6 +779,23 @@ def self_test() -> int:
             "TimerPayload: TypeAlias = _openapi.OpenAPITimerPayload\n", "TimerPayload"
         ),
         True,
+    )
+    alias_ts = "export type Task = OpenAPIComponents['Task'];\n"
+    alias_py = "Task: TypeAlias = _openapi.OpenAPITask\n"
+    check(
+        "inferred_openapi_alias_types",
+        inferred_openapi_alias_types(alias_ts, alias_py),
+        {"Task"},
+    )
+    check(
+        "diff_openapi_aliases accepts mirrored aliases",
+        list(diff_openapi_aliases({"Task"}, alias_ts, alias_py)),
+        [],
+    )
+    check(
+        "diff_openapi_aliases rejects one-sided aliases",
+        list(diff_openapi_aliases({"Task"}, alias_ts, "")),
+        ["  Task: Python public type is not backed by _openapi.OpenAPITask"],
     )
 
     # Regression: json:"-" was captured as a field named "-", so any wire type
@@ -1051,21 +1094,23 @@ def main() -> int:
                     f"  {name}: protocol type {protocol_name} is neither a parsed struct nor a string enum"
                 )
 
-            # Compatibility aliases are required only for the historical
-            # public models. Generated-only models are exported directly from
-            # each language's generated module.
-            if name in TRACKED_TYPES:
-                if not has_typescript_openapi_alias(sources["ts"], name):
-                    failures.append(
-                        f"  {name}: TypeScript public type is not backed by OpenAPIComponents['{name}']"
-                    )
-                if not has_python_openapi_alias(sources["python"], name):
-                    failures.append(
-                        f"  {name}: Python public type is not backed by _openapi.OpenAPI{name}"
-                    )
+    # Monorepo mode reads complete ownership from the generator. Legacy
+    # sibling/GitHub modes cannot assume the private monorepo is available,
+    # so infer the cutover from either public compatibility alias and then
+    # require the other language to agree.
+    compatibility_openapi_types = (
+        set(TRACKED_TYPES) & openapi_protocol_schemas
+        if args.monorepo
+        else inferred_openapi_alias_types(sources["ts"], sources["python"])
+    )
+    failures.extend(
+        diff_openapi_aliases(
+            compatibility_openapi_types, sources["ts"], sources["python"]
+        )
+    )
 
     runtime_tracked_types = [
-        name for name in TRACKED_TYPES if name not in openapi_protocol_schemas
+        name for name in TRACKED_TYPES if name not in compatibility_openapi_types
     ]
     for name in runtime_tracked_types:
         go_fields = go_types.get(name)
@@ -1096,8 +1141,13 @@ def main() -> int:
         )
         return 1
 
+    openapi_count = (
+        len(openapi_protocol_schemas)
+        if args.monorepo
+        else len(compatibility_openapi_types)
+    )
     print(
-        f"Drift check OK ({len(openapi_protocol_schemas)} protocol-backed OpenAPI and "
+        f"Drift check OK ({openapi_count} protocol-backed OpenAPI and "
         f"{len(runtime_tracked_types)} runtime-only types verified)."
     )
     return 0

@@ -8,7 +8,7 @@ import re
 from typing import Any, Literal, Mapping, Protocol, Sequence, TypeAlias, TypedDict, cast
 from urllib.parse import quote, urlencode
 
-OPENAPI_SPEC_SHA256 = '1e297793b59ae69b88f5df3082fad26bdc392215a4b2d17582c1d418de3655e8'
+OPENAPI_SPEC_SHA256 = 'b306bb05b746e43687e3a48c50a23b33e688e1dfae7e1a67a4f99c7318942834'
 OPENAPI_OPERATION_COUNT = 42
 OPENAPI_CLIENT_OPERATION_COUNT = 40
 CONNECT_SANDBOX_SESSION_PATH_SESSION_ID = 'sessionId'
@@ -402,7 +402,7 @@ class _SchemaAgentPollDirective(_SchemaAgentPollDirectiveOptional):
     type: _SchemaAgentPollDirectiveType
 
 class _SchemaPollTaskResponseOptional(TypedDict, total=False):
-    task: _SchemaTask
+    task: _SchemaTask | None
     directive: _SchemaAgentPollDirective
 
 class _SchemaPollTaskResponse(_SchemaPollTaskResponseOptional):
@@ -484,10 +484,10 @@ class _SchemaSandboxOptional(TypedDict, total=False):
     runtimeInstanceId: str
     failureCode: str
     failureMessage: str
-    expiresAt: str
-    lastActivityAt: str
-    stoppedAt: str
-    deletedAt: str
+    expiresAt: str | None
+    lastActivityAt: str | None
+    stoppedAt: str | None
+    deletedAt: str | None
 
 class _SchemaSandbox(_SchemaSandboxOptional):
     tenantId: str

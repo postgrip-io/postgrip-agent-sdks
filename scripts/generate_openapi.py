@@ -210,6 +210,15 @@ def go_schema_type(schema: dict[str, Any], optional: bool = False) -> str:
         return f"*{value}" if optional else value
     if not schema:
         return "any"
+    variants = schema.get("oneOf") or schema.get("anyOf")
+    if variants:
+        non_null = [variant for variant in variants if variant.get("type") != "null"]
+        if len(non_null) == 1 and len(non_null) != len(variants):
+            value = go_schema_type(non_null[0])
+            if value == "any" or value.startswith(("*", "[]", "map[")):
+                return value
+            return f"*{value}"
+        return "any"
     schema_type = schema.get("type")
     if schema_type == "array":
         return f"[]{go_schema_type(schema.get('items', {}))}"
@@ -496,6 +505,8 @@ def typescript_schema_type(schema: dict[str, Any], indent: str = "") -> str:
         return "Uint8Array"
     if schema_type == "string":
         return "string"
+    if schema_type == "null":
+        return "null"
     return "unknown"
 
 
@@ -543,6 +554,8 @@ def python_schema_type(schema: dict[str, Any]) -> str:
         return "bytes"
     if schema_type == "string":
         return "str"
+    if schema_type == "null":
+        return "None"
     return "Any"
 
 

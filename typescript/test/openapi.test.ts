@@ -5,9 +5,11 @@ import {
   OPENAPI_OPERATION_COUNT,
   resolveOpenAPIOperation,
   OpenAPIClient,
+  type OpenAPIPollTaskResponse,
   type OpenAPIRequestBody,
   type OpenAPIQueryParameters,
   type OpenAPIResponseBody,
+  type OpenAPISandbox,
   type OpenAPITransport,
 } from '../src/index.js';
 
@@ -51,6 +53,13 @@ describe('generated OpenAPI operations', () => {
     expectTypeOf<Parameters<OpenAPIClient['pauseSchedule']>[0]>().toMatchTypeOf<{
       readonly body: OpenAPIRequestBody<'pauseSchedule'>;
     }>();
+    expectTypeOf<OpenAPIPollTaskResponse['task']>().toEqualTypeOf<
+      OpenAPIResponseBody<'getTask'> | null | undefined
+    >();
+    expectTypeOf<OpenAPISandbox['expiresAt']>().toEqualTypeOf<string | null | undefined>();
+    expectTypeOf<OpenAPISandbox['lastActivityAt']>().toEqualTypeOf<string | null | undefined>();
+    expectTypeOf<OpenAPISandbox['stoppedAt']>().toEqualTypeOf<string | null | undefined>();
+    expectTypeOf<OpenAPISandbox['deletedAt']>().toEqualTypeOf<string | null | undefined>();
   });
 
   it('exposes a generated typed client facade', async () => {
