@@ -54,7 +54,7 @@ async def main() -> None:
         await submit_managed_runtime()
         return
 
-    address = os.environ.get("POSTGRIP_AGENTORCHESTRATOR_URL") or os.environ.get("POSTGRIP_AGENT_LIVE_SERVER_URL") or "https://agentorchestrator.postgrip.app"
+    address = os.environ.get("POSTGRIP_AGENTORCHESTRATOR_URL") or os.environ.get("POSTGRIP_AGENT_LIVE_SERVER_URL") or "https://agentorchestrator1.postgrip.io"
     queue = os.environ.get("POSTGRIP_AGENT_TASK_QUEUE", "python-example")
     agent_id = os.environ.get("POSTGRIP_AGENT_ID", "python-example-agent")
 
@@ -90,7 +90,7 @@ async def main() -> None:
 
 
 async def submit_managed_runtime() -> None:
-    address = os.environ.get("POSTGRIP_AGENTORCHESTRATOR_URL") or os.environ.get("POSTGRIP_AGENT_LIVE_SERVER_URL") or "https://agentorchestrator.postgrip.app"
+    address = os.environ.get("POSTGRIP_AGENTORCHESTRATOR_URL") or os.environ.get("POSTGRIP_AGENT_LIVE_SERVER_URL") or "https://agentorchestrator1.postgrip.io"
     client = await Client.connect(address, headers=agent_token_headers())
     args_json = os.environ.get("SDK_EXAMPLE_RUNTIME_ARGS_JSON") or os.environ.get("POSTGRIP_EXAMPLE_RUNTIME_ARGS_JSON")
     args = json.loads(args_json) if args_json else DEFAULT_RUNTIME_ARGS

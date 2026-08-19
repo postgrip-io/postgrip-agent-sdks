@@ -13,7 +13,7 @@ pip install postgrip-agent==0.12.0
 ## Requirements
 
 - **Python 3.11 or newer.** The SDK uses [`asyncio`](https://docs.python.org/3/library/asyncio.html), `contextvars`, and structural typing patterns that target 3.11 / 3.12 / 3.13.
-- A reachable PostGrip Agent runtime service. The default address is `https://agentorchestrator.postgrip.app`.
+- A reachable PostGrip Agent runtime service. The default address is `https://agentorchestrator1.postgrip.io`.
 
 ## Importing
 

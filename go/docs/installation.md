@@ -21,7 +21,7 @@ go get github.com/postgrip-io/postgrip-agent-sdks/go@v0.12.0
 ## Requirements
 
 - Go 1.25 or newer (the module's `go.mod` declares 1.25).
-- A reachable PostGrip Agent runtime service. The default address is `https://agentorchestrator.postgrip.app`.
+- A reachable PostGrip Agent runtime service. The default address is `https://agentorchestrator1.postgrip.io`.
 
 ## What gets imported
 

@@ -82,7 +82,7 @@ export interface AgentAuthOptions {
   signingPrivateKey?: string;
 }
 
-export const DEFAULT_BASE_URL = 'https://agentorchestrator.postgrip.app';
+export const DEFAULT_BASE_URL = 'https://agentorchestrator1.postgrip.io';
 
 interface PollTaskOptions {
   namespace?: string;

@@ -21,7 +21,7 @@ npm install @postgrip/agent@0.12.0
 ## Requirements
 
 - **Node.js 20 or newer** (or Bun ≥ 1.0). The SDK is published as ESM only — `"type": "module"` in `package.json`.
-- A reachable PostGrip Agent runtime service. The default address is `https://agentorchestrator.postgrip.app`.
+- A reachable PostGrip Agent runtime service. The default address is `https://agentorchestrator1.postgrip.io`.
 
 ## Importing
 

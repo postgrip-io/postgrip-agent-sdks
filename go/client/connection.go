@@ -18,7 +18,7 @@ import (
 	"github.com/postgrip-io/postgrip-agent-sdks/protocol"
 )
 
-const DefaultAddress = "https://agentorchestrator.postgrip.app"
+const DefaultAddress = "https://agentorchestrator1.postgrip.io"
 
 // ConnectionOptions configures the HTTP connection to the agent runtime
 // service. Address is the base URL (defaults to DefaultAddress).
