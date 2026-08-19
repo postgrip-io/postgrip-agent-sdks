@@ -572,6 +572,10 @@
             "description": "Leased task, if available",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PollTaskResponse" } } }
           },
+          "410": {
+            "description": "The agent has been removed. The body carries a shutdown directive and the agent should stop polling and exit.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PollTaskResponse" } } }
+          },
           "default": { "$ref": "#/components/responses/ErrorResponse" }
         }
       }
@@ -596,7 +600,7 @@
       "post": {
         "operationId": "appendAgentTaskEvent",
         "summary": "Append an event to a leased task",
-        "description": "Records one progress, stdout, stderr, or milestone event and returns 202. It does not extend the lease -- send a heartbeat for that.",
+        "description": "Records one task event and returns 202. Agents send progress, milestone, stdout, and stderr; the TypeScript and Python workers additionally emit started, completed, and failed markers alongside the authoritative complete and fail calls, so a finished task can carry two completed events. Only the server writes leased. The kind is not validated -- an empty value defaults to progress. This does not extend the lease; send a heartbeat for that.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",
@@ -626,7 +630,7 @@
       "post": {
         "operationId": "blockAgentTask",
         "summary": "Park a leased task until its workflow is signalled",
-        "description": "Non-terminal: the task moves to blocked and its lease is released, so it is not retried and no longer counts against the agent. It resumes only when its workflow receives a signal.",
+        "description": "Non-terminal: the task moves to blocked and its lease is released, so it is not retried and no longer counts against the agent. A worker calls this whenever a workflow body suspends on a pending durable command -- an activity, a timer, a child workflow, or an awaited signal. The orchestrator re-queues the task for redelivery as soon as that dependency resolves: the activity completes, fails, or times out; the timer fires; the child workflow finishes; a signal or workflow update arrives; or the workflow is cancelled.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",

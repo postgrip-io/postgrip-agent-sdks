@@ -8,7 +8,7 @@ import re
 from typing import Any, Literal, Mapping, Protocol, Sequence, TypeAlias, TypedDict, cast
 from urllib.parse import quote, urlencode
 
-OPENAPI_SPEC_SHA256 = '0d323cc601cc71a08146b3395f479bb6702a9ad3d5f40f5917ef064140f813cb'
+OPENAPI_SPEC_SHA256 = '290703b21b11d91df949108588527908c4e907a61b30f69947489048af87b0d8'
 OPENAPI_OPERATION_COUNT = 42
 OPENAPI_CLIENT_OPERATION_COUNT = 40
 CONNECT_SANDBOX_SESSION_PATH_SESSION_ID = 'sessionId'
