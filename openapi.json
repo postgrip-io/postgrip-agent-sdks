@@ -8,7 +8,7 @@
   },
   "servers": [
     {
-      "url": "https://agentorchestrator.postgrip.app"
+      "url": "https://agentorchestrator1.postgrip.io"
     }
   ],
   "tags": [
@@ -24,6 +24,8 @@
     "/healthz": {
       "get": {
         "operationId": "health",
+        "summary": "Liveness probe",
+        "description": "Returns a fixed ok status without touching the store. This is the only route that bypasses authentication entirely, so an uptime monitor can call it with no credential.",
         "tags": ["System"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "public",
@@ -35,6 +37,8 @@
     "/readyz": {
       "get": {
         "operationId": "ready",
+        "summary": "Readiness probe with store counts",
+        "description": "Reports readiness along with current task, workflow, schedule, and namespace counts. Unlike the liveness probe this route requires a credential.",
         "tags": ["System"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -48,6 +52,8 @@
     "/api/v1/namespaces": {
       "get": {
         "operationId": "listNamespaces",
+        "summary": "List namespaces visible to the caller",
+        "description": "Scoped to the tenant the credential resolves to, and narrowed further to the agent's namespace allow-list when called with an agent session.",
         "tags": ["Namespaces"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -66,6 +72,8 @@
       },
       "post": {
         "operationId": "createNamespace",
+        "summary": "Create a namespace",
+        "description": "Any tenantId in the body is ignored and replaced with the tenant the credential resolves to.",
         "tags": ["Namespaces"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -83,6 +91,8 @@
     "/api/v1/admin/compact": {
       "post": {
         "operationId": "compact",
+        "summary": "Purge finished tasks and workflows across every tenant",
+        "description": "Deletes every succeeded or failed task, and every workflow that is not running, last updated before the retention cutoff -- along with their events and history. Irreversible, and deliberately not scoped to one tenant: a tenant-scoped credential is refused rather than narrowed.",
         "tags": ["System"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "global-admin",
@@ -103,6 +113,8 @@
     "/api/v1/tasks": {
       "get": {
         "operationId": "listTasks",
+        "summary": "List tasks",
+        "description": "Filters by namespace, queue, type, and state within the caller's tenant, then sorts and paginates.",
         "tags": ["Tasks"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -127,6 +139,8 @@
       },
       "post": {
         "operationId": "enqueueTask",
+        "summary": "Enqueue a task",
+        "description": "Returns 202 with the created task. Any tenantId in the body is replaced with the tenant the credential resolves to.",
         "tags": ["Tasks"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -145,6 +159,8 @@
       "parameters": [{ "$ref": "#/components/parameters/TaskId" }],
       "get": {
         "operationId": "getTask",
+        "summary": "Fetch a single task",
+        "description": "A task belonging to another tenant is reported as 404 rather than 403, so identifiers cannot be probed across tenant boundaries.",
         "tags": ["Tasks"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -159,6 +175,8 @@
       "parameters": [{ "$ref": "#/components/parameters/TaskId" }],
       "get": {
         "operationId": "listTaskEvents",
+        "summary": "List a task's event stream",
+        "description": "Returns the task's full event history in order -- lease, start, heartbeat, stdout, stderr, and terminal events. This endpoint is not paginated.",
         "tags": ["Tasks"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -175,6 +193,7 @@
     "/api/v1/schedules": {
       "get": {
         "operationId": "listSchedules",
+        "summary": "List schedules",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -196,6 +215,8 @@
       },
       "post": {
         "operationId": "createSchedule",
+        "summary": "Create a schedule",
+        "description": "Returns 202. Any tenantId in the body is replaced with the tenant the credential resolves to.",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -214,6 +235,7 @@
       "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
       "get": {
         "operationId": "getSchedule",
+        "summary": "Fetch a single schedule",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -225,6 +247,8 @@
       },
       "patch": {
         "operationId": "updateSchedule",
+        "summary": "Update a schedule",
+        "description": "A partial update: only the fields present in the body are changed.",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -240,6 +264,8 @@
       },
       "delete": {
         "operationId": "deleteSchedule",
+        "summary": "Delete a schedule",
+        "description": "Returns the deleted schedule with 200 rather than an empty 204; the record moves to the deleted state.",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -254,6 +280,8 @@
       "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
       "post": {
         "operationId": "pauseSchedule",
+        "summary": "Pause a schedule",
+        "description": "Stops the schedule firing without deleting it, and returns the updated schedule.",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -269,6 +297,7 @@
       "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
       "post": {
         "operationId": "unpauseSchedule",
+        "summary": "Resume a paused schedule",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -284,6 +313,8 @@
       "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
       "post": {
         "operationId": "triggerSchedule",
+        "summary": "Run a schedule immediately",
+        "description": "Fires the schedule out of band from its spec. The next scheduled run is unaffected.",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -302,6 +333,8 @@
       "parameters": [{ "$ref": "#/components/parameters/ScheduleId" }],
       "post": {
         "operationId": "backfillSchedule",
+        "summary": "Backfill a schedule across a time range",
+        "description": "Enqueues one task per scheduled instant between the requested start and end. A range that would exceed the server's per-request cap is rejected outright rather than silently truncated.",
         "tags": ["Schedules"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -322,6 +355,7 @@
     "/api/v1/workflows": {
       "get": {
         "operationId": "listWorkflows",
+        "summary": "List workflow executions",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -355,6 +389,8 @@
     "/api/v1/workflows/count": {
       "get": {
         "operationId": "countWorkflows",
+        "summary": "Count workflow executions matching a filter",
+        "description": "Applies the same filters as the list operation and returns only the count. Paging parameters are ignored.",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -384,6 +420,8 @@
       "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
       "get": {
         "operationId": "getWorkflow",
+        "summary": "Fetch a workflow execution",
+        "description": "Returns the latest run of the workflow.",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -398,6 +436,7 @@
       "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
       "get": {
         "operationId": "listWorkflowHistory",
+        "summary": "List a workflow's history events",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -415,6 +454,8 @@
       "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
       "post": {
         "operationId": "signalWorkflow",
+        "summary": "Send a signal to a running workflow",
+        "description": "Returns 202 with the appended history event. A signal also releases the workflow's blocked task, which is how a task that parked itself resumes. Signalling a workflow that is no longer running fails.",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -433,6 +474,8 @@
       "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
       "post": {
         "operationId": "signalWithStartWorkflow",
+        "summary": "Signal a workflow, starting it first if none is running",
+        "description": "Starts a new execution of workflowType when no running one exists, then delivers the signal. A workflowId in the body takes precedence over the one in the path.",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -454,6 +497,8 @@
       "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
       "post": {
         "operationId": "cancelWorkflow",
+        "summary": "Request cooperative cancellation of a workflow",
+        "description": "Asks the workflow to stop at its next cancellation point. Use terminate for an execution that does not cooperate.",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -469,6 +514,8 @@
       "parameters": [{ "$ref": "#/components/parameters/WorkflowId" }],
       "post": {
         "operationId": "terminateWorkflow",
+        "summary": "Forcibly terminate a workflow",
+        "description": "Stops the execution immediately, without giving workflow code a chance to clean up.",
         "tags": ["Workflows"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "either",
@@ -483,6 +530,8 @@
     "/api/v1/agent/session/refresh": {
       "post": {
         "operationId": "refreshAgentSession",
+        "summary": "Exchange a refresh token for a new agent session",
+        "description": "The refresh token in the body is itself the credential, so this operation carries no bearer token. Rotation is single-use: presenting a token that has already been rotated revokes the whole token family.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "public",
@@ -502,6 +551,8 @@
     "/api/v1/agent/poll": {
       "get": {
         "operationId": "pollAgentTask",
+        "summary": "Long-poll for the next leased task or lifecycle directive",
+        "description": "Blocks up to wait_seconds and returns 200 with an empty object -- not 204 -- when nothing is available. A queued lifecycle directive (upgrade, log level, attest) is returned in place of a task, and an agent that has been removed receives 410 carrying a shutdown directive.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",
@@ -529,6 +580,8 @@
       "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
       "post": {
         "operationId": "heartbeatAgentTask",
+        "summary": "Extend a leased task's lease",
+        "description": "Extends the lease and appends a heartbeat event. The task must currently be leased to the calling agent.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",
@@ -542,6 +595,8 @@
       "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
       "post": {
         "operationId": "appendAgentTaskEvent",
+        "summary": "Append an event to a leased task",
+        "description": "Records one progress, stdout, stderr, or milestone event and returns 202. It does not extend the lease -- send a heartbeat for that.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",
@@ -555,6 +610,8 @@
       "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
       "post": {
         "operationId": "completeAgentTask",
+        "summary": "Complete a leased task successfully",
+        "description": "Terminal. Stores the result, releases the lease, and advances the owning workflow. Secret values drawn from the task's environment are masked out of the stored result.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",
@@ -568,6 +625,8 @@
       "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
       "post": {
         "operationId": "blockAgentTask",
+        "summary": "Park a leased task until its workflow is signalled",
+        "description": "Non-terminal: the task moves to blocked and its lease is released, so it is not retried and no longer counts against the agent. It resumes only when its workflow receives a signal.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",
@@ -581,6 +640,8 @@
       "parameters": [{ "$ref": "#/components/parameters/TaskId" }, { "$ref": "#/components/parameters/AgentIdQuery" }],
       "post": {
         "operationId": "failAgentTask",
+        "summary": "Fail a leased task",
+        "description": "Terminal. Records the error, releases the lease, and drives the workflow's retry or failure handling. Error text is masked for secrets before it is stored.",
         "tags": ["Agent runtime"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "agent",
@@ -593,6 +654,8 @@
     "/api/v1/sandboxes": {
       "get": {
         "operationId": "listSandboxes",
+        "summary": "List sandboxes",
+        "description": "Returns the tenant's live sandboxes. Deleted sandboxes are omitted here but remain fetchable by id.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -604,6 +667,8 @@
       },
       "post": {
         "operationId": "createSandbox",
+        "summary": "Create a sandbox",
+        "description": "Records the desired sandbox and returns 201. Provisioning is asynchronous, so the returned record is not yet running. Names must be unique per tenant among live sandboxes.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -616,6 +681,7 @@
       "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
       "get": {
         "operationId": "getSandbox",
+        "summary": "Fetch a sandbox",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -624,6 +690,8 @@
       },
       "delete": {
         "operationId": "deleteSandbox",
+        "summary": "Request sandbox deletion",
+        "description": "Sets desired state to deleted and returns 202 with the updated record. Teardown is asynchronous and completes when the assigned agent reports it.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -635,6 +703,8 @@
       "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
       "post": {
         "operationId": "startSandbox",
+        "summary": "Request that a sandbox start",
+        "description": "Sets desired state to running and returns 202. The returned record still carries the previous observed state; a sandbox is ready only once observedState is running and observedGeneration has caught up with generation.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -646,6 +716,8 @@
       "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
       "post": {
         "operationId": "stopSandbox",
+        "summary": "Request that a sandbox stop",
+        "description": "Sets desired state to stopped and returns 202. The assigned agent applies it asynchronously.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -657,6 +729,8 @@
       "parameters": [{ "$ref": "#/components/parameters/SandboxId" }],
       "post": {
         "operationId": "createSandboxSession",
+        "summary": "Mint a single-use ticket for an interactive session",
+        "description": "Creates a pending pty or exec session and returns its ticket exactly once -- only a hash of it is stored. The ticket is short-lived and is redeemed against the connect operation. The sandbox must already be running.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -671,14 +745,16 @@
     "/api/v1/workspaces": {
       "post": {
         "operationId": "uploadWorkspace",
+        "summary": "Upload a workspace archive",
+        "description": "The request body is a raw gzipped tar stream, not a multipart form. Repository and revision metadata travel in the X-PostGrip-Repository and X-PostGrip-Revision headers. Storage is content-addressed, so re-uploading identical bytes returns the existing record rather than creating a new one.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
         "x-postgrip-streaming-request": true,
         "security": [{ "managementToken": [] }],
         "parameters": [
-          { "name": "X-PostGrip-Repository", "in": "header", "schema": { "type": "string" } },
-          { "name": "X-PostGrip-Revision", "in": "header", "schema": { "type": "string" } }
+          { "name": "X-PostGrip-Repository", "in": "header", "schema": { "type": "string", "example": "my-repo" } },
+          { "name": "X-PostGrip-Revision", "in": "header", "schema": { "type": "string", "example": "9f1c2d4" } }
         ],
         "requestBody": {
           "required": true,
@@ -697,6 +773,8 @@
       ],
       "get": {
         "operationId": "connectSandboxSession",
+        "summary": "Attach to an interactive session over WebSocket",
+        "description": "Upgrades to a WebSocket carrying raw, unframed stdio; stdout and stderr are interleaved on one stream and there is no resize channel. The process exit code arrives as the WebSocket close status offset by 4000, not in the stream itself.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -757,7 +835,7 @@
         "properties": { "status": { "type": "string" }, "stats": { "type": "object", "additionalProperties": { "type": "integer" } } }
       },
       "TaskState": { "type": "string", "enum": ["queued", "leased", "blocked", "succeeded", "failed"] },
-      "TaskEventKind": { "type": "string", "enum": ["leased", "started", "heartbeat", "milestone", "progress", "stdout", "stderr", "completed", "failed"] },
+      "TaskEventKind": { "type": "string", "example": "progress", "enum": ["leased", "started", "heartbeat", "milestone", "progress", "stdout", "stderr", "completed", "failed"] },
       "AgentPollDirectiveType": { "type": "string", "enum": ["upgrade", "shutdown", "log_level", "poll_now", "attest"] },
       "AgentPollDirectiveSubject": { "type": "string", "enum": ["agent", "agent_helper"] },
       "WorkflowState": { "type": "string", "enum": ["running", "succeeded", "failed", "continued_as_new"] },
@@ -789,7 +867,7 @@
       "CompactRequest": {
         "type": "object",
         "additionalProperties": false,
-        "properties": { "retention_seconds": { "type": "integer", "minimum": 0, "default": 0 } }
+        "properties": { "retention_seconds": { "type": "integer", "minimum": 0, "default": 0, "example": 604800 } }
       },
       "CompactResponse": {
         "type": "object",
@@ -840,7 +918,7 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "exit_code": { "type": "integer" },
+          "exit_code": { "type": "integer", "example": 0 },
           "stdout": { "type": "string" },
           "stderr": { "type": "string" },
           "message": { "type": "string" },
@@ -929,6 +1007,7 @@
       "ScheduleSpec": {
         "type": "object",
         "additionalProperties": false,
+        "example": { "cron": "0 2 * * *", "timezone": "UTC" },
         "properties": {
           "interval_seconds": { "type": "integer" },
           "cron": { "type": "string" },
@@ -1185,8 +1264,8 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "rows": { "type": "integer", "minimum": 1 },
-          "columns": { "type": "integer", "minimum": 1 },
+          "rows": { "type": "integer", "minimum": 1, "example": 24 },
+          "columns": { "type": "integer", "minimum": 1, "example": 80 },
           "kind": { "$ref": "#/components/schemas/SandboxSessionKind" },
           "command": { "type": "array", "items": { "type": "string" } }
         }

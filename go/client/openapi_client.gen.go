@@ -506,4 +506,4 @@ func (c *OpenAPIClient) UpdateSchedule(ctx context.Context, scheduleId string, b
 // connection operations, which use Connection's custom adapters.
 const OpenAPIClientOperationCount = 40
 
-const openAPIClientSpecSHA256 = "390980a3cd6e5c5e095a3345c239adcd2543eeac1cbb593d1fbd282672955b51"
+const openAPIClientSpecSHA256 = "0d323cc601cc71a08146b3395f479bb6702a9ad3d5f40f5917ef064140f813cb"
