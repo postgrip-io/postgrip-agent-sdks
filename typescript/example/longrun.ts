@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const baseUrl = process.env.POSTGRIP_AGENTORCHESTRATOR_URL ?? process.env.POSTGRIP_AGENT_LIVE_SERVER_URL ?? 'https://agentorchestrator.postgrip.app';
+  const baseUrl = process.env.POSTGRIP_AGENTORCHESTRATOR_URL ?? process.env.POSTGRIP_AGENT_LIVE_SERVER_URL ?? 'https://agentorchestrator1.postgrip.io';
   const taskQueue = process.env.POSTGRIP_AGENT_TASK_QUEUE ?? 'typescript-longrun';
   const agentId = process.env.POSTGRIP_AGENT_ID ?? 'typescript-longrun-agent';
 
@@ -172,7 +172,7 @@ function readStringArrayJSON(name: string): string[] | undefined {
 }
 
 async function submitManagedRuntime(): Promise<void> {
-  const baseUrl = process.env.POSTGRIP_AGENTORCHESTRATOR_URL ?? process.env.POSTGRIP_AGENT_LIVE_SERVER_URL ?? 'https://agentorchestrator.postgrip.app';
+  const baseUrl = process.env.POSTGRIP_AGENTORCHESTRATOR_URL ?? process.env.POSTGRIP_AGENT_LIVE_SERVER_URL ?? 'https://agentorchestrator1.postgrip.io';
   const connection = await Connection.connect({ baseUrl, headers: agentTokenHeaders() });
   const client = new Client({ connection });
   const queue = envAny(['POSTGRIP_EXAMPLE_RUNTIME_QUEUE', 'SDK_EXAMPLE_RUNTIME_QUEUE'], 'default');

@@ -1,5 +1,13 @@
 # Release notes
 
+## Unreleased
+
+- Changes the default service address to `https://agentorchestrator1.postgrip.io`.
+  The previous default, `agentorchestrator.postgrip.app`, does not resolve, so
+  any client constructed without an explicit address or environment override
+  was contacting a host that does not exist. Callers that already pass an
+  address, or set `POSTGRIP_AGENTORCHESTRATOR_URL`, are unaffected.
+
 ## 0.12.0
 
 This release completes the hard cutover to the public SDK monorepo.

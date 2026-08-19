@@ -45,7 +45,7 @@ var defaultRuntimeArgs = []string{
 func main() {
 	loadExampleEnv()
 
-	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator.postgrip.app"))
+	address := envOr("POSTGRIP_AGENTORCHESTRATOR_URL", envOr("POSTGRIP_AGENT_LIVE_SERVER_URL", "https://agentorchestrator1.postgrip.io"))
 	authToken := os.Getenv("POSTGRIP_AGENT_TOKEN")
 	queue := envOr("POSTGRIP_AGENT_TASK_QUEUE", "go-example")
 	agentID := envOr("POSTGRIP_AGENT_ID", "go-example-agent")

@@ -28,7 +28,7 @@ from .workflow import workflow_name
 
 _MISSING = object()
 _POSTGRIP_UI_MEMO_KEY = "postgrip.ui"
-DEFAULT_ADDRESS = "https://agentorchestrator.postgrip.app"
+DEFAULT_ADDRESS = "https://agentorchestrator1.postgrip.io"
 
 
 def has_authorization_header(headers: dict[str, str]) -> bool:

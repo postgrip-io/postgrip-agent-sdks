@@ -112,7 +112,7 @@ async def main() -> None:
     address = (
         os.environ.get("POSTGRIP_AGENTORCHESTRATOR_URL")
         or os.environ.get("POSTGRIP_AGENT_LIVE_SERVER_URL")
-        or "https://agentorchestrator.postgrip.app"
+        or "https://agentorchestrator1.postgrip.io"
     )
     queue = os.environ.get("POSTGRIP_AGENT_TASK_QUEUE", "python-longrun")
     agent_id = os.environ.get("POSTGRIP_AGENT_ID", "python-longrun-agent")
@@ -162,7 +162,7 @@ async def submit_managed_runtime() -> None:
     address = (
         os.environ.get("POSTGRIP_AGENTORCHESTRATOR_URL")
         or os.environ.get("POSTGRIP_AGENT_LIVE_SERVER_URL")
-        or "https://agentorchestrator.postgrip.app"
+        or "https://agentorchestrator1.postgrip.io"
     )
     client = await Client.connect(address, headers=agent_token_headers())
     queue = env_any(["POSTGRIP_EXAMPLE_RUNTIME_QUEUE", "SDK_EXAMPLE_RUNTIME_QUEUE"], "default")
