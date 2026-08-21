@@ -1,8 +1,8 @@
 # test/
 
-Reserved for future SDK-level tests (vitest unit tests, integration
-tests against a runtime service).
+Vitest regression coverage for the SDK runtime, OpenAPI bindings, sandbox
+transport, and published ESM module specifiers.
 
 The companion `tests/postgrip-agent/` directory in `postgrip-web`
-exercises the runtime contract from the postgrip-web side; once an SDK-
-local test runner is wired up here, that coverage moves with the SDK.
+exercises the runtime contract from the server side. Tests here keep
+SDK-specific behavior and packaging checks with the package they protect.
