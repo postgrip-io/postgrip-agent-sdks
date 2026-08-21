@@ -5,7 +5,7 @@ description = "Python SDK for PostGrip Agent workflows"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "PostGrip" }]
-license = "MIT"
+license = "Apache-2.0"
 keywords = ["postgrip", "agent", "workflow", "temporal"]
 classifiers = [
   "Development Status :: 3 - Alpha",

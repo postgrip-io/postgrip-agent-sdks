@@ -5,6 +5,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/postgrip-io/postgrip-agent-sdks/go.svg)](https://pkg.go.dev/github.com/postgrip-io/postgrip-agent-sdks/go)
 [![npm](https://img.shields.io/npm/v/%40postgrip%2Fagent.svg?logo=npm)](https://www.npmjs.com/package/@postgrip/agent)
 [![PyPI](https://img.shields.io/pypi/v/postgrip-agent.svg?logo=pypi)](https://pypi.org/project/postgrip-agent/)
+[![License](https://img.shields.io/github/license/postgrip-io/postgrip-agent-sdks.svg)](LICENSE)
 
 The official Go, TypeScript, and Python SDKs for submitting work to PostGrip
 agents and building managed, durable workflow runtimes. The repository also
@@ -169,6 +170,6 @@ compatibility details.
 
 Report SDK bugs and request features in the
 [monorepo issue tracker](https://github.com/postgrip-io/postgrip-agent-sdks/issues).
-The protocol and SDK source is licensed under the Apache License 2.0; see the
-license files in [protocol](protocol/LICENSE), [Go](go/LICENSE),
-[TypeScript](typescript/LICENSE), and [Python](python/LICENSE).
+The protocol and all SDK source is licensed under the
+[Apache License 2.0](LICENSE). Package-level license copies are kept identical
+so standalone Go, npm, and Python distributions include the same terms.

@@ -90,6 +90,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Check license consistency
+        run: |
+          cmp LICENSE protocol/LICENSE
+          cmp LICENSE go/LICENSE
+          cmp LICENSE typescript/LICENSE
+          cmp LICENSE python/LICENSE
+          grep -Fq '"license": "Apache-2.0"' typescript/package.json
+          grep -Fxq 'license = "Apache-2.0"' python/pyproject.toml
       - run: python3 protocol/tools/check_drift.py --self-test
       - run: python3 protocol/tools/check_drift.py --monorepo
       - run: python3 scripts/generate_openapi.py --check
