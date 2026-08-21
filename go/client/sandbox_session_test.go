@@ -163,6 +163,22 @@ func TestExecSignalsEOFForNilStdin(t *testing.T) {
 	}
 }
 
+// A command such as true can report its process close before the client sends
+// the empty-input EOF frame. The close status is authoritative once all input
+// bytes were delivered; treating the losing EOF write as fatal loses a valid
+// exit code nondeterministically.
+func TestExecPreservesExitStatusWhenEmptyStdinEOFLosesTheCloseRace(t *testing.T) {
+	t.Parallel()
+	exit := websocket.CloseError{
+		Code:   websocket.StatusCode(protocol.SandboxExecCloseStatusBase + 7),
+		Reason: "exit:7",
+	}
+	code, err := sandboxExecResult(exit, sandboxExecStdinOutcome{eofErr: io.ErrClosedPipe})
+	if err != nil || code != 7 {
+		t.Fatalf("sandboxExecResult = (%d, %v), want (7, nil)", code, err)
+	}
+}
+
 func TestSandboxStreamCloseWriteIsIdempotentAndClosesOnlyInput(t *testing.T) {
 	t.Parallel()
 	eofFrames := make(chan int, 1)

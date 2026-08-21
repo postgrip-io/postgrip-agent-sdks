@@ -282,6 +282,49 @@ class SandboxRelayContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "input is closed"):
             session.send(b"late")
 
+    def test_close_input_preserves_an_exit_that_wins_the_eof_race(self):
+        class ProcessClosed(Exception):
+            def __init__(self):
+                self.rcvd = type("CloseFrame", (), {"code": SANDBOX_EXEC_CLOSE_STATUS_BASE + 7})()
+
+        class FakeSocket:
+            close_code = SANDBOX_EXEC_CLOSE_STATUS_BASE + 7
+
+            def send(self, _data):
+                raise ProcessClosed()
+
+        session = object.__new__(SandboxSession)
+        session._socket = FakeSocket()
+        session.exit_code = None
+        session._input_closed = False
+
+        session.close_input()
+
+        self.assertTrue(session._input_closed)
+        self.assertEqual(session.exit_code, 7)
+
+    def test_close_input_does_not_hide_a_transport_close(self):
+        class TransportClosed(Exception):
+            def __init__(self):
+                self.rcvd = type("CloseFrame", (), {"code": 1000})()
+
+        class FakeSocket:
+            close_code = 1000
+
+            def send(self, _data):
+                raise TransportClosed()
+
+        session = object.__new__(SandboxSession)
+        session._socket = FakeSocket()
+        session.exit_code = None
+        session._input_closed = False
+
+        with self.assertRaises(TransportClosed):
+            session.close_input()
+
+        self.assertFalse(session._input_closed)
+        self.assertIsNone(session.exit_code)
+
 
 if __name__ == "__main__":
     unittest.main()

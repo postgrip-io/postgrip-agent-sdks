@@ -95,10 +95,14 @@ export interface SandboxSessionOptions {
 export class SandboxSession {
   private readonly closed: Promise<number | undefined>;
   private inputClosed = false;
+  private reportedExitCode: number | undefined;
 
   constructor(private readonly socket: WebSocket) {
     this.closed = new Promise((resolve) => {
-      socket.addEventListener('close', (event) => resolve(sandboxExecExitCode(event.code)), { once: true });
+      socket.addEventListener('close', (event) => {
+        this.reportedExitCode = sandboxExecExitCode(event.code);
+        resolve(this.reportedExitCode);
+      }, { once: true });
     });
   }
 
@@ -117,7 +121,14 @@ export class SandboxSession {
   /** Signals stdin EOF while keeping output and exit-status delivery open. */
   closeInput(): void {
     if (this.inputClosed) return;
-    this.socket.send(new Uint8Array(0));
+    try {
+      this.socket.send(new Uint8Array(0));
+    } catch (error) {
+      // A command that does not read stdin may report its valid exit before
+      // this empty EOF frame is written. Preserve that process result; a
+      // transport close without an exec status must still surface as error.
+      if (this.reportedExitCode === undefined) throw error;
+    }
     this.inputClosed = true;
   }
 

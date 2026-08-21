@@ -348,7 +348,20 @@ class SandboxSession:
         """Signal stdin EOF without closing output or exit-status delivery."""
         if self._input_closed:
             return
-        self._socket.send(b"")
+        try:
+            self._socket.send(b"")
+        except Exception as exc:
+            # A command that never reads stdin can close with its valid exit
+            # status before this empty EOF frame is written. Preserve that
+            # process result; closes without an exec status remain failures.
+            received = getattr(exc, "rcvd", None)
+            close_code = getattr(received, "code", None)
+            if close_code is None:
+                close_code = getattr(self._socket, "close_code", None)
+            exit_code = sandbox_exec_exit_code(close_code) if isinstance(close_code, int) else None
+            if exit_code is None:
+                raise
+            self.exit_code = exit_code
         self._input_closed = True
 
     def read_all(self) -> Iterable[bytes]:

@@ -778,7 +778,7 @@
       "get": {
         "operationId": "connectSandboxSession",
         "summary": "Attach to an interactive session over WebSocket",
-        "description": "Upgrades to a WebSocket carrying raw, unframed stdio; stdout and stderr are interleaved on one stream and there is no resize channel. The process exit code arrives as the WebSocket close status offset by 4000, not in the stream itself.",
+        "description": "Upgrades to a WebSocket carrying stdio in binary messages; stdout and stderr are interleaved on one stream and there is no resize channel. Non-empty client-to-agent messages carry raw stdin bytes. A zero-length binary client-to-agent message signals stdin EOF without closing the output side. The process exit code arrives as the WebSocket close status offset by 4000, not in the stream itself.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",

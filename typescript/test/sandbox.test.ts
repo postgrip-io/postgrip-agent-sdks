@@ -267,6 +267,37 @@ describe('sandbox client', () => {
       );
     }
   });
+
+  it('preserves a fast exit that wins the empty-stdin EOF race', async () => {
+    const { client } = await sandboxClient(() =>
+      jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+    );
+    class ExitedWebSocket extends EventTarget {
+      binaryType: BinaryType = 'blob';
+      send(): void {
+        throw new Error('socket already closed');
+      }
+      close(): void {}
+    }
+    const socket = new ExitedWebSocket();
+    const result = client.sandbox.exec('sbx_1', ['true'], {
+      webSocketFactory: () => {
+        setTimeout(() => {
+          socket.dispatchEvent(new Event('open'));
+          queueMicrotask(() => {
+            const close = new Event('close');
+            Object.defineProperty(close, 'code', {
+              value: SANDBOX_EXEC_CLOSE_STATUS_BASE + 7,
+            });
+            socket.dispatchEvent(close);
+          });
+        }, 0);
+        return socket as unknown as WebSocket;
+      },
+    });
+
+    await expect(result).resolves.toMatchObject({ exitCode: 7 });
+  });
 });
 
 describe('sandbox relay contract', () => {
