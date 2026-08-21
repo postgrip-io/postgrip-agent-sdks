@@ -4,15 +4,15 @@
 [![PyPI version](https://img.shields.io/pypi/v/postgrip-agent.svg)](https://pypi.org/project/postgrip-agent/)
 [![Python versions](https://img.shields.io/pypi/pyversions/postgrip-agent.svg)](https://pypi.org/project/postgrip-agent/)
 [![CI](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml/badge.svg)](https://github.com/postgrip-io/postgrip-agent-sdks/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/postgrip-io/postgrip-agent-sdks.svg)](LICENSE)
+[![License](https://img.shields.io/github/license/postgrip-io/postgrip-agent-sdks.svg)](https://github.com/postgrip-io/postgrip-agent-sdks/blob/main/LICENSE)
 
 Python SDK for defining, submitting, and executing PostGrip workflows. In production, SDK workflow runtimes are supervised by an existing PostGrip agent: the host agent launches the runtime, injects delegated credentials, and keeps generic operational tasks separate from workflow/activity task polling. Client-side SDK code submits `workflow.runtime` tasks to an existing agent pool; it does not enroll or spawn standalone PostGrip agents. The Go, TypeScript, and shared protocol packages live alongside it in this monorepo.
 
 **Docs:** [postgrip-io.github.io/postgrip-agent-sdks/python](https://postgrip-io.github.io/postgrip-agent-sdks/python/) — quick start, workflow runtime, API guide.
 
-**Current release:** `0.12.1`
+**Current release:** `0.12.2`
 
-Install from PyPI after publishing:
+Install from PyPI:
 
 ```bash
 pip install postgrip-agent
@@ -218,9 +218,10 @@ frames raise locally rather than having the relay close the session.
 
 Public protocol types are available from `postgrip_agent.types` and are re-exported from `postgrip_agent`, including `Task`, `TaskEvent`, `WorkflowExecution`, `WorkflowHistoryEvent`, `RetryPolicy`, schedule request/response types, and workflow payload definitions. The package includes `py.typed` so type checkers can consume those annotations. For SDK applications, the documented client-side submission path is `client.task.workflow_runtime(...)`; workflow and activity tasks are then coordinated by the managed runtime launched on the host agent.
 
-Package validation:
+Package validation from the repository root:
 
 ```bash
-python -m pip wheel --no-deps postgrip-agent/python -w /tmp/postgrip-agent-wheel
-PYTHONPATH=postgrip-agent/python python -m unittest discover -s postgrip-agent/python/tests
+cd python
+python -m pip wheel --no-deps . -w /tmp/postgrip-agent-wheel
+PYTHONPATH=src python -m unittest discover -s test
 ```
