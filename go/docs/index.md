@@ -10,7 +10,7 @@ nav_order: 1
 Run shell commands, container workloads, and durable workflows on the PostGrip Agent runtime service from your Go code.
 {: .fs-6 .fw-300 }
 
-**Current release:** `v0.12.1`
+**Current release:** `v0.12.2`
 
 [Quick start →]({{ "/quickstart" | relative_url }}){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [GitHub](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/go){: .btn .fs-5 .mb-4 .mb-md-0 }
