@@ -125,6 +125,7 @@ export {
   SANDBOX_EXEC_CLOSE_STATUS_MAX,
 } from './sandbox.js';
 export type {
+  SandboxExecOptions,
   SandboxWaitOptions,
   SandboxSessionOptions,
   SandboxWebSocketConnectOptions,

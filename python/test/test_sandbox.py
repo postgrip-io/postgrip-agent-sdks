@@ -8,6 +8,7 @@ from postgrip_agent import (
     SANDBOX_RELAY_MAX_FRAME_BYTES,
     Client,
     Connection,
+    SandboxSession,
     sandbox_exec_exit_code,
     sandbox_is_ready,
     sandbox_relay_url,
@@ -184,6 +185,40 @@ class SandboxClientTests(unittest.TestCase):
         self.assertEqual(captured["body"], b"GZIPPED-IN-CHUNKS")
         self.assertGreater(archive.read_calls, 1)
 
+    def test_exec_sends_stdin_eof_before_reading_output(self):
+        class FakeSession:
+            def __init__(self):
+                self.exit_code = 0
+                self.sent = []
+                self.input_closed = False
+
+            def send(self, data):
+                self.sent.append(data)
+
+            def close_input(self):
+                self.input_closed = True
+
+            def read_all(self):
+                self.assert_input_closed()
+                return [b"cat output"]
+
+            def assert_input_closed(self):
+                if not self.input_closed:
+                    raise AssertionError("output read before stdin EOF")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return None
+
+        session = FakeSession()
+        with patch.object(self.client.sandbox, "open_session", return_value=session):
+            code, output = self.client.sandbox.exec("sbx_1", ["cat"], stdin=b"hello")
+        self.assertEqual(session.sent, [b"hello"])
+        self.assertTrue(session.input_closed)
+        self.assertEqual((code, output), (0, b"cat output"))
+
 
 class SandboxRelayContractTests(unittest.TestCase):
     def test_relay_url_scheme_and_escaping(self):
@@ -224,6 +259,28 @@ class SandboxRelayContractTests(unittest.TestCase):
 
     def test_relay_frame_bound_is_stated(self):
         self.assertEqual(SANDBOX_RELAY_MAX_FRAME_BYTES, 1 << 20)
+
+    def test_empty_binary_message_is_reserved_for_close_input(self):
+        class FakeSocket:
+            def __init__(self):
+                self.sent = []
+
+            def send(self, data):
+                self.sent.append(data)
+
+        session = object.__new__(SandboxSession)
+        session._socket = FakeSocket()
+        session.exit_code = None
+        session._input_closed = False
+
+        session.send("hello")
+        session.send(b"")
+        session.close_input()
+        session.close_input()
+
+        self.assertEqual(session._socket.sent, [b"hello", b""])
+        with self.assertRaisesRegex(RuntimeError, "input is closed"):
+            session.send(b"late")
 
 
 if __name__ == "__main__":

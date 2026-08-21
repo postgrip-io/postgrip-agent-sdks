@@ -86,12 +86,15 @@ export interface SandboxSessionOptions {
  * A live sandbox session: a raw bidirectional byte stream plus the process
  * exit code once it closes.
  *
- * There is no framing. For `pty` this is terminal traffic; for `exec` it is
- * the process's stdout and stderr **interleaved on one stream** — the relay
- * multiplexes both, so they cannot be separated client-side.
+ * For `pty` this is terminal traffic; for `exec` it is the process's stdout
+ * and stderr **interleaved on one stream** — the relay multiplexes both, so
+ * they cannot be separated client-side. Message boundaries are otherwise
+ * opaque, except that `closeInput` sends the reserved zero-length binary
+ * stdin-EOF message.
  */
 export class SandboxSession {
   private readonly closed: Promise<number | undefined>;
+  private inputClosed = false;
 
   constructor(private readonly socket: WebSocket) {
     this.closed = new Promise((resolve) => {
@@ -101,14 +104,21 @@ export class SandboxSession {
 
   /** Sends bytes to the sandbox's stdin. */
   send(data: Uint8Array | string): void {
-    const size = typeof data === 'string' ? Buffer.byteLength(data) : data.byteLength;
-    if (size > SANDBOX_RELAY_MAX_FRAME_BYTES) {
-      throw new Error(
-        `postgrip-agent: sandbox write of ${size} bytes exceeds the relay frame limit ` +
-          `(${SANDBOX_RELAY_MAX_FRAME_BYTES}); chunk your writes`,
-      );
+    if (this.inputClosed) {
+      throw new Error('postgrip-agent: sandbox session input is closed');
     }
-    this.socket.send(data);
+    const bytes = sandboxInputBytes(data);
+    // An empty binary message is the stdin-EOF control. Preserve send's byte
+    // stream semantics by making empty writes no-ops; closeInput owns it.
+    if (bytes.byteLength === 0) return;
+    this.socket.send(bytes);
+  }
+
+  /** Signals stdin EOF while keeping output and exit-status delivery open. */
+  closeInput(): void {
+    if (this.inputClosed) return;
+    this.socket.send(new Uint8Array(0));
+    this.inputClosed = true;
   }
 
   /** Registers a handler for sandbox output. */
@@ -136,6 +146,11 @@ export class SandboxSession {
   close(): void {
     this.socket.close();
   }
+}
+
+export interface SandboxExecOptions extends Omit<SandboxSessionOptions, 'command'> {
+  /** Bytes delivered to stdin before the SDK signals EOF. Defaults to empty. */
+  stdin?: Uint8Array | string;
 }
 
 /**
@@ -292,11 +307,28 @@ export class SandboxClient {
   async exec(
     sandboxId: string,
     command: string[],
-    options: Omit<SandboxSessionOptions, 'command'> = {},
+    options: SandboxExecOptions = {},
   ): Promise<{ exitCode: number | undefined; output: Uint8Array }> {
-    const session = await this.openSession(sandboxId, 'exec', { ...options, command });
+    const { stdin, ...sessionOptions } = options;
+    // Validate deterministic local failures before createSession starts a
+    // remote command and consumes its single-use relay ticket.
+    const stdinBytes = stdin === undefined ? undefined : sandboxInputBytes(stdin);
+    const session = await this.openSession(sandboxId, 'exec', { ...sessionOptions, command });
     const chunks: Uint8Array[] = [];
     session.onData((chunk) => chunks.push(chunk));
+    try {
+      if (stdinBytes !== undefined) session.send(stdinBytes);
+      session.closeInput();
+    } catch (error) {
+      // A socket can fail after the remote exec has started. The caller has no
+      // session handle from this convenience method, so tear it down here.
+      try {
+        session.close();
+      } catch {
+        // Preserve the stdin setup failure; close is best-effort cleanup.
+      }
+      throw error;
+    }
     const exitCode = await session.exitCode();
     let total = 0;
     for (const c of chunks) total += c.byteLength;
@@ -308,6 +340,17 @@ export class SandboxClient {
     }
     return { exitCode, output };
   }
+}
+
+function sandboxInputBytes(data: Uint8Array | string): Uint8Array {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  if (bytes.byteLength > SANDBOX_RELAY_MAX_FRAME_BYTES) {
+    throw new Error(
+      `postgrip-agent: sandbox write of ${bytes.byteLength} bytes exceeds the relay frame limit ` +
+        `(${SANDBOX_RELAY_MAX_FRAME_BYTES}); chunk your writes`,
+    );
+  }
+  return bytes;
 }
 
 type HeaderCapableWebSocketConstructor = new (

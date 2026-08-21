@@ -29,6 +29,14 @@ const (
 	// sandbox session relay, in either direction. A peer writing a larger
 	// frame has its session closed rather than forwarded, so clients must
 	// chunk their writes at or below this size.
+	//
+	// Client-to-agent binary messages carry stdin bytes, with one reserved
+	// control message: a zero-length binary message signals end-of-stdin. It
+	// does not close the WebSocket; output continues until the agent closes the
+	// session with SandboxExecCloseStatusBase+exitCode. Clients must send the
+	// EOF message at most once and must not send stdin bytes after it. Legacy
+	// agents treat the empty message as a no-op, making the extension safe to
+	// roll out before updated SDKs begin sending it.
 	SandboxRelayMaxFrameBytes = 1 << 20
 
 	// SandboxWorkspaceMaxUploadBytes is the server's cap on a workspace
