@@ -46,7 +46,9 @@ examples.
 - Submit shell, container, and managed `workflow.runtime` tasks to PostGrip
   agent queues.
 - Define durable workflows and activities with replay-safe timers, retries,
-  child workflows, cancellation, signals, queries, and updates.
+  child workflows, cancellation, and signals. TypeScript and Python also
+  dispatch query and update handlers; Go handler dispatch remains on the
+  roadmap.
 - Create schedules and inspect workflow execution history.
 - Upload workspaces and manage persistent sandboxes, including command and
   interactive session execution.
@@ -104,8 +106,12 @@ python3 scripts/generate_openapi.py --check
 python3 scripts/generate_openapi.py --check-source ../postgrip-web/api/agent-openapi.json
 ```
 
-Never edit generated clients or wire-type files directly. Update the canonical
-contract, synchronize `openapi.json`, and rerun the generator.
+Never edit generated operation metadata, clients, or wire-type files directly.
+This includes `go/client/openapi_*.gen.go`,
+`typescript/src/generated/openapi.ts`,
+`python/src/postgrip_agent/generated/`, and
+`python/src/postgrip_agent/openapi.py`. Update the canonical contract,
+synchronize `openapi.json`, and rerun the generator.
 
 ## Development
 
@@ -163,6 +169,6 @@ compatibility details.
 
 Report SDK bugs and request features in the
 [monorepo issue tracker](https://github.com/postgrip-io/postgrip-agent-sdks/issues).
-The protocol and SDK packages are licensed under MIT; see the license files in
-[protocol](protocol/LICENSE), [Go](go/LICENSE),
+The protocol and SDK source is licensed under the Apache License 2.0; see the
+license files in [protocol](protocol/LICENSE), [Go](go/LICENSE),
 [TypeScript](typescript/LICENSE), and [Python](python/LICENSE).
