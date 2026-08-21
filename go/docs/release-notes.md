@@ -8,6 +8,14 @@ nav_order: 7
 
 ## Unreleased
 
+## v0.12.3
+
+- Signals stdin EOF after `SandboxClient.Exec` drains its input so commands
+  that read to EOF can finish while output and exit-status delivery stay open.
+- Adds `SandboxStream.CloseWrite` for manually managed exec sessions.
+- Preserves valid fast-process exit statuses when the EOF control races the
+  remote close, and pins the shared wire contract at `protocol/v0.3.1`.
+
 ## v0.12.2
 
 - Aligns the Go SDK release number with the TypeScript and Python SDK releases.

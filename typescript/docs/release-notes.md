@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.12.3
+
+- Adds the `stdin` exec option and `SandboxSession.closeInput()` so commands
+  that consume input through EOF can finish without closing their output side.
+- Preserves valid fast-process exit statuses when the EOF control races the
+  remote close, with cleanup for genuine stdin setup failures.
+- Standardizes the published package metadata on Apache-2.0 licensing.
+
 ## 0.12.2
 
 - Adds a prominent installation section to the npm README.

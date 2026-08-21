@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.12.3
+
+- Adds the `stdin` exec argument and `SandboxSession.close_input()` so commands
+  that consume input through EOF can finish without closing their output side.
+- Preserves valid fast-process exit statuses when the EOF control races the
+  remote close.
+- Standardizes the published package metadata on Apache-2.0 licensing.
+
 ## 0.12.2
 
 - Corrects the package README's validation commands and license link for the
