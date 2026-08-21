@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.12.2
+
+- Adds a prominent installation section to the npm README.
+- Corrects the repository layout and documents the implemented cancellation
+  scope support and active Vitest suite.
+
 ## 0.12.1
 
 - Changes the default service address to `https://agentorchestrator1.postgrip.io`.

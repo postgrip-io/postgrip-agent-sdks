@@ -10,21 +10,31 @@ This package provides a Temporal-style TypeScript API for defining, submitting, 
 
 **Docs:** [postgrip-io.github.io/postgrip-agent-sdks/typescript](https://postgrip-io.github.io/postgrip-agent-sdks/typescript/) — quick start, workflow runtime, API guide.
 
-**Current release:** `0.12.1`
+**Current release:** `0.12.2`
+
+## Installation
+
+```sh
+npm install @postgrip/agent
+```
+
+The package supports Node.js 20 or newer and Bun 1.0 or newer. It is published
+as ESM and exports its public API from `@postgrip/agent`.
 
 ## Layout
 
 ```text
 src/                  # TypeScript sources — Connection / Client / workflow runtime
-test/                 # reserved for future vitest unit / integration tests
-doc/                  # reserved for longer-form prose docs
-.github/workflows/    # CI and package release automation at the repository root
+test/                 # Vitest unit, transport, OpenAPI, and packaging regression tests
+docs/                 # customer documentation site sources
+example/              # runnable workflow examples
+../.github/workflows/ # monorepo CI and package release automation
 ```
 
 
 It mirrors the common Temporal TypeScript shape documented in Temporal's TypeScript developer guide: a `Connection`, `Client`, `Agent`, registered Workflows, registered Activities, activity helpers such as `heartbeat` and `activityMilestone`, and workflow helpers such as `milestone`, `proxyActivities`, `executeChild`, `continueAsNew`, `sleep`, `condition`, `cancellationRequested`, and `workflowInfo`.
 
-This is not a full Temporal replacement yet. The current PostGrip Agent runtime service supports durable JSON state, namespaces, workflow history, workflow ID reuse policies, memo/search attribute visibility metadata, activity tasks, activity heartbeats, activity cancellation on workflow cancellation, child workflows, continue-as-new, workflow run timeouts, timer tasks, durable schedules, durable signals, replayed queries, durable updates, durable cancellation requests, termination, and history replay for activity, child workflow, `sleep()`, retry, signal, query, update, and cancellation commands. Cancellation scopes, calendars, advanced search queries, and stronger deterministic sandboxing are still future work.
+This is not a full Temporal replacement yet. The current PostGrip Agent runtime service supports durable JSON state, namespaces, workflow history, workflow ID reuse policies, memo/search attribute visibility metadata, activity tasks, activity heartbeats, activity cancellation on workflow cancellation, child workflows, continue-as-new, workflow run timeouts, timer tasks, durable schedules, durable signals, replayed queries, durable updates, durable cancellation requests, cancellation scopes, termination, and history replay for activity, child workflow, `sleep()`, retry, signal, query, update, and cancellation commands. Calendars, advanced search queries, and stronger deterministic sandboxing are still future work.
 
 ## Example
 

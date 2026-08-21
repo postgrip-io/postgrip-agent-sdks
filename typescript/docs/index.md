@@ -2,7 +2,7 @@
 
 Run shell commands, container workloads, and durable workflows on the PostGrip Agent runtime service from your TypeScript code.
 
-**Current release:** `0.12.1`
+**Current release:** `0.12.2`
 
 [Quick start →](quickstart.md){ .md-button .md-button--primary }
 [GitHub](https://github.com/postgrip-io/postgrip-agent-sdks/tree/main/typescript){ .md-button }
