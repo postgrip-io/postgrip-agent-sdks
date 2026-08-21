@@ -518,9 +518,18 @@ export class Connection {
     return (await response.json()) as SandboxWorkspace;
   }
 
-  /** Management Authorization header value, for the relay dial. */
+  /** Headers for a management-authenticated custom transport such as the sandbox relay. */
+  managementHeaders(): Headers {
+    const headers = new Headers(this.headers);
+    if (this.authToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    return headers;
+  }
+
+  /** Management Authorization header value, for compatibility with earlier relay adapters. */
   authorizationHeader(): string | undefined {
-    return this.authToken ? `Bearer ${this.authToken}` : undefined;
+    return this.managementHeaders().get('Authorization') ?? undefined;
   }
 
   private async requestOpenAPI<

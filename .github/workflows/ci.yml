@@ -77,7 +77,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip wheel --no-deps . -w /tmp/wheel
       - run: python -m pip install /tmp/wheel/postgrip_agent-*.whl
-      - run: PYTHONPATH=src python -m unittest discover -s test
+      - name: Test the installed wheel without source-tree shadowing
+        run: python -m unittest discover -s test
 
   drift:
     runs-on: ubuntu-latest

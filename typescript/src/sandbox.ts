@@ -43,6 +43,17 @@ export interface SandboxWaitOptions {
   signal?: AbortSignal;
 }
 
+export interface SandboxWebSocketConnectOptions {
+  /** Connection-level headers, including the management Authorization header. */
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/** Creates an authenticated WebSocket for a sandbox relay connection. */
+export type SandboxWebSocketFactory = (
+  url: string,
+  options: SandboxWebSocketConnectOptions,
+) => WebSocket;
+
 export interface SandboxSessionOptions {
   command?: string[];
   /**
@@ -58,7 +69,16 @@ export interface SandboxSessionOptions {
    * WebSocket upgrades — the relay is deliberately not proxied.
    */
   relayBaseUrl?: string;
-  /** Supply a WebSocket implementation when the runtime lacks a global one. */
+  /**
+   * Overrides WebSocket construction. The factory receives every configured
+   * connection header, including the management Authorization credential.
+   */
+  webSocketFactory?: SandboxWebSocketFactory;
+  /**
+   * Legacy constructor override. Header-capable Node implementations receive
+   * the connection headers in their constructor options. Prefer
+   * `webSocketFactory` for new integrations.
+   */
   webSocketImpl?: typeof WebSocket;
 }
 
@@ -232,18 +252,14 @@ export class SandboxClient {
     if (kind === 'exec' && (!options.command || options.command.length === 0)) {
       throw new Error('postgrip-agent: sandbox exec requires a command');
     }
-    // Resolved before the session is created, not after. Creating first meant
-    // that on a runtime with no global WebSocket the server-side session was
-    // already made — and for an exec session the command may have started —
-    // before this threw. The caller then saw an error, never the output, and
-    // retrying with an implementation supplied would run a side-effecting
-    // command a second time.
-    const WebSocketImpl = options.webSocketImpl ?? globalThis.WebSocket;
-    if (!WebSocketImpl) {
-      throw new Error(
-        'postgrip-agent: no WebSocket implementation available; pass webSocketImpl (Node 22+ has a global WebSocket)',
-      );
-    }
+    const relayHeaders: Record<string, string> = {};
+    this.connection.managementHeaders().forEach((value, name) => {
+      relayHeaders[name] = value;
+    });
+    Object.freeze(relayHeaders);
+    // Resolve the transport before creating the single-use server session. A
+    // missing implementation must not burn a ticket or start an exec command.
+    const createWebSocket = await resolveSandboxWebSocketFactory(options, relayHeaders);
     const session = await this.createSession(sandboxId, {
       kind,
       command: options.command,
@@ -255,10 +271,9 @@ export class SandboxClient {
       session.id!,
       session.ticket!,
     );
-    // The ticket authorizes the session; the management credential still
-    // authenticates the request. Browsers cannot set headers on a WebSocket
-    // handshake, which is why the ticket is in the query string.
-    const socket = new WebSocketImpl(url);
+    // The ticket selects and authorizes the session; the management credential
+    // separately authenticates the request. Both are required by the contract.
+    const socket = createWebSocket(url, { headers: relayHeaders });
     socket.binaryType = 'arraybuffer';
     await new Promise<void>((resolve, reject) => {
       socket.addEventListener('open', () => resolve(), { once: true });
@@ -293,6 +308,49 @@ export class SandboxClient {
     }
     return { exitCode, output };
   }
+}
+
+type HeaderCapableWebSocketConstructor = new (
+  url: string,
+  protocols?: string | string[],
+  options?: { headers?: Readonly<Record<string, string>> },
+) => WebSocket;
+
+async function resolveSandboxWebSocketFactory(
+  options: SandboxSessionOptions,
+  headers: Readonly<Record<string, string>>,
+): Promise<SandboxWebSocketFactory> {
+  if (options.webSocketFactory) {
+    return options.webSocketFactory;
+  }
+  if (options.webSocketImpl) {
+    const WebSocketImpl = options.webSocketImpl as unknown as HeaderCapableWebSocketConstructor;
+    return (url, connectOptions) => new WebSocketImpl(url, [], { headers: connectOptions.headers });
+  }
+
+  // The standard WebSocket API cannot attach an Authorization header. Use the
+  // header-capable `ws` implementation on Node/Bun even when a global
+  // WebSocket exists (Node 22+), otherwise token-authenticated relays fail.
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    const { WebSocket: NodeWebSocket } = await import('ws');
+    return (url, connectOptions) => new NodeWebSocket(url, {
+      headers: { ...connectOptions.headers },
+    }) as unknown as WebSocket;
+  }
+
+  const WebSocketImpl = globalThis.WebSocket;
+  if (!WebSocketImpl) {
+    throw new Error(
+      'postgrip-agent: no WebSocket implementation available; pass webSocketFactory',
+    );
+  }
+  if (Object.keys(headers).length > 0) {
+    throw new Error(
+      'postgrip-agent: browser WebSocket cannot send configured relay headers; ' +
+        'authenticate with same-origin cookies or pass webSocketFactory in a header-capable runtime',
+    );
+  }
+  return (url) => new WebSocketImpl(url);
 }
 
 /** Builds the ws(s):// relay URL from an http(s) API base URL. */

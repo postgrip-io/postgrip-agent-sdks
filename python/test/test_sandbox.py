@@ -1,3 +1,4 @@
+import io
 import json
 import unittest
 from unittest.mock import patch
@@ -152,6 +153,36 @@ class SandboxClientTests(unittest.TestCase):
         request = captured["request"]
         self.assertIsNone(request.get_header("X-postgrip-repository"))
         self.assertIsNone(request.get_header("X-postgrip-revision"))
+
+    def test_upload_workspace_streams_file_like_inputs(self):
+        class TrackingArchive(io.BytesIO):
+            def __init__(self, value):
+                super().__init__(value)
+                self.read_calls = 0
+
+            def read(self, size=-1):
+                self.read_calls += 1
+                return super().read(size)
+
+        archive = TrackingArchive(b"GZIPPED-IN-CHUNKS")
+        captured = {}
+
+        def fake_urlopen(request, timeout=None):
+            captured["same_object"] = request.data is archive
+            captured["reads_before_transport"] = archive.read_calls
+            chunks = []
+            while chunk := request.data.read(4):
+                chunks.append(chunk)
+            captured["body"] = b"".join(chunks)
+            return FakeResponse({"id": "wsp_1"})
+
+        with patch("postgrip_agent.sandbox.urlopen", fake_urlopen):
+            self.client.sandbox.upload_workspace(archive)
+
+        self.assertTrue(captured["same_object"])
+        self.assertEqual(captured["reads_before_transport"], 0)
+        self.assertEqual(captured["body"], b"GZIPPED-IN-CHUNKS")
+        self.assertGreater(archive.read_calls, 1)
 
 
 class SandboxRelayContractTests(unittest.TestCase):

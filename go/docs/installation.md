@@ -15,7 +15,7 @@ go get github.com/postgrip-io/postgrip-agent-sdks/go@latest
 To pin a specific version:
 
 ```sh
-go get github.com/postgrip-io/postgrip-agent-sdks/go@v0.12.0
+go get github.com/postgrip-io/postgrip-agent-sdks/go@v0.12.1
 ```
 
 ## Requirements
