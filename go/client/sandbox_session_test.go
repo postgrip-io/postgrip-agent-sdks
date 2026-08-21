@@ -91,18 +91,19 @@ func TestExecStreamsAndReportsTheExitCode(t *testing.T) {
 			return
 		}
 		ctx := r.Context()
-		_ = conn.Write(ctx, websocket.MessageBinary, []byte("hello from sandbox"))
-		// Drain whatever stdin arrives, then close with exit code 3.
-		go func() {
-			for {
-				_, data, err := conn.Read(ctx)
-				if err != nil {
-					return
-				}
-				gotStdin.Write(data)
+		// Do not produce output or an exit status until the client half-closes
+		// stdin. Before the EOF control this exact shape hung forever for cat.
+		for {
+			kind, data, readErr := conn.Read(ctx)
+			if readErr != nil {
+				return
 			}
-		}()
-		time.Sleep(50 * time.Millisecond)
+			if kind == websocket.MessageBinary && len(data) == 0 {
+				break
+			}
+			gotStdin.Write(data)
+		}
+		_ = conn.Write(ctx, websocket.MessageBinary, []byte("hello from sandbox"))
 		_ = conn.Close(websocket.StatusCode(protocol.SandboxExecCloseStatusBase+3), "exit:3")
 	}))
 	defer server.Close()
@@ -123,6 +124,115 @@ func TestExecStreamsAndReportsTheExitCode(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "hello from sandbox") {
 		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if got := gotStdin.String(); got != "stdin bytes" {
+		t.Fatalf("stdin = %q, want %q before EOF", got, "stdin bytes")
+	}
+}
+
+// A nil Reader means an empty stdin stream, not "leave stdin open forever".
+// Commands such as cat still need the EOF control before they can exit.
+func TestExecSignalsEOFForNilStdin(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/sessions") {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"ses_1","ticket":"pgss_t"}`))
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		if err != nil {
+			return
+		}
+		kind, data, err := conn.Read(r.Context())
+		if err != nil || kind != websocket.MessageBinary || len(data) != 0 {
+			t.Errorf("first stdin message = (%v, %d bytes, %v), want empty binary EOF", kind, len(data), err)
+			return
+		}
+		_ = conn.Close(websocket.StatusCode(protocol.SandboxExecCloseStatusBase), "exit:0")
+	}))
+	defer server.Close()
+
+	conn, err := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "mgmt"})
+	if err != nil {
+		t.Fatalf("NewConnection: %v", err)
+	}
+	code, err := New(conn).Sandbox.Exec(context.Background(), "sbx_1", []string{"cat"}, nil, io.Discard)
+	if err != nil || code != 0 {
+		t.Fatalf("Exec = (%d, %v), want (0, nil)", code, err)
+	}
+}
+
+// A command such as true can report its process close before the client sends
+// the empty-input EOF frame. The close status is authoritative once all input
+// bytes were delivered; treating the losing EOF write as fatal loses a valid
+// exit code nondeterministically.
+func TestExecPreservesExitStatusWhenEmptyStdinEOFLosesTheCloseRace(t *testing.T) {
+	t.Parallel()
+	exit := websocket.CloseError{
+		Code:   websocket.StatusCode(protocol.SandboxExecCloseStatusBase + 7),
+		Reason: "exit:7",
+	}
+	code, err := sandboxExecResult(exit, sandboxExecStdinOutcome{eofErr: io.ErrClosedPipe})
+	if err != nil || code != 7 {
+		t.Fatalf("sandboxExecResult = (%d, %v), want (7, nil)", code, err)
+	}
+}
+
+func TestSandboxStreamCloseWriteIsIdempotentAndClosesOnlyInput(t *testing.T) {
+	t.Parallel()
+	eofFrames := make(chan int, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/sessions") {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"ses_1","ticket":"pgss_t"}`))
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+		if err != nil {
+			return
+		}
+		count := 0
+		for {
+			kind, data, readErr := conn.Read(r.Context())
+			if readErr != nil {
+				break
+			}
+			if kind == websocket.MessageBinary && len(data) == 0 {
+				count++
+			}
+		}
+		eofFrames <- count
+	}))
+	defer server.Close()
+
+	conn, _ := NewConnection(ConnectionOptions{Address: server.URL, AuthToken: "mgmt"})
+	stream, err := New(conn).Sandbox.OpenSandboxSession(context.Background(), "sbx_1", protocol.SandboxSessionKindExec, SandboxSessionOptions{Command: []string{"cat"}})
+	if err != nil {
+		t.Fatalf("OpenSandboxSession: %v", err)
+	}
+	if n, err := stream.Write(nil); n != 0 || err != nil {
+		t.Fatalf("empty Write = (%d, %v), want (0, nil)", n, err)
+	}
+	if err := stream.CloseWrite(); err != nil {
+		t.Fatalf("CloseWrite: %v", err)
+	}
+	if err := stream.CloseWrite(); err != nil {
+		t.Fatalf("second CloseWrite: %v", err)
+	}
+	if _, err := stream.Write([]byte("late")); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("Write after CloseWrite = %v, want io.ErrClosedPipe", err)
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	select {
+	case count := <-eofFrames:
+		if count != 1 {
+			t.Fatalf("EOF frame count = %d, want 1", count)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("relay never received stdin EOF")
 	}
 }
 

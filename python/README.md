@@ -174,7 +174,7 @@ box = client.sandbox.create({
 # create() returns as soon as the record exists; the sandbox is not up yet.
 box = client.sandbox.wait_until_running(box["id"])
 
-exit_code, output = client.sandbox.exec(box["id"], ["pytest", "-q"])
+exit_code, output = client.sandbox.exec(box["id"], ["wc", "-c"], stdin=b"hello")
 
 client.sandbox.delete(box["id"])
 ```
@@ -203,12 +203,15 @@ with client.sandbox.open_session(box["id"], kind="pty", rows=40, columns=120) as
     print("exit:", session.exit_code)
 ```
 
-Three relay properties that are not obvious:
+Four relay properties that are not obvious:
 
 - **stdout and stderr are interleaved.** The relay carries one byte stream, so
   they cannot be separated client-side.
 - **There is no resize channel.** `rows`/`columns` are fixed at session
   creation; resizing your terminal mid-session cannot reach the sandbox.
+- **Exec stdin can be half-closed.** `exec` signals EOF after its optional
+  `stdin`. For a manually opened exec session, call `session.close_input()`;
+  output and exit-status delivery remain open.
 - **Exit codes arrive as the WebSocket close status** (`4000 + code`), not in
   the stream. `exit_code` is `None` when the close carried no code — that means
   the transport ended, not that the process succeeded.

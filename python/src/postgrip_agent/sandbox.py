@@ -292,21 +292,10 @@ class SandboxClient:
         is ``None`` when the close carried no code, meaning the transport ended
         rather than the process.
 
-        .. warning::
-
-           **Commands that read stdin to EOF will hang.** There is no
-           end-of-input signal on the wire. The agent hands the relay
-           connection to the process as its stdin directly, so that stdin
-           reaches EOF only when the whole session closes — which is also what
-           carries the exit status back. Sending ``stdin`` here therefore
-           delivers the bytes but tells the sandbox nothing more, and a command
-           that reads until EOF (``cat``, ``sort``,
-           ``python -c 'import sys; sys.stdin.read()'``) waits for input while
-           this call waits for output.
-
-           Commands that read a bounded amount, and commands that read nothing,
-           are unaffected. Closing this properly needs a half-close on the wire,
-           which is a protocol change rather than an SDK one.
+        After sending ``stdin`` (or immediately when it is ``None``), the SDK
+        signals end-of-stdin while leaving output open. Commands that read to
+        EOF, such as ``cat``, ``sort``, and archive imports, can therefore
+        finish normally and still report their exit status.
         """
         session = self.open_session(
             sandbox_id, kind="exec", command=command, relay_base_url=relay_base_url
@@ -314,6 +303,7 @@ class SandboxClient:
         with session:
             if stdin:
                 session.send(stdin)
+            session.close_input()
             chunks = list(session.read_all())
             return session.exit_code, b"".join(chunks)
 
@@ -321,8 +311,9 @@ class SandboxClient:
 class SandboxSession:
     """A live sandbox session: a raw bidirectional byte stream.
 
-    There is no framing and no resize channel; rows and columns are fixed when
-    the session is created.
+    Message boundaries are opaque except for the reserved zero-length binary
+    stdin-EOF message sent by :meth:`close_input`. There is no resize channel;
+    rows and columns are fixed when the session is created.
     """
 
     def __init__(self, url: str, headers: dict[str, str]):
@@ -335,15 +326,43 @@ class SandboxSession:
             ) from exc
         self._socket = connect(url, additional_headers=headers, max_size=None)
         self.exit_code: int | None = None
+        self._input_closed = False
 
     def send(self, data: bytes | str) -> None:
-        size = len(data.encode()) if isinstance(data, str) else len(data)
+        if self._input_closed:
+            raise RuntimeError("postgrip-agent: sandbox session input is closed")
+        payload = data.encode() if isinstance(data, str) else data
+        size = len(payload)
+        # Empty binary messages carry the stdin-EOF control. Keep an empty
+        # send as a byte-stream no-op; close_input owns the control message.
+        if size == 0:
+            return
         if size > SANDBOX_RELAY_MAX_FRAME_BYTES:
             raise ValueError(
                 f"postgrip-agent: sandbox write of {size} bytes exceeds the relay frame "
                 f"limit ({SANDBOX_RELAY_MAX_FRAME_BYTES}); chunk your writes"
             )
-        self._socket.send(data)
+        self._socket.send(payload)
+
+    def close_input(self) -> None:
+        """Signal stdin EOF without closing output or exit-status delivery."""
+        if self._input_closed:
+            return
+        try:
+            self._socket.send(b"")
+        except Exception as exc:
+            # A command that never reads stdin can close with its valid exit
+            # status before this empty EOF frame is written. Preserve that
+            # process result; closes without an exec status remain failures.
+            received = getattr(exc, "rcvd", None)
+            close_code = getattr(received, "code", None)
+            if close_code is None:
+                close_code = getattr(self._socket, "close_code", None)
+            exit_code = sandbox_exec_exit_code(close_code) if isinstance(close_code, int) else None
+            if exit_code is None:
+                raise
+            self.exit_code = exit_code
+        self._input_closed = True
 
     def read_all(self) -> Iterable[bytes]:
         """Yield output until the session closes, recording the exit code."""

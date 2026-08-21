@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -34,16 +35,20 @@ type SandboxSessionOptions struct {
 // SandboxStream is a live sandbox session: a bidirectional byte stream plus
 // the process exit code once it closes.
 //
-// The stream carries raw stdio with no framing. For a pty session it is
-// terminal traffic; for exec it is the process's stdout and stderr
-// *interleaved on the same stream* — the relay multiplexes both into one
-// channel, so they cannot be separated client-side.
+// The stream carries raw stdio. For a pty session it is terminal traffic; for
+// exec it is the process's stdout and stderr *interleaved on the same stream*
+// — the relay multiplexes both into one channel, so they cannot be separated
+// client-side. WebSocket message boundaries are otherwise opaque, except that
+// CloseWrite sends the reserved zero-length binary stdin-EOF message.
 type SandboxStream struct {
 	conn *websocket.Conn
 	// net.Conn rather than io.ReadWriteCloser so ExitCode can unblock a pending
 	// read via SetReadDeadline when its context is cancelled. websocket.NetConn
 	// already returns one.
-	rw net.Conn
+	rw          net.Conn
+	ctx         context.Context
+	writeMu     sync.Mutex
+	inputClosed bool
 }
 
 // Read implements io.Reader over the session's output.
@@ -55,12 +60,40 @@ func (s *SandboxStream) Read(p []byte) (int, error) { return s.rw.Read(p) }
 // closes the session rather than forwarding a larger frame. io.Copy's default
 // 32 KiB buffer is comfortably under that.
 func (s *SandboxStream) Write(p []byte) (int, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.inputClosed {
+		return 0, io.ErrClosedPipe
+	}
+	// io.Writer permits zero-length writes as no-ops. Keep them that way: an
+	// actual empty binary WebSocket message is reserved for CloseWrite.
+	if len(p) == 0 {
+		return 0, nil
+	}
 	if len(p) > protocol.SandboxRelayMaxFrameBytes {
 		return 0, &failure.SDKError{
 			Message: "sandbox session write exceeds the relay frame limit; chunk writes at or below protocol.SandboxRelayMaxFrameBytes",
 		}
 	}
 	return s.rw.Write(p)
+}
+
+// CloseWrite signals end-of-stdin without closing the session's output side.
+//
+// The signal is a reserved zero-length binary WebSocket message. It is
+// idempotent. Once it succeeds, later writes fail with io.ErrClosedPipe while
+// Read and ExitCode continue until the sandbox process exits.
+func (s *SandboxStream) CloseWrite() error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.inputClosed {
+		return nil
+	}
+	if err := s.conn.Write(s.ctx, websocket.MessageBinary, nil); err != nil {
+		return err
+	}
+	s.inputClosed = true
+	return nil
 }
 
 // Close tears the session down immediately.
@@ -180,7 +213,12 @@ func (s *SandboxClient) OpenSandboxSession(ctx context.Context, sandboxID, kind 
 	}
 	// Frames are opaque binary. NetConn lifts the peer read limit; the relay
 	// keeps its own bound, which Write enforces above.
-	return &SandboxStream{conn: conn, rw: websocket.NetConn(ctx, conn, websocket.MessageBinary)}, nil
+	return &SandboxStream{conn: conn, rw: websocket.NetConn(ctx, conn, websocket.MessageBinary), ctx: ctx}, nil
+}
+
+type sandboxExecStdinOutcome struct {
+	copyErr error
+	eofErr  error
 }
 
 // Exec runs a command in the sandbox, streaming stdin in and stdout out, and
@@ -189,19 +227,10 @@ func (s *SandboxClient) OpenSandboxSession(ctx context.Context, sandboxID, kind 
 // stdout receives stdout and stderr interleaved — the relay carries one
 // stream. Pass a nil stdin for commands that read nothing.
 //
-// # Commands that read stdin to EOF will hang
-//
-// There is no end-of-input signal on the wire. The agent hands the relay
-// connection to the process as its stdin directly, so that stdin reaches EOF
-// only when the whole session closes — which is also what carries the exit
-// status back. Draining the caller's Reader therefore tells the sandbox
-// nothing, and a command that reads until EOF (`cat`, `sort`, an archive
-// import, `go test` consuming piped input) keeps waiting while Exec keeps
-// waiting for its output, until ctx cancels.
-//
-// Pass a ctx deadline for such commands. Commands that read a bounded amount
-// and commands that read nothing are unaffected. Fixing this properly needs a
-// half-close on the wire, which is a protocol change, not an SDK one.
+// Once stdin is drained (or immediately when it is nil), Exec sends the
+// protocol's end-of-stdin message while keeping the output side open. Commands
+// that read until EOF, such as cat, sort, and archive imports, can therefore
+// finish normally and still report their exit status.
 func (s *SandboxClient) Exec(ctx context.Context, sandboxID string, command []string, stdin io.Reader, stdout io.Writer) (int, error) {
 	stream, err := s.OpenSandboxSession(ctx, sandboxID, protocol.SandboxSessionKindExec, SandboxSessionOptions{Command: command})
 	if err != nil {
@@ -211,11 +240,17 @@ func (s *SandboxClient) Exec(ctx context.Context, sandboxID string, command []st
 
 	// Buffered so the copy never blocks on a receive that no longer happens:
 	// when the session ends first, nothing reads this channel.
-	stdinDone := make(chan error, 1)
-	if stdin != nil {
+	stdinDone := make(chan sandboxExecStdinOutcome, 1)
+	if stdin == nil {
+		stdinDone <- sandboxExecStdinOutcome{eofErr: stream.CloseWrite()}
+	} else {
 		go func() {
-			_, err := io.Copy(stream, stdin)
-			stdinDone <- err
+			_, copyErr := io.Copy(stream, stdin)
+			outcome := sandboxExecStdinOutcome{copyErr: copyErr}
+			if copyErr == nil {
+				outcome.eofErr = stream.CloseWrite()
+			}
+			stdinDone <- outcome
 		}()
 	}
 	if stdout == nil {
@@ -228,23 +263,34 @@ func (s *SandboxClient) Exec(ctx context.Context, sandboxID string, command []st
 	// exit 0 on the bytes it did receive, so the exit code alone would report
 	// success for a command that never got its input. Report the code (the
 	// caller may still want it) and an error saying not to trust it.
-	var stdinErr error
+	var stdinResult sandboxExecStdinOutcome
 	select {
-	case stdinErr = <-stdinDone:
+	case stdinResult = <-stdinDone:
 	default:
 	}
 
-	code, ok := protocol.SandboxExecExitCode(int(websocket.CloseStatus(copyErr)))
-	if stdinErr != nil {
-		return code, &failure.SDKError{Message: "sandbox exec stdin delivery failed; the exit status does not describe a complete run", Cause: stdinErr}
+	return sandboxExecResult(copyErr, stdinResult)
+}
+
+func sandboxExecResult(outputErr error, stdin sandboxExecStdinOutcome) (int, error) {
+	code, ok := protocol.SandboxExecExitCode(int(websocket.CloseStatus(outputErr)))
+	if stdin.copyErr != nil {
+		return code, &failure.SDKError{Message: "sandbox exec stdin delivery failed; the exit status does not describe a complete run", Cause: stdin.copyErr}
 	}
 	if ok {
+		// A command that does not read stdin can report its valid exit status
+		// before the empty EOF message is written. The input bytes were fully
+		// delivered (or there were none), so that close wins the race; only a
+		// copy failure above means the process saw truncated input.
 		return code, nil
+	}
+	if stdin.eofErr != nil {
+		return 0, &failure.SDKError{Message: "sandbox exec stdin delivery failed; the session ended before EOF was signalled", Cause: stdin.eofErr}
 	}
 	// No exit status: the session ended some other way. A nil copyErr means a
 	// clean EOF, which is still the stream vanishing without the sandbox
 	// reporting how the process finished.
-	return 0, &failure.SDKError{Message: "sandbox exec ended without an exit status", Cause: copyErr}
+	return 0, &failure.SDKError{Message: "sandbox exec ended without an exit status", Cause: outputErr}
 }
 
 // sandboxRelayURL builds the ws:// or wss:// session URL from an http(s)

@@ -6,6 +6,7 @@ import { Connection } from '../src/connection';
 import {
   SANDBOX_EXEC_CLOSE_STATUS_BASE,
   SANDBOX_RELAY_MAX_FRAME_BYTES,
+  SandboxSession,
   sandboxExecExitCode,
   sandboxRelayUrl,
 } from '../src/sandbox';
@@ -159,6 +160,48 @@ describe('sandbox client', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('rejects oversized exec stdin before creating a remote session', async () => {
+    const { client, fetchImpl } = await sandboxClient(() =>
+      jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+    );
+    await expect(
+      client.sandbox.exec('sbx_1', ['cat'], {
+        stdin: new Uint8Array(SANDBOX_RELAY_MAX_FRAME_BYTES + 1),
+      }),
+    ).rejects.toThrow(/exceeds the relay frame limit/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('closes a remote exec when sending stdin or EOF throws', async () => {
+    for (const failingSend of [1, 2]) {
+      const { client } = await sandboxClient(() =>
+        jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+      );
+      let sends = 0;
+      const close = vi.fn();
+      class FailingWebSocket extends EventTarget {
+        binaryType: BinaryType = 'blob';
+        send(): void {
+          sends += 1;
+          if (sends === failingSend) throw new Error(`send ${failingSend} failed`);
+        }
+        close(): void {
+          close();
+        }
+      }
+      const socket = new FailingWebSocket();
+      const run = client.sandbox.exec('sbx_1', ['cat'], {
+        stdin: 'hello',
+        webSocketFactory: () => {
+          setTimeout(() => socket.dispatchEvent(new Event('open')), 0);
+          return socket as unknown as WebSocket;
+        },
+      });
+      await expect(run).rejects.toThrow(`send ${failingSend} failed`);
+      expect(close).toHaveBeenCalledOnce();
+    }
+  });
+
   it('authenticates the default Node WebSocket relay dial', async () => {
     const relay = new WebSocketServer({ host: '127.0.0.1', port: 0 });
     await new Promise<void>((resolve) => relay.once('listening', resolve));
@@ -184,6 +227,76 @@ describe('sandbox client', () => {
         relay.close((error) => (error ? reject(error) : resolve())),
       );
     }
+  });
+
+  it('sends stdin EOF and keeps reading until the exec exit status', async () => {
+    const relay = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await new Promise<void>((resolve) => relay.once('listening', resolve));
+    const port = (relay.address() as AddressInfo).port;
+    let stdin = Buffer.alloc(0);
+    let eofFrames = 0;
+    relay.once('connection', (socket) => {
+      socket.on('message', (data, isBinary) => {
+        if (!isBinary) return;
+        const chunk = Buffer.from(data as ArrayBuffer);
+        if (chunk.byteLength === 0) {
+          eofFrames += 1;
+          socket.send(Buffer.from('cat output'));
+          socket.close(SANDBOX_EXEC_CLOSE_STATUS_BASE);
+          return;
+        }
+        stdin = Buffer.concat([stdin, chunk]);
+      });
+    });
+
+    try {
+      const { client } = await sandboxClient(() =>
+        jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+      );
+      const result = await client.sandbox.exec('sbx_1', ['cat'], {
+        relayBaseUrl: `http://127.0.0.1:${port}`,
+        stdin: 'hello',
+      });
+      expect(stdin.toString()).toBe('hello');
+      expect(eofFrames).toBe(1);
+      expect(result.exitCode).toBe(0);
+      expect(new TextDecoder().decode(result.output)).toBe('cat output');
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        relay.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('preserves a fast exit that wins the empty-stdin EOF race', async () => {
+    const { client } = await sandboxClient(() =>
+      jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+    );
+    class ExitedWebSocket extends EventTarget {
+      binaryType: BinaryType = 'blob';
+      send(): void {
+        throw new Error('socket already closed');
+      }
+      close(): void {}
+    }
+    const socket = new ExitedWebSocket();
+    const result = client.sandbox.exec('sbx_1', ['true'], {
+      webSocketFactory: () => {
+        setTimeout(() => {
+          socket.dispatchEvent(new Event('open'));
+          queueMicrotask(() => {
+            const close = new Event('close');
+            Object.defineProperty(close, 'code', {
+              value: SANDBOX_EXEC_CLOSE_STATUS_BASE + 7,
+            });
+            socket.dispatchEvent(close);
+          });
+        }, 0);
+        return socket as unknown as WebSocket;
+      },
+    });
+
+    await expect(result).resolves.toMatchObject({ exitCode: 7 });
   });
 });
 
@@ -214,6 +327,27 @@ describe('sandbox relay contract', () => {
 
   it('states the relay frame bound', () => {
     expect(SANDBOX_RELAY_MAX_FRAME_BYTES).toBe(1 << 20);
+  });
+
+  it('reserves empty binary messages for closeInput', () => {
+    const sent: Array<string | ArrayBufferLike | Blob | ArrayBufferView> = [];
+    class FakeWebSocket extends EventTarget {
+      send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+        sent.push(data);
+      }
+      close(): void {}
+    }
+    const session = new SandboxSession(new FakeWebSocket() as unknown as WebSocket);
+    session.send('hello');
+    session.send('');
+    session.closeInput();
+    session.closeInput();
+
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toBeInstanceOf(Uint8Array);
+    expect(new TextDecoder().decode(sent[0] as Uint8Array)).toBe('hello');
+    expect((sent[1] as Uint8Array).byteLength).toBe(0);
+    expect(() => session.send('late')).toThrow(/input is closed/);
   });
 });
 

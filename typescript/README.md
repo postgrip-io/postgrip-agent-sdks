@@ -165,7 +165,9 @@ let box = await client.sandbox.create({
 // create() returns as soon as the record exists; the sandbox is not up yet.
 box = await client.sandbox.waitUntilRunning(box.id!);
 
-const { exitCode, output } = await client.sandbox.exec(box.id!, ['npm', 'test']);
+const { exitCode, output } = await client.sandbox.exec(box.id!, ['wc', '-c'], {
+  stdin: 'hello',
+});
 
 await client.sandbox.delete(box.id!);
 ```
@@ -185,12 +187,15 @@ session.send('ls -la\n');
 const code = await session.exitCode();
 ```
 
-Three relay properties that are not obvious:
+Four relay properties that are not obvious:
 
 - **stdout and stderr are interleaved.** The relay carries one byte stream, so
   they cannot be separated client-side.
 - **There is no resize channel.** `rows`/`columns` are fixed at session
   creation; resizing your terminal mid-session cannot reach the sandbox.
+- **Exec stdin can be half-closed.** `exec` sends EOF after its optional
+  `stdin`. For a manually opened exec session, call `session.closeInput()`;
+  output and exit-status delivery remain open.
 - **Exit codes arrive as the WebSocket close status** (`4000 + code`), not in
   the stream. `exitCode()` resolves `undefined` when the close carried no exit
   code — that means the transport ended, not that the process succeeded.

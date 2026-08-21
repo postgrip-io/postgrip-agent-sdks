@@ -121,7 +121,7 @@ box, err := c.Sandbox.Create(ctx, client.SandboxCreateRequest{
 // Create returns as soon as the record exists; the sandbox is not up yet.
 box, err = c.Sandbox.WaitUntilRunning(ctx, box.ID, client.SandboxWaitOptions{})
 
-code, err := c.Sandbox.Exec(ctx, box.ID, []string{"go", "test", "./..."}, nil, os.Stdout)
+code, err := c.Sandbox.Exec(ctx, box.ID, []string{"wc", "-c"}, strings.NewReader("hello"), os.Stdout)
 
 _, err = c.Sandbox.Delete(ctx, box.ID)
 ```
@@ -143,12 +143,15 @@ go io.Copy(stream, os.Stdin)
 io.Copy(os.Stdout, stream)
 ```
 
-Three properties of the relay worth knowing, because they are not obvious:
+Four properties of the relay worth knowing, because they are not obvious:
 
 - **stdout and stderr are interleaved.** The relay carries one byte stream; a
   client cannot separate them.
 - **There is no resize channel.** `Rows`/`Columns` are fixed when the session
   is created, so a terminal resize mid-session cannot reach the sandbox.
+- **Exec stdin can be half-closed.** `Exec` signals EOF after its input reader
+  is drained. For a manually opened exec stream, call `stream.CloseWrite()`;
+  output and exit-status delivery remain open.
 - **Exit codes arrive as the WebSocket close status** (`4000+code`), not in the
   stream. `Exec` decodes this; a close outside that range is a transport
   failure and surfaces as an error rather than as an exit code.
