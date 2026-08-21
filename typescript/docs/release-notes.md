@@ -2,11 +2,17 @@
 
 ## Unreleased
 
+## 0.12.1
+
 - Changes the default service address to `https://agentorchestrator1.postgrip.io`.
   The previous default, `agentorchestrator.postgrip.app`, does not resolve, so
   any client constructed without an explicit address or environment override
   was contacting a host that does not exist. Callers that already pass an
   address, or set `POSTGRIP_AGENTORCHESTRATOR_URL`, are unaffected.
+- Authenticates sandbox WebSocket relay handshakes with the configured
+  management token and custom connection headers on Node and Bun.
+- Adds `webSocketFactory` for custom authenticated relay transports and reports
+  the native browser WebSocket header limitation before creating a session.
 
 ## 0.12.0
 

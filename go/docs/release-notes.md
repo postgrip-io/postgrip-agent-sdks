@@ -8,6 +8,8 @@ nav_order: 7
 
 ## Unreleased
 
+## v0.12.1
+
 - Changes the default service address to `https://agentorchestrator1.postgrip.io`.
   The previous default, `agentorchestrator.postgrip.app`, does not resolve, so
   any client constructed without an explicit address or environment override

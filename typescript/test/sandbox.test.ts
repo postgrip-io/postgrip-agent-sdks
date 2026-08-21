@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AddressInfo } from 'node:net';
+import { WebSocketServer } from 'ws';
 import { Client } from '../src/client';
 import { Connection } from '../src/connection';
 import {
@@ -156,6 +158,33 @@ describe('sandbox client', () => {
     await expect(client.sandbox.openSession('sbx_1', 'exec', {})).rejects.toThrow(/requires a command/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it('authenticates the default Node WebSocket relay dial', async () => {
+    const relay = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await new Promise<void>((resolve) => relay.once('listening', resolve));
+    const port = (relay.address() as AddressInfo).port;
+    let authorization: string | undefined;
+    relay.once('connection', (socket, request) => {
+      authorization = request.headers.authorization;
+      socket.close(SANDBOX_EXEC_CLOSE_STATUS_BASE);
+    });
+
+    try {
+      const { client } = await sandboxClient(() =>
+        jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+      );
+      const session = await client.sandbox.openSession('sbx_1', 'exec', {
+        command: ['true'],
+        relayBaseUrl: `http://127.0.0.1:${port}`,
+      });
+      expect(authorization).toBe('Bearer mgmt-token');
+      await session.exitCode();
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        relay.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
 });
 
 describe('sandbox relay contract', () => {
@@ -251,24 +280,42 @@ describe('sandbox wait and session preconditions', () => {
     expect(Date.now() - started).toBeLessThan(5_000);
   });
 
-  // Creating the session first meant that on a runtime with no WebSocket the
-  // server-side session already existed — and an exec command may have already
-  // run — before the capability check threw, so a retry could execute a
-  // side-effecting command twice.
-  it('checks for a WebSocket implementation before creating the session', async () => {
+  it('rejects browser token auth before creating a single-use session', async () => {
     const { client, fetchImpl } = await sandboxClient(() =>
       jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
     );
-    const globalWebSocket = globalThis.WebSocket;
-    // @ts-expect-error - simulating a runtime without a global WebSocket
-    delete globalThis.WebSocket;
+    const nodeVersion = Object.getOwnPropertyDescriptor(process.versions, 'node');
+    Object.defineProperty(process.versions, 'node', { ...nodeVersion, value: undefined });
     try {
       await expect(
-        client.sandbox.openSession('sbx_1', 'exec', { command: ['rm', '-rf', 'data'] }),
-      ).rejects.toThrow(/no WebSocket implementation/);
-      expect(fetchImpl, 'a session was created before the capability check').not.toHaveBeenCalled();
+        client.sandbox.openSession('sbx_1', 'exec', { command: ['true'] }),
+      ).rejects.toThrow(/browser WebSocket cannot send configured relay headers/);
+      expect(fetchImpl, 'a session was created before the browser auth check').not.toHaveBeenCalled();
     } finally {
-      globalThis.WebSocket = globalWebSocket;
+      if (nodeVersion) Object.defineProperty(process.versions, 'node', nodeVersion);
     }
+  });
+
+  it('passes management headers to a custom WebSocket factory', async () => {
+    const { client } = await sandboxClient(() =>
+      jsonResponse({ id: 'ses_1', ticket: 'pgss_t' }, 201),
+    );
+    let receivedHeaders: Readonly<Record<string, string>> | undefined;
+    class FakeWebSocket extends EventTarget {
+      binaryType: BinaryType = 'blob';
+      send(): void {}
+      close(): void {}
+    }
+    const socket = new FakeWebSocket();
+    const opening = client.sandbox.openSession('sbx_1', 'exec', {
+      command: ['true'],
+      webSocketFactory: (_url, connectOptions) => {
+        receivedHeaders = connectOptions.headers;
+        setTimeout(() => socket.dispatchEvent(new Event('open')), 0);
+        return socket as unknown as WebSocket;
+      },
+    });
+    await opening;
+    expect(receivedHeaders?.authorization).toBe('Bearer mgmt-token');
   });
 });

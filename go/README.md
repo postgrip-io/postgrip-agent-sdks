@@ -16,7 +16,7 @@ polyglot deployments share one runtime contract.
 **Docs:** [postgrip-io.github.io/postgrip-agent-sdks/go](https://postgrip-io.github.io/postgrip-agent-sdks/go/) — quick start, package guide, workflow runtime model.
 **API:** [pkg.go.dev/github.com/postgrip-io/postgrip-agent-sdks/go](https://pkg.go.dev/github.com/postgrip-io/postgrip-agent-sdks/go) — auto-generated godoc.
 
-**Current release:** `v0.12.0`
+**Current release:** `v0.12.1`
 
 ```sh
 go get github.com/postgrip-io/postgrip-agent-sdks/go

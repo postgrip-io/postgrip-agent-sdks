@@ -7,7 +7,7 @@ pip install postgrip-agent
 To pin a specific version:
 
 ```sh
-pip install postgrip-agent==0.12.0
+pip install postgrip-agent==0.12.1
 ```
 
 ## Requirements

@@ -15,7 +15,7 @@ bun add @postgrip/agent
 To pin a specific version:
 
 ```sh
-npm install @postgrip/agent@0.12.0
+npm install @postgrip/agent@0.12.1
 ```
 
 ## Requirements

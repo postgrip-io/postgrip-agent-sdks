@@ -10,7 +10,7 @@ This package provides a Temporal-style TypeScript API for defining, submitting, 
 
 **Docs:** [postgrip-io.github.io/postgrip-agent-sdks/typescript](https://postgrip-io.github.io/postgrip-agent-sdks/typescript/) — quick start, workflow runtime, API guide.
 
-**Current release:** `0.12.0`
+**Current release:** `0.12.1`
 
 ## Layout
 
@@ -188,7 +188,11 @@ Three relay properties that are not obvious:
 Writes must stay at or below `SANDBOX_RELAY_MAX_FRAME_BYTES` (1 MiB); larger
 frames throw locally rather than having the relay close the session.
 
-Node 22+ has a global `WebSocket`. On older runtimes pass `webSocketImpl`.
+On Node and Bun, the SDK uses a header-capable WebSocket transport so the relay
+receives the connection's management token and custom headers. A custom
+transport can be supplied with `webSocketFactory`; it receives those headers
+explicitly. Browsers cannot attach headers to the native WebSocket handshake,
+so browser sessions must use same-origin cookie authentication.
 
 Inside a managed runtime, the workflow client can inspect and interact with workflows:
 

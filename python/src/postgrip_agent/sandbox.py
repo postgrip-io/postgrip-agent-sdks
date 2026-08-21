@@ -164,11 +164,12 @@ class SandboxClient:
     ) -> dict[str, Any]:
         """Upload a gzipped tar archive; its ``id`` goes in ``workspaceId``.
 
-        The body is the raw archive — not multipart. Uploading identical bytes
-        twice returns the *pre-existing* record rather than creating a second
-        one, so do not assume a fresh id per upload.
+        The body is the raw archive — not multipart. File-like inputs are sent
+        incrementally with chunked transfer encoding rather than buffered in
+        memory. Uploading identical bytes twice returns the *pre-existing*
+        record rather than creating a second one, so do not assume a fresh id
+        per upload.
         """
-        data = archive if isinstance(archive, bytes) else archive.read()
         headers = dict(self.connection.headers)
         headers.setdefault("User-Agent", "postgrip-agent-python")
         headers["Content-Type"] = "application/gzip"
@@ -184,7 +185,9 @@ class SandboxClient:
             raise RuntimeError("postgrip-agent: workspace upload is not a streaming OpenAPI operation")
         request = Request(
             self.connection.address + operation.path,
-            data=data,
+            # urllib/http.client streams file-like request bodies in blocks.
+            # When their length is unknown it selects chunked transfer encoding.
+            data=archive,
             method=operation.method,
             headers=headers,
         )

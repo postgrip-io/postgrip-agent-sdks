@@ -2,11 +2,17 @@
 
 ## Unreleased
 
+## 0.12.1
+
 - Changes the default service address to `https://agentorchestrator1.postgrip.io`.
   The previous default, `agentorchestrator.postgrip.app`, does not resolve, so
   any client constructed without an explicit address or environment override
   was contacting a host that does not exist. Callers that already pass an
   address, or set `POSTGRIP_AGENTORCHESTRATOR_URL`, are unaffected.
+- Streams file-like sandbox workspace archives instead of reading the entire
+  upload into memory.
+- Tests the installed wheel in CI and again before publishing, without the
+  source tree shadowing the installed package.
 
 ## 0.12.0
 
