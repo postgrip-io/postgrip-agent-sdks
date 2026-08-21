@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.12.2
+
+- Corrects the package README's validation commands and license link for the
+  monorepo layout, and refreshes Python release references.
+
 ## 0.12.1
 
 - Changes the default service address to `https://agentorchestrator1.postgrip.io`.
