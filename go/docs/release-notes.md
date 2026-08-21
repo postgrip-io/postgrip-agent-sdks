@@ -8,6 +8,11 @@ nav_order: 7
 
 ## Unreleased
 
+## v0.12.2
+
+- Aligns the Go SDK release number with the TypeScript and Python SDK releases.
+  There are no Go API or wire-contract changes from v0.12.1.
+
 ## v0.12.1
 
 - Changes the default service address to `https://agentorchestrator1.postgrip.io`.

@@ -29,7 +29,7 @@ Source, issues, and releases are maintained in [`postgrip-io/postgrip-agent-sdks
 The SDK uses Go modules and semantic versioning. Pin to a specific version in your `go.mod`:
 
 ```sh
-go get github.com/postgrip-io/postgrip-agent-sdks/go@v0.12.1
+go get github.com/postgrip-io/postgrip-agent-sdks/go@v0.12.2
 ```
 
 While the version stays at `v0.x.x`, the public API may evolve. Pin to a tag for stability and read release notes when upgrading.
