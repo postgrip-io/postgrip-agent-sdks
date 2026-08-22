@@ -300,11 +300,13 @@ type CreateSandboxSessionRequest struct {
 
 // CreateSandboxSessionResponse carries a single-use relay ticket. The ticket
 // is returned exactly once and stored only as a hash, and it is short-lived —
-// connect promptly rather than holding it.
+// connect promptly rather than holding it. TerminalProtocols is omitted by
+// legacy orchestrators, so clients must treat an absent list as legacy framing.
 type CreateSandboxSessionResponse struct {
-	ID        string    `json:"id"`
-	Ticket    string    `json:"ticket"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	ID                string    `json:"id"`
+	Ticket            string    `json:"ticket"`
+	ExpiresAt         time.Time `json:"expiresAt"`
+	TerminalProtocols []string  `json:"terminalProtocols,omitempty"`
 }
 
 // --- agent-plane sandbox shapes -------------------------------------------

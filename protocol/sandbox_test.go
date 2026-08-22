@@ -181,3 +181,27 @@ func TestSandboxListResponseEnvelope(t *testing.T) {
 		t.Fatalf("decoded %+v", out.Sandboxes)
 	}
 }
+
+// Terminal protocol advertisement is optional for rolling compatibility:
+// clients must distinguish an updated orchestrator from a legacy response,
+// while older orchestrators continue to decode into the same public shape.
+func TestCreateSandboxSessionResponseTerminalProtocols(t *testing.T) {
+	legacy, err := json.Marshal(CreateSandboxSessionResponse{})
+	if err != nil {
+		t.Fatalf("marshal legacy response: %v", err)
+	}
+	if strings.Contains(string(legacy), `"terminalProtocols"`) {
+		t.Fatalf("empty terminal protocols were serialized: %s", legacy)
+	}
+
+	const protocolName = "postgrip.sandbox.terminal.v1"
+	advertised, err := json.Marshal(CreateSandboxSessionResponse{
+		TerminalProtocols: []string{protocolName},
+	})
+	if err != nil {
+		t.Fatalf("marshal advertised response: %v", err)
+	}
+	if !strings.Contains(string(advertised), `"terminalProtocols":["`+protocolName+`"]`) {
+		t.Fatalf("terminal protocols missing from response: %s", advertised)
+	}
+}
