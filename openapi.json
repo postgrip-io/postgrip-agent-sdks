@@ -778,7 +778,7 @@
       "get": {
         "operationId": "connectSandboxSession",
         "summary": "Attach to an interactive session over WebSocket",
-        "description": "Upgrades to a WebSocket carrying stdio in binary messages; stdout and stderr are interleaved on one stream and there is no resize channel. Non-empty client-to-agent messages carry raw stdin bytes. A zero-length binary client-to-agent message signals stdin EOF without closing the output side. The process exit code arrives as the WebSocket close status offset by 4000, not in the stream itself.",
+        "description": "Upgrades to a WebSocket carrying stdio in binary messages; stdout and stderr are interleaved on one stream. Clients that offer the postgrip.sandbox.terminal.v1 WebSocket subprotocol may send UTF-8 text control messages of the form {\"type\":\"resize\",\"rows\":24,\"columns\":80}; rows and columns must be integers from 1 through 65535. Binary client-to-agent messages carry raw stdin bytes, and a zero-length binary message signals stdin EOF without closing the output side. For backward compatibility, text messages are also treated as raw stdin when the subprotocol is not negotiated. The process exit code arrives as the WebSocket close status offset by 4000, not in the stream itself.",
         "tags": ["Sandboxes"],
         "x-postgrip-sdk-generate": true,
         "x-postgrip-auth-lane": "management",
@@ -1278,7 +1278,16 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["id", "ticket", "expiresAt"],
-        "properties": { "id": { "type": "string" }, "ticket": { "type": "string" }, "expiresAt": { "type": "string", "format": "date-time" } }
+        "properties": {
+          "id": { "type": "string" },
+          "ticket": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "terminalProtocols": {
+            "type": "array",
+            "description": "WebSocket subprotocols supported by this relay. Omitted by legacy orchestrators; clients must then connect without a subprotocol and keep the session's initial dimensions.",
+            "items": { "type": "string", "enum": ["postgrip.sandbox.terminal.v1"] }
+          }
+        }
       },
       "SandboxWorkspace": {
         "type": "object",

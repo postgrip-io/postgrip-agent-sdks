@@ -8,7 +8,7 @@ import re
 from typing import Any, Literal, Mapping, Protocol, Sequence, TypeAlias, TypedDict, cast
 from urllib.parse import quote, urlencode
 
-OPENAPI_SPEC_SHA256 = '959a2c9cfba818dfa75324de4411a52ced5e0c6258e41e9c6de30f3cbcae6786'
+OPENAPI_SPEC_SHA256 = '0e0c5d7e9ff17c16d3451bc22449fd90f749e2cb2de85893ff894caab316348e'
 OPENAPI_OPERATION_COUNT = 42
 OPENAPI_CLIENT_OPERATION_COUNT = 40
 CONNECT_SANDBOX_SESSION_PATH_SESSION_ID = 'sessionId'
@@ -534,7 +534,10 @@ class _SchemaCreateSandboxSessionRequestOptional(TypedDict, total=False):
 class _SchemaCreateSandboxSessionRequest(_SchemaCreateSandboxSessionRequestOptional):
     pass
 
-class _SchemaCreateSandboxSessionResponse(TypedDict):
+class _SchemaCreateSandboxSessionResponseOptional(TypedDict, total=False):
+    terminalProtocols: list[Literal['postgrip.sandbox.terminal.v1']]
+
+class _SchemaCreateSandboxSessionResponse(_SchemaCreateSandboxSessionResponseOptional):
     id: str
     ticket: str
     expiresAt: str
