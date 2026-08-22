@@ -76,6 +76,7 @@ export type {
   SandboxResourceLimits,
   SandboxSessionKind,
   SandboxWorkspace,
+  SandboxWorkspaceListResponse,
   Schedule,
   ScheduleAction,
   ScheduleCalendarSpec,

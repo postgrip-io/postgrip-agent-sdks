@@ -185,6 +185,41 @@ class SandboxClientTests(unittest.TestCase):
         self.assertEqual(captured["body"], b"GZIPPED-IN-CHUNKS")
         self.assertGreater(archive.read_calls, 1)
 
+    def test_workspace_lifecycle_methods_and_list_envelope(self):
+        responses = [
+            {"workspaces": [{"id": "wsp_1"}, {"id": "wsp_2"}]},
+            {"id": "wsp_1"},
+            {},
+        ]
+
+        def fake_urlopen(request, timeout=None):
+            response = responses[len(self.calls)]
+            self.calls.append(request)
+            return FakeResponse(response)
+
+        with patch("postgrip_agent.client.urlopen", fake_urlopen):
+            workspaces = self.client.sandbox.list_workspaces()
+            workspace = self.client.sandbox.get_workspace("wsp_1")
+            self.client.sandbox.delete_workspace("wsp_1")
+        self.assertEqual([item["id"] for item in workspaces], ["wsp_1", "wsp_2"])
+        self.assertEqual(workspace["id"], "wsp_1")
+        self.assertEqual(
+            [(request.get_method(), request.full_url) for request in self.calls],
+            [
+                ("GET", "https://agents.example.com/api/v1/workspaces"),
+                ("GET", "https://agents.example.com/api/v1/workspaces/wsp_1"),
+                ("DELETE", "https://agents.example.com/api/v1/workspaces/wsp_1"),
+            ],
+        )
+
+    def test_blank_workspace_id_is_rejected_before_any_request(self):
+        with self._patch({}):
+            with self.assertRaises(ValueError):
+                self.client.sandbox.get_workspace("")
+            with self.assertRaises(ValueError):
+                self.client.sandbox.delete_workspace("")
+        self.assertEqual(self.calls, [])
+
     def test_exec_sends_stdin_eof_before_reading_output(self):
         class FakeSession:
             def __init__(self):

@@ -130,9 +130,47 @@ func (c *Connection) UploadWorkspace(ctx context.Context, archive io.Reader, rep
 	return &out, nil
 }
 
+// ListWorkspaces returns every workspace owned by the authenticated tenant,
+// newest first.
+func (c *Connection) ListWorkspaces(ctx context.Context) ([]SandboxWorkspace, error) {
+	out, err := c.OpenAPI().ListWorkspaces(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return out.Workspaces, nil
+}
+
+// GetWorkspace fetches one uploaded workspace by id.
+func (c *Connection) GetWorkspace(ctx context.Context, workspaceID string) (*SandboxWorkspace, error) {
+	if err := workspaceIDRequired(workspaceID); err != nil {
+		return nil, err
+	}
+	out, err := c.OpenAPI().GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteWorkspace removes one uploaded workspace. A workspace still attached
+// to a live sandbox cannot be deleted and the server returns 409.
+func (c *Connection) DeleteWorkspace(ctx context.Context, workspaceID string) error {
+	if err := workspaceIDRequired(workspaceID); err != nil {
+		return err
+	}
+	return c.OpenAPI().DeleteWorkspace(ctx, workspaceID)
+}
+
 func sandboxIDRequired(sandboxID string) error {
 	if sandboxID == "" {
 		return &failure.SDKError{Message: "sandbox id is required"}
+	}
+	return nil
+}
+
+func workspaceIDRequired(workspaceID string) error {
+	if workspaceID == "" {
+		return &failure.SDKError{Message: "workspace id is required"}
 	}
 	return nil
 }

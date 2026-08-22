@@ -284,6 +284,11 @@ type SandboxWorkspace struct {
 	ExpiresAt      time.Time `json:"expiresAt"`
 }
 
+// SandboxWorkspaceListResponse is returned by GET /api/v1/workspaces.
+type SandboxWorkspaceListResponse struct {
+	Workspaces []SandboxWorkspace `json:"workspaces"`
+}
+
 // CreateSandboxSessionRequest is the body of
 // POST /api/v1/sandboxes/{id}/sessions. Rows and Columns default to 24x80 and
 // are fixed for the life of the session — there is no resize channel. Kind

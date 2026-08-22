@@ -39,8 +39,8 @@ describe('generated OpenAPI operations', () => {
   });
 
   it('generates request and response payload types', () => {
-    expect(OPENAPI_OPERATION_COUNT).toBe(42);
-    expect(OPENAPI_CLIENT_OPERATION_COUNT).toBe(40);
+    expect(OPENAPI_OPERATION_COUNT).toBe(45);
+    expect(OPENAPI_CLIENT_OPERATION_COUNT).toBe(43);
     expectTypeOf<OpenAPIRequestBody<'enqueueTask'>>().toMatchTypeOf<{ type: string }>();
     expectTypeOf<OpenAPIResponseBody<'enqueueTask'>>().toHaveProperty('lease_timeout_seconds');
     expectTypeOf<Parameters<OpenAPIClient['pollAgentTask']>[0]>().toMatchTypeOf<{

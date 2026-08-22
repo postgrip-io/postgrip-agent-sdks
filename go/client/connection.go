@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -164,7 +165,26 @@ func (c *Connection) doOpenAPI(ctx context.Context, id openAPIOperationID, pathP
 			return err
 		}
 	}
-	return c.do(ctx, operation.Method, operation.Path, body, out, agentAuth, operation.Signing)
+	err = c.do(ctx, operation.Method, operation.Path, body, out, agentAuth, operation.Signing)
+	if err == nil || id != openAPIPollAgentTask {
+		return err
+	}
+	var sdkErr *failure.SDKError
+	if !errors.As(err, &sdkErr) || sdkErr.StatusCode != http.StatusGone {
+		return err
+	}
+	// Poll Gone is a successful terminal response. Decode any directive fields
+	// the server supplied, but retain terminal semantics if an intermediary
+	// returned an empty or malformed body.
+	if terminal, ok := out.(*OpenAPIPollAgentTaskResponseBody); ok {
+		_ = json.Unmarshal(sdkErr.ResponseBody, terminal)
+		if terminal.Directive == nil {
+			terminal.Directive = &AgentPollDirective{Type: AgentPollDirectiveTypeShutdown}
+		} else {
+			terminal.Directive.Type = AgentPollDirectiveTypeShutdown
+		}
+	}
+	return nil
 }
 
 // do is the single HTTP entrypoint; all the typed helpers funnel through
@@ -232,7 +252,11 @@ func (c *Connection) do(ctx context.Context, method, path string, body any, out 
 		if msg == "" {
 			msg = resp.Status
 		}
-		return &failure.SDKError{Message: fmt.Sprintf("%s %s -> %d %s", method, path, resp.StatusCode, msg)}
+		return &failure.SDKError{
+			Message:      fmt.Sprintf("%s %s -> %d %s", method, path, resp.StatusCode, msg),
+			StatusCode:   resp.StatusCode,
+			ResponseBody: append([]byte(nil), raw...),
+		}
 	}
 	if out == nil || len(raw) == 0 {
 		return nil
@@ -298,7 +322,11 @@ func (c *Connection) doStream(ctx context.Context, method, path string, body io.
 		if msg == "" {
 			msg = resp.Status
 		}
-		return &failure.SDKError{Message: fmt.Sprintf("%s %s -> %d %s", method, path, resp.StatusCode, msg)}
+		return &failure.SDKError{
+			Message:      fmt.Sprintf("%s %s -> %d %s", method, path, resp.StatusCode, msg),
+			StatusCode:   resp.StatusCode,
+			ResponseBody: append([]byte(nil), raw...),
+		}
 	}
 	if out == nil || len(raw) == 0 {
 		return nil

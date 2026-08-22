@@ -747,6 +747,19 @@
       }
     },
     "/api/v1/workspaces": {
+      "get": {
+        "operationId": "listWorkspaces",
+        "summary": "List uploaded workspaces",
+        "description": "Returns every workspace archive owned by the authenticated tenant, newest first.",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "200": { "description": "Workspace envelope", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxWorkspaceListResponse" } } } },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
       "post": {
         "operationId": "uploadWorkspace",
         "summary": "Upload a workspace archive",
@@ -766,6 +779,34 @@
         },
         "responses": {
           "201": { "description": "Content-addressed workspace", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxWorkspace" } } } },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}": {
+      "parameters": [{ "$ref": "#/components/parameters/WorkspaceId" }],
+      "get": {
+        "operationId": "getWorkspace",
+        "summary": "Fetch an uploaded workspace",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "200": { "description": "Workspace", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxWorkspace" } } } },
+          "default": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWorkspace",
+        "summary": "Delete an uploaded workspace",
+        "description": "Deletes the tenant's workspace record and removes its archive once no tenant references the same content-addressed blob. A workspace still referenced by a live sandbox returns 409.",
+        "tags": ["Sandboxes"],
+        "x-postgrip-sdk-generate": true,
+        "x-postgrip-auth-lane": "management",
+        "security": [{ "managementToken": [] }],
+        "responses": {
+          "204": { "description": "Workspace deleted" },
           "default": { "$ref": "#/components/responses/ErrorResponse" }
         }
       }
@@ -802,6 +843,7 @@
       "ScheduleId": { "name": "scheduleId", "in": "path", "required": true, "schema": { "type": "string" } },
       "WorkflowId": { "name": "workflowId", "in": "path", "required": true, "schema": { "type": "string" } },
       "SandboxId": { "name": "sandboxId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "WorkspaceId": { "name": "workspaceId", "in": "path", "required": true, "schema": { "type": "string" } },
       "SessionId": { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } },
       "AgentIdQuery": { "name": "agent_id", "in": "query", "schema": { "type": "string" }, "description": "Compatibility identifier; authenticated requests derive the agent from the session token." },
       "NamespaceQuery": { "name": "namespace", "in": "query", "schema": { "type": "string" } },
@@ -1304,6 +1346,12 @@
           "createdAt": { "type": "string", "format": "date-time" },
           "expiresAt": { "type": "string", "format": "date-time" }
         }
+      },
+      "SandboxWorkspaceListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspaces"],
+        "properties": { "workspaces": { "type": "array", "items": { "$ref": "#/components/schemas/SandboxWorkspace" } } }
       },
       "ErrorResponse": { "type": "object", "additionalProperties": false, "required": ["error"], "properties": { "error": { "type": "string" }, "code": { "type": "string" } } }
     }

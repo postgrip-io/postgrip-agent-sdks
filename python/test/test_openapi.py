@@ -45,8 +45,8 @@ class OpenAPIOperationTests(unittest.TestCase):
             resolve_openapi_operation(OperationId.GET_TASK)
 
     def test_generates_request_and_response_payload_types(self) -> None:
-        self.assertEqual(OPENAPI_OPERATION_COUNT, 42)
-        self.assertEqual(OPENAPI_CLIENT_OPERATION_COUNT, 40)
+        self.assertEqual(OPENAPI_OPERATION_COUNT, 45)
+        self.assertEqual(OPENAPI_CLIENT_OPERATION_COUNT, 43)
         request: EnqueueTaskRequestBody = {"type": "noop"}
         response: EnqueueTaskResponseBody = {
             "id": "task-1",

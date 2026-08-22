@@ -211,6 +211,59 @@ func TestUploadWorkspaceOmitsBlankMetadata(t *testing.T) {
 	}
 }
 
+func TestWorkspaceLifecyclePathsAndListEnvelope(t *testing.T) {
+	t.Parallel()
+	var seen []string
+	c, _ := sandboxTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/workspaces":
+			_, _ = w.Write([]byte(`{"workspaces":[{"id":"wsp_1"},{"id":"wsp_2"}]}`))
+		case r.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`{"id":"wsp_1"}`))
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	})
+	ctx := context.Background()
+	workspaces, err := c.Sandbox.ListWorkspaces(ctx)
+	if err != nil {
+		t.Fatalf("ListWorkspaces: %v", err)
+	}
+	if len(workspaces) != 2 || workspaces[0].ID != "wsp_1" || workspaces[1].ID != "wsp_2" {
+		t.Fatalf("workspaces = %+v", workspaces)
+	}
+	if _, err := c.Sandbox.GetWorkspace(ctx, "wsp_1"); err != nil {
+		t.Fatalf("GetWorkspace: %v", err)
+	}
+	if err := c.Sandbox.DeleteWorkspace(ctx, "wsp_1"); err != nil {
+		t.Fatalf("DeleteWorkspace: %v", err)
+	}
+	want := []string{
+		"GET /api/v1/workspaces",
+		"GET /api/v1/workspaces/wsp_1",
+		"DELETE /api/v1/workspaces/wsp_1",
+	}
+	if strings.Join(seen, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests = %q, want %q", seen, want)
+	}
+}
+
+func TestWorkspaceLifecycleRejectsBlankID(t *testing.T) {
+	t.Parallel()
+	c, _ := sandboxTestClient(t, func(http.ResponseWriter, *http.Request) {
+		t.Fatal("blank workspace id should not issue a request")
+	})
+	if _, err := c.Sandbox.GetWorkspace(context.Background(), ""); err == nil {
+		t.Fatal("GetWorkspace accepted a blank id")
+	}
+	if err := c.Sandbox.DeleteWorkspace(context.Background(), ""); err == nil {
+		t.Fatal("DeleteWorkspace accepted a blank id")
+	}
+}
+
 func TestCreateSandboxSessionPostsToTheSandbox(t *testing.T) {
 	t.Parallel()
 	var gotPath string

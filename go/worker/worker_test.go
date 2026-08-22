@@ -1,6 +1,12 @@
 package worker
 
 import (
+	"context"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +31,44 @@ func TestNewWorkerValidatesInputs(t *testing.T) {
 	}
 	if w.opts.MaxConcurrentTasks != 4 {
 		t.Fatalf("MaxConcurrentTasks default = %d, want 4", w.opts.MaxConcurrentTasks)
+	}
+}
+
+func TestWorkerStopsWhenPollReturnsGoneShutdownDirective(t *testing.T) {
+	t.Parallel()
+	var polls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/agent/poll" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		polls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusGone)
+		_, _ = w.Write([]byte(`{"directive":{"type":"shutdown","subject":"agent"}}`))
+	}))
+	defer server.Close()
+
+	conn, err := client.NewConnection(client.ConnectionOptions{Address: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.SeedAgentSession("agent-1", "agent-token", time.Now().Add(time.Hour))
+	w, err := New(Options{
+		Connection:   conn,
+		AgentID:      "agent-1",
+		PollInterval: time.Millisecond,
+		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := w.Run(ctx); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := polls.Load(); got != 1 {
+		t.Fatalf("poll count = %d, want 1", got)
 	}
 }
 

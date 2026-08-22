@@ -33,7 +33,7 @@ GO_PROTOCOL_SCHEMAS = {
     "FailTaskRequest", "RefreshAgentSessionRequest", "AgentSessionResponse",
     "SandboxResourceLimits", "SandboxPortMapping", "SandboxNetworkPolicy", "Sandbox",
     "SandboxCreateRequest", "SandboxListResponse", "CreateSandboxSessionRequest",
-    "CreateSandboxSessionResponse", "SandboxWorkspace",
+    "CreateSandboxSessionResponse", "SandboxWorkspace", "SandboxWorkspaceListResponse",
 }
 GO_PROTOCOL_TYPE_OVERRIDES = {"WorkflowIdReusePolicy": "WorkflowIDReusePolicy"}
 GO_COMPATIBILITY_EXCLUDED_SCHEMAS = {"ErrorResponse"}

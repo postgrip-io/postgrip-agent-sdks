@@ -345,6 +345,7 @@ export type SandboxListResponse = OpenAPIComponents['SandboxListResponse'];
  * record, so don't assume a fresh id per upload.
  */
 export type SandboxWorkspace = OpenAPIComponents['SandboxWorkspace'];
+export type SandboxWorkspaceListResponse = OpenAPIComponents['SandboxWorkspaceListResponse'];
 
 /**
  * `rows`/`columns` default to 24x80 and are fixed for the session's life —

@@ -70,6 +70,22 @@ func (s *SandboxClient) UploadWorkspace(ctx context.Context, archive io.Reader, 
 	return s.conn.UploadWorkspace(ctx, archive, repositoryName, revision)
 }
 
+// ListWorkspaces returns the tenant's uploaded workspaces, newest first.
+func (s *SandboxClient) ListWorkspaces(ctx context.Context) ([]SandboxWorkspace, error) {
+	return s.conn.ListWorkspaces(ctx)
+}
+
+// GetWorkspace fetches one uploaded workspace by id.
+func (s *SandboxClient) GetWorkspace(ctx context.Context, workspaceID string) (*SandboxWorkspace, error) {
+	return s.conn.GetWorkspace(ctx, workspaceID)
+}
+
+// DeleteWorkspace removes an uploaded workspace. The server rejects deletion
+// while a live sandbox references it.
+func (s *SandboxClient) DeleteWorkspace(ctx context.Context, workspaceID string) error {
+	return s.conn.DeleteWorkspace(ctx, workspaceID)
+}
+
 // CreateSession mints a single-use relay ticket. The sandbox must already be
 // running; while it is still coming up the server returns a retryable 400, so
 // call WaitUntilRunning first.

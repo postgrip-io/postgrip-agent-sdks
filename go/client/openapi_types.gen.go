@@ -81,6 +81,7 @@ type OpenAPISandboxListResponse = protocol.SandboxListResponse
 type OpenAPICreateSandboxSessionRequest = protocol.CreateSandboxSessionRequest
 type OpenAPICreateSandboxSessionResponse = protocol.CreateSandboxSessionResponse
 type OpenAPISandboxWorkspace = protocol.SandboxWorkspace
+type OpenAPISandboxWorkspaceListResponse = protocol.SandboxWorkspaceListResponse
 type OpenAPIErrorResponse struct {
 	Error string  `json:"error"`
 	Code  *string `json:"code,omitempty"`
@@ -113,6 +114,8 @@ type OpenAPIDeleteSandboxRequestBody = OpenAPINoBody
 type OpenAPIDeleteSandboxResponseBody = OpenAPISandbox
 type OpenAPIDeleteScheduleRequestBody = OpenAPINoBody
 type OpenAPIDeleteScheduleResponseBody = OpenAPISchedule
+type OpenAPIDeleteWorkspaceRequestBody = OpenAPINoBody
+type OpenAPIDeleteWorkspaceResponseBody = OpenAPINoBody
 type OpenAPIEnqueueTaskRequestBody = OpenAPIEnqueueTaskRequest
 type OpenAPIEnqueueTaskResponseBody = OpenAPITask
 type OpenAPIFailAgentTaskRequestBody = OpenAPIFailTaskRequest
@@ -125,6 +128,8 @@ type OpenAPIGetTaskRequestBody = OpenAPINoBody
 type OpenAPIGetTaskResponseBody = OpenAPITask
 type OpenAPIGetWorkflowRequestBody = OpenAPINoBody
 type OpenAPIGetWorkflowResponseBody = OpenAPIWorkflowExecution
+type OpenAPIGetWorkspaceRequestBody = OpenAPINoBody
+type OpenAPIGetWorkspaceResponseBody = OpenAPISandboxWorkspace
 type OpenAPIHealthRequestBody = OpenAPINoBody
 type OpenAPIHealthResponseBody = OpenAPIHealthResponse
 type OpenAPIHeartbeatAgentTaskRequestBody = OpenAPIHeartbeatTaskRequest
@@ -143,6 +148,8 @@ type OpenAPIListWorkflowHistoryRequestBody = OpenAPINoBody
 type OpenAPIListWorkflowHistoryResponseBody = []OpenAPIWorkflowHistoryEvent
 type OpenAPIListWorkflowsRequestBody = OpenAPINoBody
 type OpenAPIListWorkflowsResponseBody = []OpenAPIWorkflowExecution
+type OpenAPIListWorkspacesRequestBody = OpenAPINoBody
+type OpenAPIListWorkspacesResponseBody = OpenAPISandboxWorkspaceListResponse
 type OpenAPIPauseScheduleRequestBody = OpenAPIPauseScheduleRequest
 type OpenAPIPauseScheduleResponseBody = OpenAPISchedule
 type OpenAPIPollAgentTaskRequestBody = OpenAPINoBody
@@ -298,5 +305,6 @@ type SandboxListResponse = protocol.SandboxListResponse
 type CreateSandboxSessionRequest = protocol.CreateSandboxSessionRequest
 type CreateSandboxSessionResponse = protocol.CreateSandboxSessionResponse
 type SandboxWorkspace = protocol.SandboxWorkspace
+type SandboxWorkspaceListResponse = protocol.SandboxWorkspaceListResponse
 
-const openAPITypesSpecSHA256 = "5c41bd4b80894d3915692eee5b9c9a6c98a435eebdbfc6a86fac6327f7405b08"
+const openAPITypesSpecSHA256 = "06afe6c5fb3db593140020e300cfed910a4c34f1ab5218fa380bdc0a699a6871"

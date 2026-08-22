@@ -177,7 +177,15 @@ box = client.sandbox.wait_until_running(box["id"])
 exit_code, output = client.sandbox.exec(box["id"], ["wc", "-c"], stdin=b"hello")
 
 client.sandbox.delete(box["id"])
+
+# Uploaded workspaces are manageable once no live sandbox uses them.
+workspaces = client.sandbox.list_workspaces()
+workspace = client.sandbox.get_workspace(workspace["id"])
+client.sandbox.delete_workspace(workspace["id"])
 ```
+
+Deleting a workspace still referenced by a live sandbox raises an error for
+`409 Conflict`.
 
 `wait_until_running` treats readiness as `observedState == "running"` **and**
 `observedGeneration >= generation`. A "running" reading can predate a start or

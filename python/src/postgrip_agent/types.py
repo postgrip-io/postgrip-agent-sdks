@@ -387,6 +387,9 @@ SandboxListResponse: TypeAlias = _openapi.OpenAPISandboxListResponse
 SandboxWorkspace: TypeAlias = _openapi.OpenAPISandboxWorkspace
 
 
+SandboxWorkspaceListResponse: TypeAlias = _openapi.OpenAPISandboxWorkspaceListResponse
+
+
 CreateSandboxSessionRequest: TypeAlias = _openapi.OpenAPICreateSandboxSessionRequest
 
 

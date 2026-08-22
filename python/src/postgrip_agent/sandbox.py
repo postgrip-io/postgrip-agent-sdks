@@ -200,6 +200,21 @@ class SandboxClient:
 
         return json.loads(raw.decode()) if raw else {}
 
+    def list_workspaces(self) -> list[dict[str, Any]]:
+        """List the tenant's uploaded workspaces, newest first."""
+        response = self.connection.openapi.list_workspaces() or {}
+        return response.get("workspaces") or []
+
+    def get_workspace(self, workspace_id: str) -> dict[str, Any]:
+        """Fetch one uploaded workspace by id."""
+        _require_workspace_id(workspace_id)
+        return self.connection.openapi.get_workspace(workspace_id)
+
+    def delete_workspace(self, workspace_id: str) -> None:
+        """Delete a workspace unless a live sandbox still references it."""
+        _require_workspace_id(workspace_id)
+        self.connection.openapi.delete_workspace(workspace_id)
+
     def wait_until_running(
         self,
         sandbox_id: str,
@@ -393,3 +408,8 @@ def _require_sandbox_id(sandbox_id: str) -> None:
         # Otherwise this builds /api/v1/sandboxes/ and hits the collection
         # route, which is a confusing 404 or worse a list.
         raise ValueError("postgrip-agent: sandbox id is required")
+
+
+def _require_workspace_id(workspace_id: str) -> None:
+    if not workspace_id:
+        raise ValueError("postgrip-agent: workspace id is required")

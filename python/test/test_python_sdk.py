@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import os
 import time
 import unittest
 from datetime import timedelta
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 from postgrip_agent import Client, Connection, Task, Agent, Worker, WorkflowExecution, activity, types, workflow
 
@@ -195,6 +198,29 @@ class PythonSdkTests(unittest.TestCase):
         self.assertIn("/api/v1/agent/tasks/task-1/events?agent_id=agent-1", task_paths)
         poll_path = next(path for _method, path, _body, _agent_auth in requests if path.startswith("/api/v1/agent/poll?"))
         self.assertIn("agent_id=agent-1", poll_path)
+
+    def test_gone_poll_response_preserves_shutdown_directive(self):
+        connection = Connection(
+            "http://agent.test/orchestrator",
+            agent_id="agent-1",
+            agent_access_token="access-token",
+            agent_refresh_token="refresh-token",
+            agent_access_expires_at="2999-01-01T00:00:00Z",
+        )
+        error = HTTPError(
+            "http://agent.test/orchestrator/api/v1/agent/poll",
+            410,
+            "Gone",
+            {},
+            io.BytesIO(b'{"directive":{"type":"shutdown","subject":"agent"}}'),
+        )
+        with patch("postgrip_agent.client.urlopen", side_effect=error):
+            response = connection.poll_task_response(
+                namespace="default",
+                queue="default",
+                agent_id="agent-1",
+            )
+        self.assertEqual(response["directive"], {"type": "shutdown", "subject": "agent"})
 
     def test_task_helpers_preserve_required_payload_arguments(self):
         connection = Connection("http://agent.test")
@@ -636,6 +662,29 @@ class PythonSdkTests(unittest.TestCase):
 
         self.assertEqual(connection.failed[0][0], "task-1")
         self.assertIn("not supported", connection.failed[0][1])
+
+    def test_agent_stops_when_poll_directs_shutdown(self):
+        connection = FakeConnection()
+        polls = 0
+
+        def poll_task_response(**_options):
+            nonlocal polls
+            polls += 1
+            return {"directive": {"type": "shutdown"}}
+
+        connection.poll_task_response = poll_task_response  # type: ignore[method-assign]
+        agent = Agent(
+            connection=connection,
+            task_queue="default",
+            workflows={},
+            activities={},
+            max_concurrent_tasks=1,
+        )
+
+        asyncio.run(agent.run())
+
+        self.assertTrue(agent._stopping)
+        self.assertEqual(polls, 1)
 
     def test_public_type_exports_and_agent_defaults_match_typescript(self):
         connection = FakeConnection()

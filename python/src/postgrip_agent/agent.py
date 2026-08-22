@@ -77,8 +77,8 @@ class Agent:
                     await self._wait_for_task_slot()
                     continue
                 try:
-                    task = await asyncio.to_thread(
-                        self.connection.poll_task,
+                    response = await asyncio.to_thread(
+                        self.connection.poll_task_response,
                         namespace=self.namespace,
                         queue=self.task_queue,
                         agent_id=self.identity,
@@ -91,6 +91,10 @@ class Agent:
                     print(f"postgrip-agent: poll failed: {exc}", flush=True)
                     await asyncio.sleep(self.poll_interval)
                     continue
+                directive = response.get("directive") or {}
+                if directive.get("type") == "shutdown":
+                    break
+                task = response.get("task")
                 if not task:
                     await asyncio.sleep(self.poll_interval)
                     continue

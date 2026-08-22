@@ -170,7 +170,14 @@ const { exitCode, output } = await client.sandbox.exec(box.id!, ['wc', '-c'], {
 });
 
 await client.sandbox.delete(box.id!);
+
+// Uploaded workspaces are manageable once no live sandbox uses them.
+const workspaces = await client.sandbox.listWorkspaces();
+await client.sandbox.getWorkspace(workspace.id);
+await client.sandbox.deleteWorkspace(workspace.id);
 ```
+
+Deleting a workspace still referenced by a live sandbox rejects with `409 Conflict`.
 
 `waitUntilRunning` treats readiness as `observedState === 'running'` **and**
 `observedGeneration >= generation`. A "running" reading can predate a start or

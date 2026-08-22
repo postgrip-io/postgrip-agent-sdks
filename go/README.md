@@ -124,7 +124,14 @@ box, err = c.Sandbox.WaitUntilRunning(ctx, box.ID, client.SandboxWaitOptions{})
 code, err := c.Sandbox.Exec(ctx, box.ID, []string{"wc", "-c"}, strings.NewReader("hello"), os.Stdout)
 
 _, err = c.Sandbox.Delete(ctx, box.ID)
+
+// Uploaded workspaces are manageable independently once no live sandbox uses them.
+workspaces, err := c.Sandbox.ListWorkspaces(ctx)
+ws, err = c.Sandbox.GetWorkspace(ctx, ws.ID)
+err = c.Sandbox.DeleteWorkspace(ctx, ws.ID)
 ```
+
+Deleting a workspace still referenced by a live sandbox returns `409 Conflict`.
 
 `WaitUntilRunning` treats readiness as `observedState == running` **and**
 `observedGeneration >= generation`. A "running" reading can predate a start or
