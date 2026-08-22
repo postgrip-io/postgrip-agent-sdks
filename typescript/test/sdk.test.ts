@@ -203,6 +203,33 @@ describe('PostGrip Agent TypeScript Connection', () => {
     await expect(connection.pollTask({ queue: 'default', workerId: 'agent-compat', waitSeconds: 0 })).resolves.toBeNull();
   });
 
+  it('decodes a shutdown directive from a Gone poll response', async () => {
+    const connection = await Connection.connect({
+      baseUrl: 'http://agent.test',
+      agentAuth: {
+        agentId: 'agent-1',
+        accessToken: 'agent-access-token',
+        refreshToken: 'agent-refresh-token',
+        accessExpiresAt: '2999-01-01T00:00:00Z',
+      },
+      fetch: vi.fn<typeof fetch>(async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/healthz') {
+          return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+        }
+        return new Response(JSON.stringify({
+          directive: { type: 'shutdown', subject: 'agent' },
+        }), { status: 410 });
+      }),
+    });
+
+    await expect(connection.pollTaskResponse({
+      queue: 'default',
+      agentId: 'agent-1',
+      waitSeconds: 0,
+    })).resolves.toMatchObject({ directive: { type: 'shutdown', subject: 'agent' } });
+  });
+
   it('blocks workflow-family task submission outside managed runtimes', async () => {
     const connection = await Connection.connect({
       baseUrl: 'http://agent.test',
@@ -439,6 +466,32 @@ describe('PostGrip Agent TypeScript Client', () => {
 });
 
 describe('PostGrip Agent TypeScript Agent', () => {
+  it('stops polling when the server directs the agent to shut down', async () => {
+    const previousManagedRuntime = process.env.POSTGRIP_AGENT_MANAGED_RUNTIME;
+    process.env.POSTGRIP_AGENT_MANAGED_RUNTIME = 'true';
+    const connection = {
+      health: vi.fn(async () => ({ status: 'ok' })),
+      pollTaskResponse: vi.fn(async () => ({ directive: { type: 'shutdown' } })),
+      configureAgentAuth: vi.fn(),
+    };
+    try {
+      const agent = await Agent.create({
+        connection: connection as unknown as Connection,
+        taskQueue: 'default',
+        workflows: {},
+        maxConcurrentTasks: 1,
+      });
+      await agent.run();
+    } finally {
+      if (previousManagedRuntime == null) {
+        delete process.env.POSTGRIP_AGENT_MANAGED_RUNTIME;
+      } else {
+        process.env.POSTGRIP_AGENT_MANAGED_RUNTIME = previousManagedRuntime;
+      }
+    }
+    expect(connection.pollTaskResponse).toHaveBeenCalledOnce();
+  });
+
   it('emits activity stdout and stderr events with task context', async () => {
     const previousManagedRuntime = process.env.POSTGRIP_AGENT_MANAGED_RUNTIME;
     process.env.POSTGRIP_AGENT_MANAGED_RUNTIME = 'true';

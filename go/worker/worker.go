@@ -157,6 +157,12 @@ func (w *Worker) Run(ctx context.Context) error {
 			}
 			continue
 		}
+		if resp != nil && resp.Directive != nil && resp.Directive.Type == client.AgentPollDirectiveTypeShutdown {
+			<-w.semaphore
+			w.logger.Info("worker shutdown requested", "agent_id", w.opts.AgentID)
+			w.inflight.Wait()
+			return nil
+		}
 		if resp == nil || resp.Task == nil {
 			<-w.semaphore
 			if !sleepOrStop(ctx, w.stopCh, w.opts.PollInterval) {

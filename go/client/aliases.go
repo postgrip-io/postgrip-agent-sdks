@@ -55,6 +55,8 @@ const (
 	DefaultNamespace = protocol.DefaultNamespace
 	DefaultQueue     = protocol.DefaultQueue
 
+	AgentPollDirectiveTypeShutdown = protocol.AgentPollDirectiveTypeShutdown
+
 	SandboxBackendAuto        = protocol.SandboxBackendAuto
 	SandboxBackendDocker      = protocol.SandboxBackendDocker
 	SandboxBackendPodman      = protocol.SandboxBackendPodman

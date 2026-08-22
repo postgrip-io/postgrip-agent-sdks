@@ -205,6 +205,19 @@ export class SandboxClient {
     return this.connection.uploadWorkspace(archive, metadata);
   }
 
+  async listWorkspaces(): Promise<SandboxWorkspace[]> {
+    return this.connection.listWorkspaces();
+  }
+
+  async getWorkspace(workspaceId: string): Promise<SandboxWorkspace> {
+    return this.connection.getWorkspace(requireWorkspaceId(workspaceId));
+  }
+
+  /** Deletes a workspace unless a live sandbox still references it. */
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.connection.deleteWorkspace(requireWorkspaceId(workspaceId));
+  }
+
   async createSession(
     sandboxId: string,
     request: CreateSandboxSessionRequest = {},
@@ -429,6 +442,13 @@ function requireSandboxId(sandboxId: string): string {
     throw new Error('postgrip-agent: sandbox id is required');
   }
   return sandboxId;
+}
+
+function requireWorkspaceId(workspaceId: string): string {
+  if (!workspaceId) {
+    throw new Error('postgrip-agent: workspace id is required');
+  }
+  return workspaceId;
 }
 
 /**

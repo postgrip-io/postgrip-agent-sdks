@@ -24,8 +24,10 @@ type Info = protocol.FailureInfo
 // that escape the SDK boundary so callers can reliably match them with
 // errors.As without depending on internal types.
 type SDKError struct {
-	Message string
-	Cause   error
+	Message      string
+	Cause        error
+	StatusCode   int
+	ResponseBody []byte
 }
 
 func (e *SDKError) Error() string {

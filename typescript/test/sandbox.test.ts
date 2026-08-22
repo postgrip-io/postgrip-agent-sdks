@@ -154,6 +154,35 @@ describe('sandbox client', () => {
     expect(headers.has('X-PostGrip-Revision')).toBe(false);
   });
 
+  it('lists, gets, and deletes uploaded workspaces', async () => {
+    const seen: string[] = [];
+    const { client } = await sandboxClient((url, init) => {
+      const path = new URL(url).pathname;
+      if (path !== '/healthz') seen.push(`${init.method} ${path}`);
+      if (path === '/api/v1/workspaces') {
+        return jsonResponse({ workspaces: [{ id: 'wsp_1' }, { id: 'wsp_2' }] });
+      }
+      if (init.method === 'DELETE') return new Response(null, { status: 204 });
+      return jsonResponse({ id: 'wsp_1' });
+    });
+    const workspaces = await client.sandbox.listWorkspaces();
+    expect(workspaces.map((workspace) => workspace.id)).toEqual(['wsp_1', 'wsp_2']);
+    expect((await client.sandbox.getWorkspace('wsp_1')).id).toBe('wsp_1');
+    await client.sandbox.deleteWorkspace('wsp_1');
+    expect(seen).toEqual([
+      'GET /api/v1/workspaces',
+      'GET /api/v1/workspaces/wsp_1',
+      'DELETE /api/v1/workspaces/wsp_1',
+    ]);
+  });
+
+  it('rejects a blank workspace id before issuing a request', async () => {
+    const { client, fetchImpl } = await sandboxClient(() => jsonResponse({}));
+    await expect(client.sandbox.getWorkspace('')).rejects.toThrow(/workspace id is required/);
+    await expect(client.sandbox.deleteWorkspace('')).rejects.toThrow(/workspace id is required/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('refuses an exec session with no command before calling the server', async () => {
     const { client, fetchImpl } = await sandboxClient(() => jsonResponse({}));
     await expect(client.sandbox.openSession('sbx_1', 'exec', {})).rejects.toThrow(/requires a command/);

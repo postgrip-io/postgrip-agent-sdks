@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	OpenAPISpecSHA256     = "5c41bd4b80894d3915692eee5b9c9a6c98a435eebdbfc6a86fac6327f7405b08"
-	OpenAPIOperationCount = 42
+	OpenAPISpecSHA256     = "06afe6c5fb3db593140020e300cfed910a4c34f1ab5218fa380bdc0a699a6871"
+	OpenAPIOperationCount = 45
 )
 
 type openAPIOperationID string
@@ -30,12 +30,14 @@ const (
 	openAPICreateSchedule          openAPIOperationID = "createSchedule"
 	openAPIDeleteSandbox           openAPIOperationID = "deleteSandbox"
 	openAPIDeleteSchedule          openAPIOperationID = "deleteSchedule"
+	openAPIDeleteWorkspace         openAPIOperationID = "deleteWorkspace"
 	openAPIEnqueueTask             openAPIOperationID = "enqueueTask"
 	openAPIFailAgentTask           openAPIOperationID = "failAgentTask"
 	openAPIGetSandbox              openAPIOperationID = "getSandbox"
 	openAPIGetSchedule             openAPIOperationID = "getSchedule"
 	openAPIGetTask                 openAPIOperationID = "getTask"
 	openAPIGetWorkflow             openAPIOperationID = "getWorkflow"
+	openAPIGetWorkspace            openAPIOperationID = "getWorkspace"
 	openAPIHealth                  openAPIOperationID = "health"
 	openAPIHeartbeatAgentTask      openAPIOperationID = "heartbeatAgentTask"
 	openAPIListNamespaces          openAPIOperationID = "listNamespaces"
@@ -45,6 +47,7 @@ const (
 	openAPIListTasks               openAPIOperationID = "listTasks"
 	openAPIListWorkflowHistory     openAPIOperationID = "listWorkflowHistory"
 	openAPIListWorkflows           openAPIOperationID = "listWorkflows"
+	openAPIListWorkspaces          openAPIOperationID = "listWorkspaces"
 	openAPIPauseSchedule           openAPIOperationID = "pauseSchedule"
 	openAPIPollAgentTask           openAPIOperationID = "pollAgentTask"
 	openAPIReady                   openAPIOperationID = "ready"
@@ -95,12 +98,14 @@ var openAPIOperationTable = map[openAPIOperationID]openAPIOperation{
 	openAPICreateSchedule:          {Method: "POST", Path: "/api/v1/schedules", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "CreateScheduleRequest", ResponseSchema: "Schedule", PathParameters: []string{}},
 	openAPIDeleteSandbox:           {Method: "DELETE", Path: "/api/v1/sandboxes/{sandboxId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Sandbox", PathParameters: []string{"sandboxId"}},
 	openAPIDeleteSchedule:          {Method: "DELETE", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
+	openAPIDeleteWorkspace:         {Method: "DELETE", Path: "/api/v1/workspaces/{workspaceId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "", PathParameters: []string{"workspaceId"}},
 	openAPIEnqueueTask:             {Method: "POST", Path: "/api/v1/tasks", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "EnqueueTaskRequest", ResponseSchema: "Task", PathParameters: []string{}},
 	openAPIFailAgentTask:           {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/fail", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, RequestSchema: "FailTaskRequest", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
 	openAPIGetSandbox:              {Method: "GET", Path: "/api/v1/sandboxes/{sandboxId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Sandbox", PathParameters: []string{"sandboxId"}},
 	openAPIGetSchedule:             {Method: "GET", Path: "/api/v1/schedules/{scheduleId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
 	openAPIGetTask:                 {Method: "GET", Path: "/api/v1/tasks/{taskId}", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
 	openAPIGetWorkflow:             {Method: "GET", Path: "/api/v1/workflows/{workflowId}", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "WorkflowExecution", PathParameters: []string{"workflowId"}},
+	openAPIGetWorkspace:            {Method: "GET", Path: "/api/v1/workspaces/{workspaceId}", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "SandboxWorkspace", PathParameters: []string{"workspaceId"}},
 	openAPIHealth:                  {Method: "GET", Path: "/healthz", AuthLane: "public", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "HealthResponse", PathParameters: []string{}},
 	openAPIHeartbeatAgentTask:      {Method: "POST", Path: "/api/v1/agent/tasks/{taskId}/heartbeat", AuthLane: "agent", Signing: "agent-task-v1", StreamingRequest: false, WebSocket: false, RequestSchema: "HeartbeatTaskRequest", ResponseSchema: "Task", PathParameters: []string{"taskId"}},
 	openAPIListNamespaces:          {Method: "GET", Path: "/api/v1/namespaces", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{}},
@@ -110,6 +115,7 @@ var openAPIOperationTable = map[openAPIOperationID]openAPIOperation{
 	openAPIListTasks:               {Method: "GET", Path: "/api/v1/tasks", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{}},
 	openAPIListWorkflowHistory:     {Method: "GET", Path: "/api/v1/workflows/{workflowId}/history", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{"workflowId"}},
 	openAPIListWorkflows:           {Method: "GET", Path: "/api/v1/workflows", AuthLane: "either", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "inline", PathParameters: []string{}},
+	openAPIListWorkspaces:          {Method: "GET", Path: "/api/v1/workspaces", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "SandboxWorkspaceListResponse", PathParameters: []string{}},
 	openAPIPauseSchedule:           {Method: "POST", Path: "/api/v1/schedules/{scheduleId}/pause", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "PauseScheduleRequest", ResponseSchema: "Schedule", PathParameters: []string{"scheduleId"}},
 	openAPIPollAgentTask:           {Method: "GET", Path: "/api/v1/agent/poll", AuthLane: "agent", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "PollTaskResponse", PathParameters: []string{}},
 	openAPIReady:                   {Method: "GET", Path: "/readyz", AuthLane: "management", Signing: "", StreamingRequest: false, WebSocket: false, RequestSchema: "", ResponseSchema: "ReadyResponse", PathParameters: []string{}},

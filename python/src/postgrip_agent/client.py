@@ -205,7 +205,23 @@ class Connection:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read()
         except HTTPError as exc:
-            raise RuntimeError(exc.read().decode() or str(exc)) from exc
+            raw = exc.read()
+            if exc.code == 410 and urlsplit(path).path == "/api/v1/agent/poll":
+                # Gone is terminal even if an intermediary strips or corrupts
+                # the response body. Preserve valid directive fields while
+                # making shutdown unconditionally reachable to the worker.
+                try:
+                    parsed = json.loads(raw.decode()) if raw else {}
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    parsed = {}
+                if not isinstance(parsed, dict):
+                    parsed = {}
+                directive = parsed.get("directive")
+                if not isinstance(directive, dict):
+                    directive = {}
+                parsed["directive"] = {**directive, "type": "shutdown"}
+                return parsed
+            raise RuntimeError(raw.decode() or str(exc)) from exc
         return json.loads(raw.decode()) if raw else None
 
     def ensure_agent_session(self, *, namespace: str | None = None, queue: str | None = None, agent_id: str | None = None, worker_id: str | None = None) -> bool:
@@ -316,17 +332,27 @@ class Connection:
         self.ensure_agent_session(agent_id=resolved_agent_id)
         return self.openapi.append_agent_task_event(task_id, {"event": event}, agent_id=resolved_agent_id)
 
-    def poll_task(self, *, namespace: str, queue: str, agent_id: str | None = None, worker_id: str | None = None, wait_seconds: int = 20, task_types: list[str] | tuple[str, ...] | None = None) -> dict[str, Any] | None:
+    def poll_task_response(self, *, namespace: str, queue: str, agent_id: str | None = None, worker_id: str | None = None, wait_seconds: int = 20, task_types: list[str] | tuple[str, ...] | None = None) -> dict[str, Any]:
         resolved_agent_id = agent_id or worker_id
         if not resolved_agent_id:
             raise TypeError("agent_id is required")
         self.ensure_agent_session(namespace=namespace, queue=queue, agent_id=resolved_agent_id)
-        response = self.openapi.poll_agent_task(
+        return self.openapi.poll_agent_task(
             namespace=namespace,
             queue=queue,
             agent_id=resolved_agent_id,
             wait_seconds=wait_seconds,
             task_types=",".join(task_types) if task_types else None,
+        ) or {}
+
+    def poll_task(self, *, namespace: str, queue: str, agent_id: str | None = None, worker_id: str | None = None, wait_seconds: int = 20, task_types: list[str] | tuple[str, ...] | None = None) -> dict[str, Any] | None:
+        response = self.poll_task_response(
+            namespace=namespace,
+            queue=queue,
+            agent_id=agent_id,
+            worker_id=worker_id,
+            wait_seconds=wait_seconds,
+            task_types=task_types,
         )
         return response.get("task")
 

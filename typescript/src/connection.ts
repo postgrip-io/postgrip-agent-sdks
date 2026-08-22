@@ -9,6 +9,7 @@ import type {
   SandboxCreateRequest,
   SandboxListResponse,
   SandboxWorkspace,
+  SandboxWorkspaceListResponse,
   Namespace,
   EnqueueTaskRequest,
   PauseScheduleRequest,
@@ -357,6 +358,12 @@ export class Connection {
   }
 
   async pollTask<P = unknown, R = unknown>(options: PollTaskOptions): Promise<Task<P, R> | undefined> {
+    const response = await this.pollTaskResponse<P, R>(options);
+    return response.task;
+  }
+
+  /** Polls for work while preserving agent directives such as shutdown. */
+  async pollTaskResponse<P = unknown, R = unknown>(options: PollTaskOptions): Promise<PollTaskResponse<P, R>> {
     const agentId = options.agentId ?? options.workerId;
     if (!agentId) {
       throw new Error('agentId is required');
@@ -375,7 +382,7 @@ export class Connection {
       query,
       signal: options.signal,
     }) as PollTaskResponse<P, R>;
-    return response.task;
+    return response ?? {};
   }
 
   async heartbeatTask(taskId: string, agentId: string, event?: TaskEventInput): Promise<Task> {
@@ -518,6 +525,20 @@ export class Connection {
     return (await response.json()) as SandboxWorkspace;
   }
 
+  async listWorkspaces(): Promise<SandboxWorkspace[]> {
+    const response = await this.openapi.listWorkspaces() as SandboxWorkspaceListResponse;
+    return response?.workspaces ?? [];
+  }
+
+  async getWorkspace(workspaceId: string): Promise<SandboxWorkspace> {
+    return this.openapi.getWorkspace({ pathParameters: { workspaceId } });
+  }
+
+  /** Deletes a workspace unless a live sandbox still references it. */
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.openapi.deleteWorkspace({ pathParameters: { workspaceId } });
+  }
+
   /** Headers for a management-authenticated custom transport such as the sandbox relay. */
   managementHeaders(): Headers {
     const headers = new Headers(this.headers);
@@ -549,10 +570,17 @@ export class Connection {
     return this.request(operation.method, operation.path, options.body, options.signal, {
       agentAuth,
       signing: operation.signing,
+      acceptedStatuses: id === 'pollAgentTask' ? [410] : undefined,
     });
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, options: { agentAuth?: boolean; signing?: string } = {}): Promise<T> {
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+    options: { agentAuth?: boolean; signing?: string; acceptedStatuses?: readonly number[] } = {},
+  ): Promise<T> {
     const useAgentAuth = options.agentAuth === true;
     if (useAgentAuth) {
       await this.ensureAgentSession();
@@ -585,17 +613,35 @@ export class Connection {
       headers,
       body: body == null ? undefined : bodyString,
     });
-    if (!response.ok) {
+    if (!response.ok && !options.acceptedStatuses?.includes(response.status)) {
       const payload = await response.json().catch(() => ({ error: response.statusText }));
       throw new Error(typeof payload.error === 'string' ? payload.error : response.statusText);
     }
     const text = await response.text();
+    const terminalGone = response.status === 410 && options.acceptedStatuses?.includes(410);
     if (text === '') {
+      if (terminalGone) {
+        return { directive: { type: 'shutdown' } } as T;
+      }
       return undefined as T;
     }
     try {
-      return JSON.parse(text) as T;
+      const parsed = JSON.parse(text) as unknown;
+      if (terminalGone) {
+        const envelope = parsed != null && typeof parsed === 'object'
+          ? { ...(parsed as Record<string, unknown>) }
+          : {};
+        const directive = envelope.directive != null && typeof envelope.directive === 'object'
+          ? { ...(envelope.directive as Record<string, unknown>) }
+          : {};
+        envelope.directive = { ...directive, type: 'shutdown' };
+        return envelope as T;
+      }
+      return parsed as T;
     } catch (err) {
+      if (terminalGone) {
+        return { directive: { type: 'shutdown' } } as T;
+      }
       throw new Error(`postgrip-agent: ${method} ${path} -> ${response.status} (parse failed): ${text.slice(0, 200)}`);
     }
   }

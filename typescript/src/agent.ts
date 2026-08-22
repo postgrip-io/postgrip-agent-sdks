@@ -119,7 +119,7 @@ export class Agent {
     while (!options.signal?.aborted) {
       let task: Task<WorkflowPayload | ActivityInvocationPayload | WorkflowQueryPayload | WorkflowUpdatePayload> | undefined;
       try {
-        task = await this.connection.pollTask<WorkflowPayload | ActivityInvocationPayload | WorkflowQueryPayload | WorkflowUpdatePayload>({
+        const response = await this.connection.pollTaskResponse<WorkflowPayload | ActivityInvocationPayload | WorkflowQueryPayload | WorkflowUpdatePayload>({
           namespace: this.namespace,
           queue: this.taskQueue,
           agentId: this.identity,
@@ -127,6 +127,11 @@ export class Agent {
           taskTypes: WORKFLOW_RUNTIME_TASK_TYPES,
           signal: options.signal,
         });
+        if (response.directive?.type === 'shutdown') {
+          this.runController?.abort();
+          return;
+        }
+        task = response.task;
       } catch (err) {
         if (options.signal?.aborted) return;
         const message = err instanceof Error ? err.message : String(err);

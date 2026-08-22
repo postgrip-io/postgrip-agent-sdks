@@ -2,3 +2,5 @@ github.com/coder/websocket v1.8.14 h1:9L0p0iKiNOibykf283eHkKUHHrpG7f65OE3BhhO7v9
 github.com/coder/websocket v1.8.14/go.mod h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg=
 github.com/postgrip-io/postgrip-agent-sdks/protocol v0.3.2-0.20260822072326-8b9a1f1f1e38 h1:3mYkz2KjcJyrPBc7MsJcPVYzl9MdRS20Py6FCgKb1YY=
 github.com/postgrip-io/postgrip-agent-sdks/protocol v0.3.2-0.20260822072326-8b9a1f1f1e38/go.mod h1:3p01a0cFIg1g5/3zmq/JeNJiqmdzT7Tneu78CG8ty0Y=
+github.com/postgrip-io/postgrip-agent-sdks/protocol v0.3.2-0.20260822152313-7d2da2d6655b h1:x0qKc7D85Ia6t/7MJcEWmcop0+gIBKe83w5q5gsQiIY=
+github.com/postgrip-io/postgrip-agent-sdks/protocol v0.3.2-0.20260822152313-7d2da2d6655b/go.mod h1:3p01a0cFIg1g5/3zmq/JeNJiqmdzT7Tneu78CG8ty0Y=

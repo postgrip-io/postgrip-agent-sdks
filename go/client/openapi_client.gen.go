@@ -366,6 +366,9 @@ func (c *OpenAPIClient) DeleteSchedule(ctx context.Context, scheduleId string) (
 	err := c.connection.doOpenAPI(ctx, openAPIDeleteSchedule, map[string]string{"scheduleId": scheduleId}, nil, nil, &response)
 	return response, err
 }
+func (c *OpenAPIClient) DeleteWorkspace(ctx context.Context, workspaceId string) error {
+	return c.connection.doOpenAPI(ctx, openAPIDeleteWorkspace, map[string]string{"workspaceId": workspaceId}, nil, nil, nil)
+}
 func (c *OpenAPIClient) EnqueueTask(ctx context.Context, body OpenAPIEnqueueTaskRequestBody) (OpenAPIEnqueueTaskResponseBody, error) {
 	var response OpenAPIEnqueueTaskResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPIEnqueueTask, nil, nil, body, &response)
@@ -394,6 +397,11 @@ func (c *OpenAPIClient) GetTask(ctx context.Context, taskId string) (OpenAPIGetT
 func (c *OpenAPIClient) GetWorkflow(ctx context.Context, workflowId string) (OpenAPIGetWorkflowResponseBody, error) {
 	var response OpenAPIGetWorkflowResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPIGetWorkflow, map[string]string{"workflowId": workflowId}, nil, nil, &response)
+	return response, err
+}
+func (c *OpenAPIClient) GetWorkspace(ctx context.Context, workspaceId string) (OpenAPIGetWorkspaceResponseBody, error) {
+	var response OpenAPIGetWorkspaceResponseBody
+	err := c.connection.doOpenAPI(ctx, openAPIGetWorkspace, map[string]string{"workspaceId": workspaceId}, nil, nil, &response)
 	return response, err
 }
 func (c *OpenAPIClient) Health(ctx context.Context) (OpenAPIHealthResponseBody, error) {
@@ -439,6 +447,11 @@ func (c *OpenAPIClient) ListWorkflowHistory(ctx context.Context, workflowId stri
 func (c *OpenAPIClient) ListWorkflows(ctx context.Context, query OpenAPIListWorkflowsQuery) (OpenAPIListWorkflowsResponseBody, error) {
 	var response OpenAPIListWorkflowsResponseBody
 	err := c.connection.doOpenAPI(ctx, openAPIListWorkflows, nil, query.values(), nil, &response)
+	return response, err
+}
+func (c *OpenAPIClient) ListWorkspaces(ctx context.Context) (OpenAPIListWorkspacesResponseBody, error) {
+	var response OpenAPIListWorkspacesResponseBody
+	err := c.connection.doOpenAPI(ctx, openAPIListWorkspaces, nil, nil, nil, &response)
 	return response, err
 }
 func (c *OpenAPIClient) PauseSchedule(ctx context.Context, scheduleId string, body OpenAPIPauseScheduleRequestBody) (OpenAPIPauseScheduleResponseBody, error) {
@@ -504,6 +517,6 @@ func (c *OpenAPIClient) UpdateSchedule(ctx context.Context, scheduleId string, b
 
 // OpenAPIClientOperationCount excludes the streaming upload and WebSocket
 // connection operations, which use Connection's custom adapters.
-const OpenAPIClientOperationCount = 40
+const OpenAPIClientOperationCount = 43
 
-const openAPIClientSpecSHA256 = "5c41bd4b80894d3915692eee5b9c9a6c98a435eebdbfc6a86fac6327f7405b08"
+const openAPIClientSpecSHA256 = "06afe6c5fb3db593140020e300cfed910a4c34f1ab5218fa380bdc0a699a6871"
